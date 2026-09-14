@@ -9,6 +9,9 @@
 //   https://download4.epson.biz/sec_pubs/bs/pdf/TM-T82II_EN_um_02.pdf
 // - Epson Australia 產品頁（介面組合、列印速度）
 //   https://www.epson.com.au/pos/products/receiptprinters/DisplaySpecs.asp?id=tmt82ii
+// - autocutter.bladeOffsetMm：TRG p.29「Automatic cutting position」，切刀刀片距離
+//   print start 約 10.5mm；download4.epson.biz 擋自動化擷取，內容經
+//   https://www.manualslib.com/manual/1488029/Epson-Tm-T82ii.html 鏡像版本核對（2026-09）
 
 export const PRINTER_PROFILES = {
     "epson-tm-t82ii": {
@@ -23,6 +26,18 @@ export const PRINTER_PROFILES = {
             supported: true,
             rasterImageCommand: "GS v 0",
         },
+        // USB Vendor ID 0x04B8 = Seiko Epson Corp.（USB-IF 廠商代碼登記資料，非型號專屬，
+        // 具體 Product ID 依連接埠與韌體設定而異，用 vendorId 篩選讓 WebUSB 裝置選擇對話框
+        // 只列出 Epson 裝置，避免要求使用者從所有 USB 裝置裡自己找）
+        webUsb: {
+            vendorId: 0x04b8,
+        },
+        // 連續熱感紙沒有像左右紙寬那樣固定的「上邊界」（每次列印都從 print start 位置 0
+        // 開始，沒有強制留白）；唯一跟紙張長度方向有關的實體限制是切刀刀片跟列印頭本來就
+        // 有一段固定距離，這段距離決定了「切下去會不會切到剛印的內容」，數值見上方來源。
+        autocutter: {
+            bladeOffsetMm: 10.5,
+        },
         color: "monochrome-1bit",
         imageCapabilities: {
             grayscale: true,
@@ -32,7 +47,7 @@ export const PRINTER_PROFILES = {
         paperWidths: [
             {
                 id: "80mm",
-                label: "80 mm（預設）",
+                label: "80 mm",
                 rollWidthMm: 79.5,
                 rollWidthToleranceMm: 0.5,
                 maxRollDiameterMm: 83,

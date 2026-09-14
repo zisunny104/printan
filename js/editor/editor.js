@@ -15,7 +15,8 @@ import { splitDotsByRatio } from "../core/units.js";
 import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js";
 import { exportToPdf } from "../core/pdf-export.js";
 import { saveDraft, loadDraft } from "../core/storage.js";
-import { SystemDialogAdapter } from "../core/printer-adapter.js";
+import { SystemDialogAdapter, WebUsbEscposAdapter, detectBrowserCapabilities } from "../core/printer-adapter.js";
+import { wireResizableColumns } from "./resizable-columns.js";
 
 const LAST_DRAFT_KEY = "printan:lastDraftId";
 const PX_PER_MM = 3.2;
@@ -28,7 +29,15 @@ const state = {
     mode: "screen", // "screen" | "thermal"
     viewMode: "edit", // "edit"（畫布顯示可拖曳的虛線外框）| "preview"（隱藏編輯用外框，接近實際列印畫面）
     previewGeneration: 0,
+    batchPreview: { active: false, records: [], index: 0 }, // 逐筆預覽批次資料時取代 previewData
+    usbConnected: false, // WebUSB 印表機是否已連接；true 時「列印」按鈕直接送 ESC/POS，不走系統對話框
+    printPrefs: { feedLines: 4, cutPaper: false }, // 走紙／切紙偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件
 };
+
+const usbAdapter = new WebUsbEscposAdapter(); // 整個編輯器共用同一個連線實例
+
+const BATCH_PANEL_EXPANDED_KEY = "printan-batch-panel-expanded";
+const PRINT_PREFS_KEY = "printan:printPrefs";
 
 const els = {}; // 快取常用 DOM 節點
 let lastRenderResult = null; // 最近一次渲染結果（含排版 items 樹），供編輯疊層與模式切換重繪使用
@@ -36,11 +45,16 @@ let lastRenderResult = null; // 最近一次渲染結果（含排版 items 樹�
 async function init() {
     cacheDom();
     state.project = await restoreOrCreateProject();
+    loadPrintPrefs();
     populatePrinterProfileSelect();
     populatePaperWidthTabs();
     bindToolbar();
     bindFileInputs();
+    bindBatchPanel();
+    bindPrinterSettings();
+    wireResizableColumns();
     onModelChange({ skipInspector: false });
+    await attemptSilentPrinterReconnect();
 }
 
 function cacheDom() {
@@ -51,6 +65,11 @@ function cacheDom() {
         "btn-export-batch-pdf", "btn-print", "outline-list", "inspector",
         "variables-panel", "batch-data", "paper-viewport", "paper-shadow", "safe-area-guide",
         "canvas-host", "image-file-input", "ptan-file-input",
+        "batch-panel-toggle", "batch-panel-body", "btn-preview-batch", "batch-preview-nav",
+        "btn-batch-prev", "btn-batch-next", "batch-preview-counter", "btn-batch-end-preview",
+        "btn-printer-settings", "printer-settings-dialog", "printer-webusb-unsupported",
+        "printer-connection-status", "btn-printer-connect", "btn-printer-disconnect",
+        "pref-feed-lines", "pref-cut-paper", "btn-printer-settings-close",
     ].forEach((id) => (els[id] = document.getElementById(id)));
 }
 
@@ -183,6 +202,7 @@ function bindFileInputs() {
         state.selectedId = null;
         state.insertionTarget = null;
         state.previewData = {};
+        endBatchPreview();
         onModelChange();
     });
 }
@@ -315,22 +335,68 @@ function renderOutline() {
     const root = els["outline-list"];
     root.innerHTML = "";
     root.appendChild(buildTargetHeader("版面（最上層）", null, 0));
-    root.appendChild(buildElementList(state.project.template.elements, 0));
+    root.appendChild(buildElementList(state.project.template.elements, 0, "root"));
 }
 
-function buildElementList(elements, depth) {
+function buildElementList(elements, depth, parentKey) {
     const frag = document.createDocumentFragment();
     elements.forEach((el) => {
-        frag.appendChild(buildElementRow(el, depth));
+        frag.appendChild(buildElementRow(el, depth, parentKey));
         if (el.type === "row") {
             el.columns.forEach((col, colIndex) => {
                 const target = { rowId: el.id, colIndex };
                 frag.appendChild(buildTargetHeader(`第 ${colIndex + 1} 欄`, target, depth + 1));
-                frag.appendChild(buildElementList(col, depth + 2));
+                frag.appendChild(buildElementList(col, depth + 2, `${el.id}:${colIndex}`));
             });
         }
     });
     return frag;
+}
+
+// ---- 大綱拖曳排序：只允許在同一個容器（同一層陣列）內重新排序，跨容器拖放會被擋掉，
+// 因為 moveElementTo() 本身只在元素目前所在的陣列裡搬動位置。----
+
+let outlineDragState = null; // { id, parentKey }
+
+function clearOutlineDropIndicators() {
+    els["outline-list"].querySelectorAll(".is-drop-before, .is-drop-after").forEach((n) => {
+        n.classList.remove("is-drop-before", "is-drop-after");
+    });
+}
+
+function wireOutlineRowDrag(row, el, parentKey) {
+    row.draggable = true;
+    row.addEventListener("dragstart", (evt) => {
+        outlineDragState = { id: el.id, parentKey };
+        evt.dataTransfer.effectAllowed = "move";
+        evt.dataTransfer.setData("text/plain", el.id);
+        row.classList.add("is-dragging");
+    });
+    row.addEventListener("dragend", () => {
+        row.classList.remove("is-dragging");
+        clearOutlineDropIndicators();
+        outlineDragState = null;
+    });
+    row.addEventListener("dragover", (evt) => {
+        if (!outlineDragState || outlineDragState.parentKey !== parentKey || outlineDragState.id === el.id) return;
+        evt.preventDefault();
+        evt.dataTransfer.dropEffect = "move";
+        const rect = row.getBoundingClientRect();
+        const before = evt.clientY < rect.top + rect.height / 2;
+        clearOutlineDropIndicators();
+        row.classList.add(before ? "is-drop-before" : "is-drop-after");
+    });
+    row.addEventListener("drop", (evt) => {
+        if (!outlineDragState || outlineDragState.parentKey !== parentKey || outlineDragState.id === el.id) return;
+        evt.preventDefault();
+        const rect = row.getBoundingClientRect();
+        const before = evt.clientY < rect.top + rect.height / 2;
+        const found = findContainerOf(state.project.template.elements, el.id);
+        if (!found) return;
+        const targetIndex = before ? found.index : found.index + 1;
+        moveElementTo(outlineDragState.id, targetIndex);
+        outlineDragState = null;
+    });
 }
 
 function buildTargetHeader(label, target, depth) {
@@ -367,9 +433,10 @@ function elementLabel(el) {
     }
 }
 
-function buildElementRow(el, depth) {
+function buildElementRow(el, depth, parentKey) {
     const row = document.createElement("div");
     row.className = `outline-row outline-indent-${depth}`;
+    row.dataset.elType = el.type;
     if (state.selectedId === el.id) row.classList.add("is-selected");
 
     const icon = document.createElement("span");
@@ -391,6 +458,7 @@ function buildElementRow(el, depth) {
     row.appendChild(actions);
 
     row.addEventListener("click", () => selectElementById(el.id));
+    wireOutlineRowDrag(row, el, parentKey);
 
     return row;
 }
@@ -696,7 +764,11 @@ function updatePaperFrame() {
     const profile = getPrinterProfile(state.project.printerProfile.id);
     const paper = getPaperWidth(profile, state.project.paper.widthId);
     const marginMm = Math.max((paper.rollWidthMm - paper.printableWidthMm) / 2, 0);
+    // 連續紙沒有實體「上邊界」，安全區上緣純粹是視覺留白；下緣則是切刀刀片跟列印頭的
+    // 實際距離（bladeOffsetMm）——太靠下緣的內容，切紙時有被裁到的風險。
+    const bladeOffsetMm = profile.autocutter?.bladeOffsetMm ?? 0;
     els["paper-shadow"].style.setProperty("--paper-margin", `${marginMm * PX_PER_MM}px`);
+    els["paper-shadow"].style.setProperty("--paper-safe-bottom", `${bladeOffsetMm * PX_PER_MM}px`);
     els["canvas-host"].style.width = `${paper.printableWidthMm * PX_PER_MM}px`;
 }
 
@@ -705,7 +777,10 @@ async function updatePreview() {
     const generation = ++state.previewGeneration;
     let result;
     try {
-        result = await renderTemplate(state.project, state.previewData, { mode: state.mode });
+        const data = state.batchPreview.active
+            ? (state.batchPreview.records[state.batchPreview.index] ?? {})
+            : state.previewData;
+        result = await renderTemplate(state.project, data, { mode: state.mode });
     } catch (err) {
         console.error(err);
         return;
@@ -946,24 +1021,191 @@ async function exportSinglePdf() {
     exportToPdf([result], { fileName: `${state.project.meta.name || "printan"}.pdf` });
 }
 
-async function exportBatchPdf() {
-    let dataArray;
+// 匯出跟預覽都要吃同一份批次資料，剖析／驗證邏輯只寫這一處，避免兩邊行為兜不起來
+function parseBatchData() {
     try {
-        dataArray = JSON.parse(els["batch-data"].value || "[]");
+        const dataArray = JSON.parse(els["batch-data"].value || "[]");
         if (!Array.isArray(dataArray) || dataArray.length === 0) throw new Error("請提供至少一筆資料的 JSON 陣列");
+        return dataArray;
     } catch (err) {
         alert(`批次資料格式錯誤：${err.message}`);
-        return;
+        return null;
     }
+}
+
+async function exportBatchPdf() {
+    const dataArray = parseBatchData();
+    if (!dataArray) return;
     const results = await renderBatch(state.project, dataArray, { mode: "thermal" });
     exportToPdf(results, { fileName: `${state.project.meta.name || "printan"}-batch.pdf` });
 }
 
+// ---- 批次資料面板：收合、逐筆預覽 ----
+
+function updateBatchPreviewNav() {
+    const { active, records, index } = state.batchPreview;
+    els["batch-preview-nav"].hidden = !active;
+    if (!active) return;
+    els["batch-preview-counter"].textContent = `第 ${index + 1} / ${records.length} 筆`;
+    els["btn-batch-prev"].disabled = index <= 0;
+    els["btn-batch-next"].disabled = index >= records.length - 1;
+}
+
+function startBatchPreview() {
+    const dataArray = parseBatchData();
+    if (!dataArray) return;
+    state.batchPreview = { active: true, records: dataArray, index: 0 };
+    updateBatchPreviewNav();
+    schedulePreview();
+}
+
+function stepBatchPreview(delta) {
+    if (!state.batchPreview.active) return;
+    const next = state.batchPreview.index + delta;
+    if (next < 0 || next >= state.batchPreview.records.length) return;
+    state.batchPreview.index = next;
+    updateBatchPreviewNav();
+    schedulePreview();
+}
+
+function endBatchPreview() {
+    if (!state.batchPreview.active) return;
+    state.batchPreview = { active: false, records: [], index: 0 };
+    updateBatchPreviewNav();
+    schedulePreview();
+}
+
+function setBatchPanelExpanded(expanded) {
+    els["batch-panel-body"].hidden = !expanded;
+    els["batch-panel-toggle"].setAttribute("aria-expanded", String(expanded));
+    localStorage.setItem(BATCH_PANEL_EXPANDED_KEY, String(expanded));
+}
+
+function bindBatchPanel() {
+    setBatchPanelExpanded(localStorage.getItem(BATCH_PANEL_EXPANDED_KEY) === "true");
+
+    els["batch-panel-toggle"].addEventListener("click", () => {
+        const expanded = els["batch-panel-toggle"].getAttribute("aria-expanded") === "true";
+        setBatchPanelExpanded(!expanded);
+    });
+
+    els["btn-preview-batch"].addEventListener("click", startBatchPreview);
+    els["btn-batch-prev"].addEventListener("click", () => stepBatchPreview(-1));
+    els["btn-batch-next"].addEventListener("click", () => stepBatchPreview(1));
+    els["btn-batch-end-preview"].addEventListener("click", endBatchPreview);
+}
+
 async function printCurrent() {
     const result = await renderTemplate(state.project, state.previewData, { mode: "thermal" });
+
+    if (state.usbConnected) {
+        try {
+            await usbAdapter.print(result, state.printPrefs);
+            return;
+        } catch (err) {
+            state.usbConnected = false;
+            updatePrinterConnectionUi();
+            alert(`印表機列印失敗，已改用系統列印對話框：${err.message}`);
+        }
+    }
+
     const adapter = new SystemDialogAdapter();
     await adapter.connect();
     await adapter.print(result);
+}
+
+// ---- 印表機設定（WebUSB 直連 + 走紙／切紙偏好） ----
+// 連線狀態、走紙／切紙偏好都是「這台瀏覽器、這台印表機」的本機操作習慣，不寫進 .ptan，
+// 同一份版型換人、換印表機開啟時不應該被綁死。
+
+function loadPrintPrefs() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(PRINT_PREFS_KEY) || "{}");
+        state.printPrefs = { ...state.printPrefs, ...saved };
+    } catch {
+        // 格式壞掉就用預設值，不擋流程
+    }
+}
+
+function savePrintPrefs() {
+    localStorage.setItem(PRINT_PREFS_KEY, JSON.stringify(state.printPrefs));
+}
+
+function currentWebUsbVendorId() {
+    return getPrinterProfile(state.project.printerProfile.id).webUsb?.vendorId;
+}
+
+async function attemptSilentPrinterReconnect() {
+    if (!usbAdapter.isSupported()) return;
+    try {
+        state.usbConnected = await usbAdapter.reconnectIfAuthorized(currentWebUsbVendorId());
+    } catch {
+        state.usbConnected = false;
+    }
+    updatePrinterConnectionUi();
+}
+
+function updatePrinterConnectionUi() {
+    const supported = usbAdapter.isSupported();
+    els["printer-webusb-unsupported"].hidden = supported;
+    els["btn-printer-connect"].hidden = !supported || state.usbConnected;
+    els["btn-printer-disconnect"].hidden = !supported || !state.usbConnected;
+    els["printer-connection-status"].textContent = !supported
+        ? "此瀏覽器不支援 WebUSB，列印會走系統列印對話框"
+        : state.usbConnected
+            ? `已連接：${usbAdapter.deviceLabel}`
+            : "尚未連接，列印會走系統列印對話框";
+}
+
+function bindPrinterSettings() {
+    els["pref-feed-lines"].value = state.printPrefs.feedLines;
+    els["pref-cut-paper"].checked = state.printPrefs.cutPaper;
+    updatePrinterConnectionUi();
+
+    els["btn-printer-settings"].addEventListener("click", () => {
+        els["printer-settings-dialog"].showModal();
+    });
+    els["btn-printer-settings-close"].addEventListener("click", () => {
+        els["printer-settings-dialog"].close();
+    });
+
+    els["btn-printer-connect"].addEventListener("click", async () => {
+        try {
+            await usbAdapter.connect({ vendorId: currentWebUsbVendorId() });
+            state.usbConnected = true;
+        } catch (err) {
+            state.usbConnected = false;
+            alert(`連接印表機失敗：${err.message}`);
+        }
+        updatePrinterConnectionUi();
+    });
+
+    els["btn-printer-disconnect"].addEventListener("click", async () => {
+        await usbAdapter.disconnect();
+        state.usbConnected = false;
+        updatePrinterConnectionUi();
+    });
+
+    els["pref-feed-lines"].addEventListener("change", () => {
+        const n = Math.max(0, Math.round(Number(els["pref-feed-lines"].value) || 0));
+        state.printPrefs.feedLines = n;
+        els["pref-feed-lines"].value = n;
+        savePrintPrefs();
+    });
+
+    els["pref-cut-paper"].addEventListener("change", () => {
+        state.printPrefs.cutPaper = els["pref-cut-paper"].checked;
+        savePrintPrefs();
+    });
+
+    if (usbAdapter.isSupported()) {
+        navigator.usb.addEventListener("disconnect", (e) => {
+            if (e.device === usbAdapter.device) {
+                state.usbConnected = false;
+                updatePrinterConnectionUi();
+            }
+        });
+    }
 }
 
 // ---- 變更彙整：儲存草稿 + 重新渲染 ----

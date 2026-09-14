@@ -62,11 +62,172 @@ export class SystemDialogAdapter {
     async disconnect() {}
 }
 
-// 未來新增（第二階段，見需求單第二十節）：
-//   - WebUsbEscposAdapter：透過 navigator.usb 直接送 ESC/POS raster bit image 指令
+const ESCPOS_CHUNK_SIZE = 4096; // 分段傳輸，避免單次 transferOut 過大
+
+function concatUint8Arrays(chunks) {
+    const total = chunks.reduce((sum, c) => sum + c.length, 0);
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) {
+        out.set(c, offset);
+        offset += c.length;
+    }
+    return out;
+}
+
+/**
+ * 把熱感模擬後的 canvas（renderTemplate 傳 mode:"thermal"，像素只剩純黑 0 或純白 255）
+ * 轉成 ESC/POS GS v 0 raster bit image 需要的點陣資料：每 8 個水平點打包成 1 byte，
+ * MSB 對應最左邊的點，bit=1 代表要打點（黑）。寬度不是 8 的倍數時，最後一 byte
+ * 多出來的 bit 補 0（白），印表機不會多印超出範圍的點。
+ */
+function canvasToEscposRaster(canvas) {
+    const ctx = canvas.getContext("2d");
+    const { width, height } = canvas;
+    const { data } = ctx.getImageData(0, 0, width, height);
+    const bytesPerLine = Math.ceil(width / 8);
+    const raster = new Uint8Array(bytesPerLine * height);
+    for (let y = 0; y < height; y++) {
+        const rowOffset = y * bytesPerLine;
+        for (let x = 0; x < width; x++) {
+            const isBlack = data[(y * width + x) * 4] < 128;
+            if (isBlack) raster[rowOffset + (x >> 3)] |= 0x80 >> (x & 7);
+        }
+    }
+    return { bytesPerLine, height, raster };
+}
+
+/**
+ * 組出完整一次列印工作的 ESC/POS 指令位元組：初始化 → raster 點陣圖 → 走紙 → 切紙。
+ * @param {{canvas: HTMLCanvasElement}} renderResult
+ * @param {{feedLines?: number, cutPaper?: boolean}} options
+ */
+function buildEscposJob(renderResult, { feedLines = 0, cutPaper = false } = {}) {
+    const { bytesPerLine, height, raster } = canvasToEscposRaster(renderResult.canvas);
+    if (bytesPerLine > 0xffff || height > 0xffff) {
+        throw new Error("圖片尺寸超過 ESC/POS raster 指令支援的範圍");
+    }
+
+    const parts = [
+        new Uint8Array([0x1b, 0x40]), // ESC @：初始化印表機
+        new Uint8Array([
+            0x1d, 0x76, 0x30, 0x00, // GS v 0 m：raster bit image，m=0 一般模式
+            bytesPerLine & 0xff, (bytesPerLine >> 8) & 0xff,
+            height & 0xff, (height >> 8) & 0xff,
+        ]),
+        raster,
+    ];
+    if (feedLines > 0) {
+        parts.push(new Uint8Array([0x1b, 0x64, Math.min(Math.round(feedLines), 255)])); // ESC d n：走紙 n 行
+    }
+    if (cutPaper) {
+        parts.push(new Uint8Array([0x1d, 0x56, 0x01])); // GS V 1：局部切紙
+    }
+    return concatUint8Arrays(parts);
+}
+
+/**
+ * WebUSB 直送 ESC/POS 指令，不透過系統列印對話框／驅動程式。
+ * 只認得 profile 有宣告 webUsb.vendorId 的印表機（見 printer-profiles.js），
+ * 避免對不明裝置亂猜相容性。
+ */
+export class WebUsbEscposAdapter {
+    constructor() {
+        this.device = null;
+        this.endpointNumber = null;
+    }
+
+    isSupported() {
+        return typeof navigator !== "undefined" && "usb" in navigator;
+    }
+
+    /** 瀏覽器已經授權過（之前 requestDevice 選過）的裝置，讀取不會跳出授權對話框。 */
+    async listAuthorizedDevices() {
+        if (!this.isSupported()) return [];
+        return navigator.usb.getDevices();
+    }
+
+    /**
+     * 嘗試沿用瀏覽器記住的裝置授權直接重新連線，不跳出選擇對話框。
+     * 給頁面載入時用，不需要使用者手勢就能恢復「已連接」狀態。
+     * @returns {Promise<boolean>} 是否成功恢復連線
+     */
+    async reconnectIfAuthorized(vendorId) {
+        const devices = await this.listAuthorizedDevices();
+        const device = devices.find((d) => !vendorId || d.vendorId === vendorId);
+        if (!device) return false;
+        await this._openAndClaim(device);
+        return true;
+    }
+
+    /**
+     * 跳出瀏覽器裝置選擇對話框——必須在使用者手勢（例如按鈕 click handler）內呼叫，
+     * 否則瀏覽器會直接拒絕。
+     */
+    async connect({ vendorId } = {}) {
+        if (!this.isSupported()) throw new Error("此瀏覽器不支援 WebUSB，請改用 Chrome 或 Edge");
+        if (await this.reconnectIfAuthorized(vendorId)) return;
+        if (!vendorId) throw new Error("此印表機規格未設定 WebUSB vendorId，無法搜尋裝置");
+        const device = await navigator.usb.requestDevice({ filters: [{ vendorId }] });
+        await this._openAndClaim(device);
+    }
+
+    async _openAndClaim(device) {
+        await device.open();
+        if (!device.configuration) await device.selectConfiguration(1);
+        let claimed = null;
+        for (const iface of device.configuration.interfaces) {
+            const out = iface.alternates[0].endpoints.find((e) => e.direction === "out" && e.type === "bulk");
+            if (out) {
+                claimed = { interfaceNumber: iface.interfaceNumber, endpointNumber: out.endpointNumber };
+                break;
+            }
+        }
+        if (!claimed) {
+            await device.close();
+            throw new Error("這台裝置找不到印表機用的 USB Bulk OUT 端點，可能不是標準 ESC/POS 印表機");
+        }
+        await device.claimInterface(claimed.interfaceNumber);
+        this.device = device;
+        this.endpointNumber = claimed.endpointNumber;
+    }
+
+    /** 目前連接裝置的顯示名稱，尚未連接時回傳空字串。 */
+    get deviceLabel() {
+        if (!this.device) return "";
+        return [this.device.manufacturerName, this.device.productName].filter(Boolean).join(" ") || "USB 印表機";
+    }
+
+    /**
+     * @param {{canvas: HTMLCanvasElement}} renderResult
+     * @param {{feedLines?: number, cutPaper?: boolean}} options
+     */
+    async print(renderResult, options = {}) {
+        if (!this.device) throw new Error("尚未連接印表機");
+        const bytes = buildEscposJob(renderResult, options);
+        for (let offset = 0; offset < bytes.length; offset += ESCPOS_CHUNK_SIZE) {
+            const chunk = bytes.subarray(offset, offset + ESCPOS_CHUNK_SIZE);
+            const result = await this.device.transferOut(this.endpointNumber, chunk);
+            if (result.status !== "ok") throw new Error(`列印資料傳輸失敗（狀態：${result.status}）`);
+        }
+    }
+
+    async disconnect() {
+        if (!this.device) return;
+        try {
+            await this.device.close();
+        } finally {
+            this.device = null;
+            this.endpointNumber = null;
+        }
+    }
+}
+
+// 未來可能新增：
 //   - WebSerialEscposAdapter：透過 navigator.serial 走 RS-232 介面
 //   - NetworkAdapter：Ethernet 介面印表機，瀏覽器無法直接開 TCP socket，
 //     需要經由後端 / 本機代理服務轉送
 export const PRINTER_ADAPTERS = {
     "system-dialog": SystemDialogAdapter,
+    "webusb-escpos": WebUsbEscposAdapter,
 };
