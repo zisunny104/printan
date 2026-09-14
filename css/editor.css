@@ -1,0 +1,237 @@
+/* Printan Editor 版面樣式。Tocas UI 沒有現成元件的地方（工具列排列、卡片標題列、
+   紙張視覺化、大綱樹狀縮排）才補自訂樣式，其餘一律交給 Tocas 的 class／間距工具類。 */
+
+/* ---- 工具列（沿用 KoiLiSu 家族慣例：pane-toolbar / pane-card-header） ---- */
+
+.pane-toolbar {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+}
+
+.toolbar-spacer {
+    flex: 1 1 auto;
+}
+
+.pane-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    min-height: 1.75rem;
+    padding: .4rem .8rem;
+    font-size: .8125rem;
+    font-weight: 600;
+    color: var(--ts-gray-600, #666);
+    background: var(--ts-gray-100, #f2f2f2);
+    border-bottom: 1px solid var(--ts-gray-300, #ddd);
+    box-sizing: border-box;
+    border-radius: var(--ts-radius, .5rem) var(--ts-radius, .5rem) 0 0;
+}
+
+.pane-card-header-title {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pane-empty-state-static {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    text-align: center;
+    padding: 1.5rem 1rem;
+}
+
+/* ---- 版面結構大綱 ---- */
+
+.outline-list {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+}
+
+.outline-row {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .35rem .5rem;
+    border-radius: .4rem;
+    cursor: pointer;
+    font-size: .85rem;
+    border: 1px solid transparent;
+}
+
+.outline-row:hover {
+    background: var(--ts-gray-100);
+}
+
+.outline-row.is-selected {
+    background: var(--ts-primary-100, #e8f0fe);
+    border-color: var(--ts-primary-300, #a8c7fa);
+}
+
+.outline-row.is-target {
+    border-color: var(--ts-positive-500, #2e7d32);
+}
+
+.outline-target-row {
+    color: var(--ts-gray-500);
+    font-size: .75rem;
+}
+
+.outline-row .outline-label {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.outline-row .outline-actions {
+    display: none;
+    gap: .1rem;
+}
+
+.outline-row:hover .outline-actions {
+    display: flex;
+}
+
+.outline-indent-1 { margin-left: 1rem; }
+.outline-indent-2 { margin-left: 2rem; }
+.outline-indent-3 { margin-left: 3rem; }
+
+/* ---- 紙張預覽：陰影表示整捲紙寬，虛線表示可列印範圍與安全區 ---- */
+
+.paper-viewport {
+    display: flex;
+    justify-content: center;
+    padding: 1.5rem 0;
+}
+
+.paper-shadow {
+    position: relative;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .15), 0 0 0 1px var(--ts-gray-200);
+    padding: 0 var(--paper-margin, 12px);
+    border-radius: 2px;
+}
+
+.safe-area-guide {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: calc(var(--paper-margin, 12px) + 6px);
+    right: calc(var(--paper-margin, 12px) + 6px);
+    border: 1px dashed var(--ts-gray-300, #ccc);
+    pointer-events: none;
+}
+
+.canvas-host {
+    position: relative;
+}
+
+.canvas-host canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+}
+
+.paper-viewport.is-preview-mode .safe-area-guide {
+    display: none;
+}
+
+/* ---- 編輯模式畫布疊層：每個元素的虛線外框、拖曳排序、拖曳縮放把手 ---- */
+
+.edit-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.edit-block {
+    position: absolute;
+    box-sizing: border-box;
+    border: 1px dashed var(--ts-gray-400, #b0b0b0);
+    pointer-events: auto;
+    cursor: grab;
+    touch-action: none;
+}
+
+.edit-block:hover {
+    border-color: var(--ts-primary-400, #7ba8f5);
+}
+
+.edit-block.is-selected {
+    border: 1px solid var(--ts-primary-500, #3b82f6);
+}
+
+.edit-block.is-dragging {
+    opacity: .55;
+    cursor: grabbing;
+    z-index: 20;
+}
+
+.edit-resize-handle {
+    position: absolute;
+    pointer-events: auto;
+    touch-action: none;
+}
+
+.edit-resize-handle.is-height {
+    height: 6px;
+    cursor: ns-resize;
+    background: var(--ts-primary-500, #3b82f6);
+    opacity: 0;
+    border-radius: 3px;
+}
+
+.edit-resize-handle.is-height:hover,
+.edit-resize-handle.is-height.is-dragging {
+    opacity: .6;
+}
+
+.edit-resize-handle.is-col {
+    width: 6px;
+    cursor: ew-resize;
+}
+
+.edit-resize-handle.is-col::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--ts-primary-500, #3b82f6);
+    opacity: 0;
+}
+
+.edit-resize-handle.is-col:hover::after,
+.edit-resize-handle.is-col.is-dragging::after {
+    opacity: .6;
+}
+
+.edit-insertion-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--ts-positive-500, #2e7d32);
+    pointer-events: none;
+}
+
+/* ---- 變數清單：批次資料文字框固定使用等寬字型，方便檢查 JSON 格式 ---- */
+
+.batch-data-textarea {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .78rem;
+}

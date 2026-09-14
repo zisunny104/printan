@@ -1,0 +1,50 @@
+# KoiLiSu 通用 .gitignore
+
+# IDE 和編輯器
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# 作業系統
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# PHP
+*.log
+*.tmp
+/vendor/
+composer.phar
+composer.lock
+
+# 設定檔案（如包含敏感資訊）
+config.local.php
+.env
+
+# 快取和暫存檔案
+cache/
+temp/
+tmp/
+
+# 備份檔案
+*.bak
+*.backup
+*~
+
+# 部署相關
+deploy.php
+deploy.sh
+
+# 測試檔案
+phpunit.xml
+/tests/coverage/
+
+# Node.js（如果使用）
+node_modules/
+npm-debug.log
+yarn-error.log
