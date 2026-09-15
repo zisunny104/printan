@@ -14,7 +14,8 @@
 - **`.ptan` 專案檔**：版本化 JSON 格式，可匯出／匯入，未來格式升級有 migration 機制
 - **本機自動儲存**：編輯中的草稿存在瀏覽器 IndexedDB，不會佔用 `.ptan` 正式匯出的角色
 - **PDF 匯出**：依熱感紙實際寬度與內容高度產生頁面尺寸，不會被硬塞進 A4
-- **列印**：透過瀏覽器原生列印對話框（`window.print()`）走系統已安裝的印表機驅動，不需要 WebUSB／WebSerial 權限
+- **列印**：可透過瀏覽器原生列印對話框（`window.print()`）走系統已安裝的印表機驅動，也可用 WebUSB 直接連線印表機送出 ESC/POS 點陣指令（Chrome/Edge），依環境自動偵測可用連線方式
+- **條碼／QR Code 元素**：可插入 QR Code、Code128、EAN-13，內容支援 `{{變數}}`，一維條碼可切換是否顯示明碼
 - **Renderer Core 可獨立嵌入**：[js/core/renderer.js](js/core/renderer.js) 是不依賴編輯器狀態、不依賴 UI 框架的 ES module，其他網頁專案可以直接 `import` 使用同一套版面／熱感模擬邏輯
 
 ## 使用方式
@@ -60,9 +61,9 @@ cd printan
 此版本為第一階段可完整操作的雛型，以下項目列為後續階段：
 
 - 畫布上直接拖曳／縮放元素（目前透過屬性面板調整數值）
-- 真正的實體印表機連線（WebUSB／WebSerial 直送 ESC/POS 點陣指令），目前僅透過系統列印對話框輸出
+- WebSerial／WebBluetooth 印表機連線（目前已支援 WebUSB 直連）
 - CSV／外部 API 作為批次資料來源（目前僅支援貼上 JSON）
-- QR Code／Barcode／Shape／Table／Icon 元素
+- Shape／Table／Icon 元素
 - 新增其他印表機規格檔（Printer Profile 架構已預留擴充空間）
 
 ## 使用的開源函式庫
