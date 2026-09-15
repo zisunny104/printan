@@ -565,6 +565,49 @@ body {
     pointer-events: none;
 }
 
+/* ---- 圖片元素 inspector：裁切工具（canvas 顯示旋轉後的圖片，疊一層可拖曳/縮放的裁切框） ---- */
+
+.image-crop-tool {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    margin-top: .5rem;
+    overflow: hidden;
+    line-height: 0;
+    background: repeating-conic-gradient(var(--ts-gray-200, #e5e5e5) 0% 25%, var(--ts-gray-50, #fafafa) 0% 50%) 50% / 16px 16px;
+}
+
+.image-crop-tool canvas {
+    display: block;
+    max-width: 100%;
+}
+
+.image-crop-box {
+    position: absolute;
+    box-sizing: border-box;
+    border: 1.5px solid var(--ts-primary-500, #3b82f6);
+    background: rgba(59, 130, 246, .12);
+    box-shadow: 0 0 0 2000px rgba(0, 0, 0, .35);
+    cursor: move;
+    touch-action: none;
+}
+
+.image-crop-handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    margin: -5px;
+    border-radius: 50%;
+    background: var(--ts-primary-500, #3b82f6);
+    border: 1.5px solid var(--ts-white, #fff);
+    touch-action: none;
+}
+
+.image-crop-handle.is-nw { top: 0; left: 0; cursor: nwse-resize; }
+.image-crop-handle.is-ne { top: 0; left: 100%; cursor: nesw-resize; }
+.image-crop-handle.is-sw { top: 100%; left: 0; cursor: nesw-resize; }
+.image-crop-handle.is-se { top: 100%; left: 100%; cursor: nwse-resize; }
+
 /* ---- 無障礙：僅供螢幕閱讀器讀出的文字（沿用 KoiLiSu common/header.php 慣例） ---- */
 
 .sr-only {

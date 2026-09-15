@@ -101,6 +101,32 @@ function buildAssetMap(assets = []) {
     return map;
 }
 
+function clampNumber(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+}
+
+function normalizeRotation(rotation) {
+    const r = ((rotation || 0) % 360 + 360) % 360;
+    return r === 90 || r === 180 || r === 270 ? r : 0;
+}
+
+// 依旋轉角度與 cropRect 算出「顯示內容」的寬高比例（都是 rotation 之後、crop 之前 naturalWidth/Height
+// 的座標系），供 layoutColumn 算 drawHeight（等比縮放）與 paintImage 算裁切窗格共用。
+function measureImageContent(el, img) {
+    if (!img) return { rotatedWidth: 0, rotatedHeight: 0, contentWidth: 0, contentHeight: 0 };
+    const rotation = normalizeRotation(el.rotation);
+    const swapped = rotation === 90 || rotation === 270;
+    const rotatedWidth = swapped ? img.naturalHeight : img.naturalWidth;
+    const rotatedHeight = swapped ? img.naturalWidth : img.naturalHeight;
+    const cr = el.cropRect || { x: 0, y: 0, w: 1, h: 1 };
+    return {
+        rotatedWidth,
+        rotatedHeight,
+        contentWidth: rotatedWidth * cr.w,
+        contentHeight: rotatedHeight * cr.h,
+    };
+}
+
 // ---- 排版（measure pass）----
 
 async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap) {
@@ -120,10 +146,13 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap) {
             y += height;
         } else if (el.type === "image") {
             const img = await resolveImage(el, assetMap);
-            const drawWidth = widthDots;
-            const drawHeight = el.heightDots > 0
+            const { contentWidth, contentHeight } = measureImageContent(el, img);
+            const widthPercent = clampNumber(el.widthPercent ?? 100, 1, 100);
+            const drawWidth = Math.round((widthDots * widthPercent) / 100);
+            const fit = el.fit || (el.heightDots > 0 ? "stretch" : "auto"); // 未指定 fit 的舊資料：heightDots > 0 視為 stretch，否則沿用舊的等比縮放行為
+            const drawHeight = fit === "stretch" && el.heightDots > 0
                 ? el.heightDots
-                : (img ? Math.round(widthDots * (img.naturalHeight / img.naturalWidth)) : 0);
+                : (contentWidth > 0 ? Math.round((drawWidth * contentHeight) / contentWidth) : 0);
             items.push({ el, y, height: drawHeight, widthDots, img, drawWidth, drawHeight });
             y += drawHeight;
         } else if (el.type === "barcode") {
@@ -366,7 +395,7 @@ function paintDivider(ctx, item, x, y) {
 
 function paintImage(ctx, item, x, y, mode) {
     if (!item.img) return;
-    const { drawWidth, drawHeight, el } = item;
+    const { drawWidth, drawHeight, el, widthDots } = item;
     const w = Math.max(1, Math.round(drawWidth));
     const h = Math.max(1, Math.round(drawHeight));
 
@@ -378,7 +407,7 @@ function paintImage(ctx, item, x, y, mode) {
     temp.height = h;
     const tctx = temp.getContext("2d");
     tctx.filter = buildImageFilter(el);
-    tctx.drawImage(item.img, 0, 0, w, h);
+    drawCroppedRotatedImage(tctx, item.img, el, w, h);
     tctx.filter = "none";
 
     if (mode === "thermal") {
@@ -387,7 +416,33 @@ function paintImage(ctx, item, x, y, mode) {
         applyDither(imageData, el.ditherMode || "floyd-steinberg", el.thresholdLevel ?? 128);
         tctx.putImageData(imageData, 0, 0);
     }
-    ctx.drawImage(temp, x, y, drawWidth, drawHeight);
+    let drawX = x;
+    if (el.align === "center") drawX = x + (widthDots - drawWidth) / 2;
+    else if (el.align === "right") drawX = x + (widthDots - drawWidth);
+    ctx.drawImage(temp, drawX, y, drawWidth, drawHeight);
+}
+
+// 把來源圖片依 rotation 旋轉、依 cropRect（旋轉後座標系，0-1 正規化）取窗格，縮放畫進
+// 目的地 tctx 的 (0,0,w,h)。cropRect 為 null 時視為整張旋轉後的圖片（不裁切）。
+function drawCroppedRotatedImage(tctx, img, el, w, h) {
+    const rotation = normalizeRotation(el.rotation);
+    const { rotatedWidth, rotatedHeight } = measureImageContent(el, img);
+    if (rotatedWidth <= 0 || rotatedHeight <= 0) return;
+    const cr = el.cropRect || { x: 0, y: 0, w: 1, h: 1 };
+    const cropX = cr.x * rotatedWidth;
+    const cropY = cr.y * rotatedHeight;
+    const cropW = Math.max(1e-6, cr.w * rotatedWidth);
+    const cropH = Math.max(1e-6, cr.h * rotatedHeight);
+    const scaleX = w / cropW;
+    const scaleY = h / cropH;
+
+    tctx.save();
+    tctx.translate(-cropX * scaleX, -cropY * scaleY);
+    tctx.scale(scaleX, scaleY);
+    tctx.translate(rotatedWidth / 2, rotatedHeight / 2);
+    tctx.rotate((rotation * Math.PI) / 180);
+    tctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2, img.naturalWidth, img.naturalHeight);
+    tctx.restore();
 }
 
 function buildImageFilter(el) {

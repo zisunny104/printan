@@ -200,8 +200,12 @@ export function createImageElement(overrides = {}) {
         id: nextId("image"),
         type: "image",
         assetId: null, // 對應 .ptan assets[].id，或 "{{placeholder}}" 由資料提供
-        heightDots: 0, // 0 = 依欄寬等比縮放
-        align: "center",
+        heightDots: 0, // 0 = 依欄寬等比縮放；fit === "stretch" 時作為指定高度
+        align: "center", // left | center | right，drawWidth < 欄寬時（widthPercent < 100）決定圖片框水平位置
+        widthPercent: 100, // 1-100，圖片框寬度 = 欄寬 × widthPercent/100
+        fit: "auto", // "auto"：依裁切後內容比例縮放高度｜"stretch"：改用 heightDots 指定高度（可能變形）
+        rotation: 0, // 0 | 90 | 180 | 270，順時針
+        cropRect: null, // null 或 { x, y, w, h }（0-1 正規化座標，相對「旋轉後」的圖片）
         brightness: 0, // -100..100
         contrast: 0, // -100..100
         invert: false,

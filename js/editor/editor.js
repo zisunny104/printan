@@ -15,6 +15,7 @@ import { renderTemplate, renderBatch } from "../core/renderer.js";
 import { BARCODE_FORMATS } from "../core/barcode.js";
 import { splitDotsByRatio } from "../core/units.js";
 import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js";
+import { convertHeicIfNeeded } from "../core/heic.js";
 import { exportToPdf } from "../core/pdf-export.js";
 import { saveDraft, loadDraft, deleteDraft, listRecent } from "../core/storage.js";
 import { SystemDialogAdapter, WebUsbEscposAdapter, WebSerialEscposAdapter, detectBrowserCapabilities } from "../core/printer-adapter.js";
@@ -230,7 +231,10 @@ function bindToolbar() {
     els["btn-add-divider"].addEventListener("click", () => insertElement(createDividerElement()));
     els["btn-add-barcode"].addEventListener("click", () => insertElement(createBarcodeElement()));
 
-    els["btn-add-image"].addEventListener("click", () => els["image-file-input"].click());
+    els["btn-add-image"].addEventListener("click", () => {
+        imageFileInputHandler = null;
+        els["image-file-input"].click();
+    });
 
     document.querySelectorAll("#row-ratio-dropdown .item[data-ratio]").forEach((item) => {
         item.addEventListener("click", () => {
@@ -265,15 +269,36 @@ function bindToolbar() {
     els["btn-print"].addEventListener("click", printCurrent);
 }
 
+// image-file-input 是整個編輯器共用的單一 hidden input（工具列「新增圖片」與各圖片元素
+// inspector 的「更換圖片」都借用同一個），用這個變數帶「這一次選檔要怎麼處理」，避免像過去
+// 那樣在同一個 input 上疊加第二個 change 監聽器（會兩邊都觸發，多插入一個重複元素）。
+let imageFileInputHandler = null; // null＝新增一個圖片元素；有值＝把選到的 assetId 交給這個 callback（例如更換既有元素的圖片）
+
+async function handleImageFileSelected(file) {
+    let converted;
+    try {
+        converted = await convertHeicIfNeeded(file);
+    } catch (err) {
+        alert(`HEIC 轉換失敗：${err.message}`);
+        return null;
+    }
+    const dataUrl = await fileToDataUrl(converted);
+    const assetId = `asset_${Date.now().toString(36)}`;
+    state.project.assets.push({ id: assetId, type: converted.type, dataUrl });
+    return assetId;
+}
+
 function bindFileInputs() {
     els["image-file-input"].addEventListener("change", async (e) => {
         const file = e.target.files[0];
         e.target.value = "";
+        const handler = imageFileInputHandler;
+        imageFileInputHandler = null;
         if (!file) return;
-        const dataUrl = await fileToDataUrl(file);
-        const assetId = `asset_${Date.now().toString(36)}`;
-        state.project.assets.push({ id: assetId, type: file.type, dataUrl });
-        insertElement(createImageElement({ assetId }));
+        const assetId = await handleImageFileSelected(file);
+        if (!assetId) return;
+        if (handler) handler(assetId);
+        else insertElement(createImageElement({ assetId }));
     });
 
     els["ptan-file-input"].addEventListener("change", async (e) => {
@@ -977,24 +1002,132 @@ function buildTextInspector(panel, el) {
     panel.appendChild(field(null, checkboxInput(el.wrap, (v) => { el.wrap = v; onModelChange({ skipInspector: true }); }, "自動換行")));
 }
 
+function resolveAssetDataUrl(assetId) {
+    const asset = state.project.assets.find((a) => a.id === assetId);
+    return asset ? asset.dataUrl : null;
+}
+
+function loadImageElement(src) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = src;
+    });
+}
+
+/** 圖片元素的裁切工具：canvas 顯示「旋轉後」的圖片，疊一層可拖曳/縮放的裁切框。
+ * cropRect 儲存在 el 上為 0-1 正規化座標，相對旋轉後的圖片（與 renderer.js 的裁切邏輯一致）。 */
+function buildCropTool(el) {
+    const wrap = document.createElement("div");
+    wrap.className = "image-crop-tool";
+    const dataUrl = resolveAssetDataUrl(el.assetId);
+    if (!dataUrl) {
+        wrap.hidden = true;
+        return wrap;
+    }
+
+    const canvas = document.createElement("canvas");
+    const box = document.createElement("div");
+    box.className = "image-crop-box";
+    ["nw", "ne", "sw", "se"].forEach((pos) => {
+        const handle = document.createElement("div");
+        handle.className = `image-crop-handle is-${pos}`;
+        handle.dataset.pos = pos;
+        box.appendChild(handle);
+    });
+    wrap.appendChild(canvas);
+    wrap.appendChild(box);
+
+    function currentRect() {
+        return el.cropRect || { x: 0, y: 0, w: 1, h: 1 };
+    }
+
+    function layoutBox() {
+        const r = currentRect();
+        box.style.left = `${r.x * 100}%`;
+        box.style.top = `${r.y * 100}%`;
+        box.style.width = `${r.w * 100}%`;
+        box.style.height = `${r.h * 100}%`;
+    }
+
+    function setCropRect(next) {
+        const MIN = 0.04;
+        let w = Math.max(MIN, Math.min(1, next.w));
+        let h = Math.max(MIN, Math.min(1, next.h));
+        const x = Math.max(0, Math.min(1 - w, next.x));
+        const y = Math.max(0, Math.min(1 - h, next.y));
+        el.cropRect = { x, y, w, h };
+        layoutBox();
+        onModelChange({ skipInspector: true });
+    }
+
+    box.addEventListener("pointerdown", (e) => {
+        const handlePos = e.target instanceof HTMLElement ? e.target.dataset.pos : null;
+        e.preventDefault();
+        e.stopPropagation();
+        box.setPointerCapture(e.pointerId);
+        const startRect = currentRect();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const rect = canvas.getBoundingClientRect();
+        const move = (ev) => {
+            const dxFrac = (ev.clientX - startX) / rect.width;
+            const dyFrac = (ev.clientY - startY) / rect.height;
+            if (!handlePos) {
+                setCropRect({ ...startRect, x: startRect.x + dxFrac, y: startRect.y + dyFrac });
+                return;
+            }
+            let { x, y, w, h } = startRect;
+            if (handlePos.includes("w")) { x = startRect.x + dxFrac; w = startRect.w - dxFrac; }
+            if (handlePos.includes("e")) { w = startRect.w + dxFrac; }
+            if (handlePos.includes("n")) { y = startRect.y + dyFrac; h = startRect.h - dyFrac; }
+            if (handlePos.includes("s")) { h = startRect.h + dyFrac; }
+            setCropRect({ x, y, w, h });
+        };
+        const up = () => {
+            box.releasePointerCapture(e.pointerId);
+            box.removeEventListener("pointermove", move);
+            box.removeEventListener("pointerup", up);
+        };
+        box.addEventListener("pointermove", move);
+        box.addEventListener("pointerup", up);
+    });
+
+    (async () => {
+        const img = await loadImageElement(dataUrl);
+        if (!img) { wrap.hidden = true; return; }
+        const rotation = ((el.rotation || 0) % 360 + 360) % 360;
+        const swapped = rotation === 90 || rotation === 270;
+        const rotatedW = swapped ? img.naturalHeight : img.naturalWidth;
+        const rotatedH = swapped ? img.naturalWidth : img.naturalHeight;
+        const scale = Math.min(1, 260 / rotatedW);
+        canvas.width = Math.max(1, Math.round(rotatedW * scale));
+        canvas.height = Math.max(1, Math.round(rotatedH * scale));
+        const ctx = canvas.getContext("2d");
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((rotation * Math.PI) / 180);
+        const drawW = img.naturalWidth * scale;
+        const drawH = img.naturalHeight * scale;
+        ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+        ctx.restore();
+        layoutBox();
+    })();
+
+    return wrap;
+}
+
 function buildImageInspector(panel, el) {
     panel.appendChild(sectionHeader("image", "圖片來源"));
     const isVariable = typeof el.assetId === "string" && /\{\{.*\}\}/.test(el.assetId);
 
     const pickBtn = mkButton(el.assetId && !isVariable ? "更換圖片" : "選擇圖片", "upload", () => {
-        els["image-file-input"].onchange = null;
-        const handler = async (e) => {
-            const file = e.target.files[0];
-            e.target.value = "";
-            els["image-file-input"].removeEventListener("change", handler);
-            if (!file) return;
-            const dataUrl = await fileToDataUrl(file);
-            const assetId = `asset_${Date.now().toString(36)}`;
-            state.project.assets.push({ id: assetId, type: file.type, dataUrl });
+        imageFileInputHandler = (assetId) => {
             el.assetId = assetId;
+            el.cropRect = null; // 換圖後舊的裁切窗格對新圖不再有意義
             onModelChange();
         };
-        els["image-file-input"].addEventListener("change", handler);
         els["image-file-input"].click();
     }, { outlined: true });
 
@@ -1015,8 +1148,42 @@ function buildImageInspector(panel, el) {
     panel.appendChild(varWrap);
 
     panel.appendChild(sectionDivider());
-    panel.appendChild(sectionHeader("ruler", "尺寸"));
-    panel.appendChild(field("固定高度 (dot，0＝依欄寬等比縮放)", textInput(el.heightDots, (v) => { el.heightDots = v; onModelChange({ skipInspector: true }); }, "number")));
+    panel.appendChild(sectionHeader("ruler", "尺寸與版面"));
+    panel.appendChild(sliderField("寬度 (%)", Math.max(1, Math.min(100, el.widthPercent ?? 100)), 1, 100, (v) => { el.widthPercent = v; onModelChange({ skipInspector: true }); }));
+
+    const layoutRow = document.createElement("div");
+    layoutRow.className = "ts-wrap is-compact has-top-spaced-small";
+    layoutRow.appendChild(iconToggleButton("align-left", "靠左", el.align === "left", () => { el.align = "left"; onModelChange(); }));
+    layoutRow.appendChild(iconToggleButton("align-center", "置中", (el.align || "center") === "center", () => { el.align = "center"; onModelChange(); }));
+    layoutRow.appendChild(iconToggleButton("align-right", "靠右", el.align === "right", () => { el.align = "right"; onModelChange(); }));
+    layoutRow.appendChild(iconToggleButton("rotate-right", "順時針旋轉 90°", false, () => {
+        el.rotation = ((el.rotation || 0) + 90) % 360;
+        el.cropRect = null; // 旋轉後舊裁切窗格的座標系不再對應原圖，重置避免裁到錯的地方
+        onModelChange();
+    }));
+    layoutRow.appendChild(iconToggleButton("arrows-up-down", "拉伸至指定高度（關閉＝依比例縮放）", el.fit === "stretch", () => {
+        el.fit = el.fit === "stretch" ? "auto" : "stretch";
+        onModelChange();
+    }));
+    panel.appendChild(layoutRow);
+
+    if (el.fit === "stretch") {
+        panel.appendChild(field("指定高度 (dot)", textInput(el.heightDots || 0, (v) => { el.heightDots = v; onModelChange({ skipInspector: true }); }, "number")));
+    }
+
+    if (!isVariable && el.assetId) {
+        panel.appendChild(sectionDivider());
+        panel.appendChild(sectionHeader("crop-simple", "裁切"));
+        const cropTool = buildCropTool(el);
+        panel.appendChild(cropTool);
+        const cropActions = document.createElement("div");
+        cropActions.className = "ts-wrap is-compact has-top-spaced-small";
+        cropActions.appendChild(iconButton("expand", "還原（取消裁切）", () => {
+            el.cropRect = null;
+            onModelChange();
+        }));
+        panel.appendChild(cropActions);
+    }
 
     panel.appendChild(sectionDivider());
     panel.appendChild(sectionHeader("sliders", "調整"));
