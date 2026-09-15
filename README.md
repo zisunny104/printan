@@ -60,7 +60,6 @@ cd printan
 
 此版本為第一階段可完整操作的雛型，以下項目列為後續階段：
 
-- 畫布上直接拖曳／縮放元素（目前透過屬性面板調整數值）
 - WebSerial／WebBluetooth 印表機連線（目前已支援 WebUSB 直連）
 - CSV／外部 API 作為批次資料來源（目前僅支援貼上 JSON）
 - Shape／Table／Icon 元素
