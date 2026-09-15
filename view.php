@@ -55,16 +55,6 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 </button>
                 <div class="ts-selection is-small" id="paper-width-tabs" role="radiogroup" aria-label="紙寬"></div>
                 <div class="ts-divider is-vertical" style="height:1.4em"></div>
-                <div class="ts-buttons">
-                    <button class="ts-button is-small is-icon is-ghost" id="btn-toggle-thermal"
-                        data-tooltip="切換熱感輸出預覽" aria-label="切換熱感輸出預覽" aria-pressed="false">
-                        <span class="ts-icon is-circle-half-stroke-icon" aria-hidden="true"></span>
-                    </button>
-                    <button class="ts-button is-small is-icon is-ghost" id="btn-toggle-preview-mode"
-                        data-tooltip="切換編輯／預覽模式" aria-label="切換編輯／預覽模式" aria-pressed="false">
-                        <span class="ts-icon is-eye-icon" aria-hidden="true"></span>
-                    </button>
-                </div>
                 <span class="toolbar-spacer"></span>
                 <div class="ts-buttons">
                     <button class="ts-button is-small is-outlined is-start-icon" id="btn-open-ptan">
@@ -172,9 +162,27 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
 
                 <div class="editor-canvas-pane" id="canvasPane">
                     <div class="ts-box is-rounded paper-viewport" id="paper-viewport">
-                        <div class="paper-shadow" id="paper-shadow">
-                            <div class="safe-area-guide" id="safe-area-guide"></div>
-                            <div id="canvas-host" class="canvas-host"></div>
+                        <div class="pane-card-header">
+                            <span class="pane-card-header-title">
+                                <span class="ts-icon is-receipt-icon" aria-hidden="true"></span>
+                                <span>工作區</span>
+                            </span>
+                            <div class="pane-header-toggle-buttons">
+                                <button class="ts-button is-icon is-ghost" id="btn-toggle-thermal"
+                                    data-tooltip="切換熱感輸出預覽" aria-label="切換熱感輸出預覽" aria-pressed="false">
+                                    <span class="ts-icon is-circle-half-stroke-icon" aria-hidden="true"></span>
+                                </button>
+                                <button class="ts-button is-icon is-ghost" id="btn-toggle-preview-mode"
+                                    data-tooltip="切換編輯／預覽模式" aria-label="切換編輯／預覽模式" aria-pressed="false">
+                                    <span class="ts-icon is-eye-icon" aria-hidden="true"></span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="paper-viewport-body">
+                            <div class="paper-shadow" id="paper-shadow">
+                                <div class="safe-area-guide" id="safe-area-guide"></div>
+                                <div id="canvas-host" class="canvas-host"></div>
+                            </div>
                         </div>
                     </div>
 

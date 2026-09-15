@@ -81,6 +81,25 @@ body {
     flex: 0 0 auto;
 }
 
+/* 顯示模式切換鈕群組：各自獨立的開關，不用 .ts-buttons（那個會把兩顆鈕合併成
+   膠囊、中間夾一條分隔線），改用純間距排列，開啟狀態靠下面的 .is-active 填色表示 */
+.pane-header-toggle-buttons {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+}
+
+/* 開啟狀態比照紙寬切換（.ts-selection 選中項目）的填色風格，而不是分隔線 */
+.pane-card-header .ts-button.is-icon.is-active {
+    background: var(--ts-primary-700, #0050b3);
+    color: #fff;
+}
+
+.pane-card-header .ts-button.is-icon.is-active:hover {
+    background: var(--ts-primary-800, #003a8c);
+    color: #fff;
+}
+
 .pane-collapse-toggle .ts-icon {
     transition: transform .15s ease;
 }
@@ -294,7 +313,15 @@ body {
 
 /* ---- 紙張預覽：陰影表示整捲紙寬，虛線表示可列印範圍與安全區 ---- */
 
+/* .paper-viewport 現在是外層 ts-box（比照 pitrace #scanPaneBox），直向排列
+   .pane-card-header（工作區標題＋顯示模式切換）跟下面實際的紙張預覽本體；
+   原本置中紙張的排版規則搬到 .paper-viewport-body，避免跟標題列擠成同一列。 */
 .paper-viewport {
+    display: flex;
+    flex-direction: column;
+}
+
+.paper-viewport-body {
     display: flex;
     justify-content: center;
     padding: 1.5rem 0;
