@@ -63,7 +63,7 @@ async function init() {
 
 function cacheDom() {
     [
-        "save-status", "printer-profile-label", "printer-profile-dropdown", "paper-width-tabs",
+        "save-status", "printer-profile-label", "printer-profile-list", "paper-width-tabs",
         "btn-add-text", "btn-add-image", "btn-add-spacer", "btn-add-divider", "btn-add-barcode",
         "btn-toggle-thermal", "btn-toggle-preview-mode", "btn-open-ptan", "btn-save-ptan", "btn-export-pdf",
         "btn-export-batch-pdf", "btn-print", "outline-list", "inspector",
@@ -100,18 +100,20 @@ async function restoreOrCreateProject() {
 
 // ---- 頂部工具列 ----
 
-// 型號選單用 Tocas 原生 .ts-dropdown（同 row-ratio-dropdown／pitrace 專案選單慣例），
-// 不用原生 <select>：瀏覽器對 <select> 展開後的選項清單無法套用自訂樣式，
-// 一定是作業系統原生外觀，跟頁面其他地方的 Tocas 視覺不一致。
+// 型號清單改放在印表機設定 modal 裡（跟 USB 連線／走紙／切紙同一個地方），不用
+// Tocas 原生 <select>：瀏覽器對 <select> 展開後的選項清單無法套用自訂樣式，
+// 一定是作業系統原生外觀，跟頁面其他地方的 Tocas 視覺不一致。用 .ts-button 排一直欄，
+// 目前選中的型號比照顯示模式切換鈕的填色風格（.is-active），不用邊框標示。
 function populatePrinterProfileSelect() {
-    const dropdown = els["printer-profile-dropdown"];
-    dropdown.querySelectorAll(".item[data-profile-id]").forEach((item) => item.remove());
+    const list = els["printer-profile-list"];
+    list.innerHTML = "";
     const currentId = state.project.printerProfile.id;
 
     for (const profile of listPrinterProfiles()) {
         const item = document.createElement("button");
         item.type = "button";
-        item.className = "item";
+        item.className = "ts-button is-small is-outlined is-fluid is-start-icon";
+        item.classList.toggle("is-active", profile.id === currentId);
         item.dataset.profileId = profile.id;
         if (profile.id === currentId) {
             const check = document.createElement("span");
@@ -130,7 +132,7 @@ function populatePrinterProfileSelect() {
             populatePaperWidthTabs();
             onModelChange();
         });
-        dropdown.appendChild(item);
+        list.appendChild(item);
     }
 
     const current = getPrinterProfile(currentId);

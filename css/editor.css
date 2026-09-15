@@ -100,6 +100,27 @@ body {
     color: #fff;
 }
 
+/* 印表機設定 modal 裡的型號清單：直向排列的 .ts-button，選中項目比照顯示模式
+   切換鈕同一套填色風格（見上面 .is-active 規則），這裡另外處理 is-outlined
+   的邊框顏色，選中時邊框要跟著填色一起變，不然會出現藍底黑框的怪異組合。 */
+.printer-profile-list {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+}
+
+.printer-profile-list .ts-button.is-active {
+    background: var(--ts-primary-700, #0050b3);
+    border-color: var(--ts-primary-700, #0050b3);
+    color: #fff;
+}
+
+.printer-profile-list .ts-button.is-active:hover {
+    background: var(--ts-primary-800, #003a8c);
+    border-color: var(--ts-primary-800, #003a8c);
+    color: #fff;
+}
+
 /* 印表機設定鈕的連線狀態：不開 modal 也要看得出來有沒有連接。用角落實心圓點，
    跟 .is-active 那種整顆填色的「目前開啟」語意分開，避免兩種狀態混淆。 */
 #btn-printer-settings.is-connected {

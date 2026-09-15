@@ -48,10 +48,14 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
             <div class="ts-divider has-vertically-spaced"></div>
 
             <div id="toolbar" class="pane-toolbar" role="toolbar" aria-label="編輯工具">
-                <button type="button" class="ts-button is-small is-outlined is-end-icon"
-                    data-dropdown="printer-profile-dropdown" aria-haspopup="true" aria-label="印表機規格與設定">
+                <!-- 印表機型號／USB 連線／走紙／切紙全部歸在同一顆「印表機設定」按鈕底下同一個
+                     modal 裡：型號雖然會影響版面（紙寬／點陣寬度），但實際操作上就是「這台印表機
+                     的設定」，跟連線、走紙、切紙分開放反而要找兩個地方。紙寬（80/58mm）編輯時常常
+                     切換，維持獨立的快速開關，不塞進 modal。 -->
+                <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-settings"
+                    data-tooltip="印表機設定（型號／USB 連線／走紙／切紙）" aria-label="印表機設定">
+                    <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
                     <span id="printer-profile-label">印表機</span>
-                    <span class="ts-icon is-chevron-down-icon" aria-hidden="true"></span>
                 </button>
                 <div class="ts-selection is-small" id="paper-width-tabs" role="radiogroup" aria-label="紙寬"></div>
                 <div class="ts-divider is-vertical" style="height:1.4em"></div>
@@ -67,12 +71,6 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         <span class="ts-icon is-file-pdf-icon" aria-hidden="true"></span> 匯出 PDF
                     </button>
                 </div>
-                <!-- 印表機設定（USB 連線／走紙／切紙）跟「列印」是同一件事的兩個開關，
-                     放在按鈕正左邊，不跟型號選單混在一起（型號是版面設定，走紙/連線是列印行為） -->
-                <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-printer-settings"
-                    data-tooltip="印表機設定（USB 連線／走紙／切紙）" aria-label="印表機設定">
-                    <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
-                </button>
                 <button class="ts-button is-small is-primary is-start-icon" id="btn-print">
                     <span class="ts-icon is-print-icon" aria-hidden="true"></span> 列印
                 </button>
@@ -86,13 +84,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <a class="item" data-ratio="1,1,1">1 / 1 / 1</a>
             </div>
 
-            <!-- 印表機型號選單：只列型號（會改變紙寬／點陣寬度，屬於版面設定，編輯時就要看得到）。
-                 連線／走紙／切紙是「列印」當下的行為，放在列印按鈕旁邊，見 btn-print 附近。 -->
-            <div class="ts-dropdown" id="printer-profile-dropdown">
-                <!-- 型號清單由 JS 動態產生 -->
-            </div>
-
-            <!-- 印表機設定：WebUSB 直連 + 走紙／切紙偏好，跟編輯器本體一樣是本機操作習慣 -->
+            <!-- 印表機設定：型號 + WebUSB 直連 + 走紙／切紙偏好，同一台印表機的設定全部放一起 -->
             <dialog id="printer-settings-dialog" class="ts-modal">
                 <div class="content">
                     <div class="ts-content">
@@ -100,6 +92,13 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                             <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
                             印表機設定
                         </div>
+                    </div>
+                    <div class="ts-divider"></div>
+                    <div class="ts-content">
+                        <div class="ts-text is-label">印表機型號</div>
+                        <div class="ts-space is-small"></div>
+                        <!-- 型號清單由 JS 動態產生（見 populatePrinterProfileSelect） -->
+                        <div id="printer-profile-list" class="printer-profile-list"></div>
                     </div>
                     <div class="ts-divider"></div>
                     <div class="ts-content">
