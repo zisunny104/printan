@@ -9,6 +9,20 @@
     display: none !important;
 }
 
+/* KoiLiSu 共用 sticky footer 慣例（見 templates/app-template、pitrace/hapbun/kobeu/
+   gradcheck 等其他 app 的 view.php）：body 是 flex column + min-height:100vh，主內容包一層
+   .main-content 拿 flex:1 撐開，開利手底部才會固定貼齊視窗下緣，內容不夠長時不會在底部
+   多出一截空白背景。printan 先前漏掉這層，是唯一沒套用這個慣例的 app，補上跟其他 app 一致。 */
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.main-content {
+    flex: 1;
+}
+
 /* ---- 工具列（沿用 KoiLiSu 家族慣例：pane-toolbar / pane-card-header） ---- */
 
 .pane-toolbar {
@@ -20,6 +34,12 @@
 
 .toolbar-spacer {
     flex: 1 1 auto;
+}
+
+/* 富文字選取範圍跨越多種樣式時的「混合」狀態：整圈外框，不用單邊色條標示。 */
+.ts-button.is-icon.is-mixed {
+    outline: 1px dashed var(--ts-gray-500);
+    outline-offset: -1px;
 }
 
 .pane-card-header {
@@ -101,7 +121,11 @@
 @media (min-width: 1024px) {
     .editor-shell {
         flex-direction: row;
-        align-items: stretch;
+        /* flex-start，不是 stretch：三欄的內容高度天生不一樣（中間紙張預覽通常比
+           右側一堆卡片堆疊矮很多），stretch 會硬把矮的欄位撐到跟最高欄位一樣高，
+           撐出來的空間沒有東西可以填、看起來就是版面下半截一大片空白。拖曳分隔線
+           另外用 align-self: stretch 蓋回來，才能維持貫穿整列的視覺分隔。 */
+        align-items: flex-start;
         gap: 0;
     }
 
@@ -128,6 +152,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        align-self: stretch;
         flex: 0 0 1rem;
         width: 1rem;
         cursor: col-resize;
@@ -265,6 +290,9 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, .15), 0 0 0 1px var(--ts-gray-200);
     padding: 0 var(--paper-margin, 12px);
     border-radius: 2px;
+    /* 版面還沒加任何元素時，畫布實際內容高度只有幾個 px，紙張看起來像一條裂縫、
+       容易被誤會成渲染壞掉。給一個最小高度，撐出看得出「這是一張紙」的空間。 */
+    min-height: 160px;
 }
 
 /* 上緣沒有實體邊界，純視覺留白 6px；下緣改用印表機 profile 的切刀刀片距離

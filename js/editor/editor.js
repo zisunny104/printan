@@ -8,7 +8,8 @@ import {
 } from "../core/printer-profiles.js";
 import {
     createTextElement, createImageElement, createSpacerElement, createDividerElement,
-    createRowElement, cloneElementWithNewIds, extractPlaceholders,
+    createRowElement, cloneElementWithNewIds, extractPlaceholders, getTextContent,
+    getRangeStyle, applyStyleToRange, replaceFullText, MIXED,
 } from "../core/document-model.js";
 import { renderTemplate, renderBatch } from "../core/renderer.js";
 import { splitDotsByRatio } from "../core/units.js";
@@ -59,7 +60,7 @@ async function init() {
 
 function cacheDom() {
     [
-        "save-status", "printer-profile-select", "paper-width-tabs",
+        "save-status", "printer-profile-label", "printer-profile-dropdown", "paper-width-tabs",
         "btn-add-text", "btn-add-image", "btn-add-spacer", "btn-add-divider",
         "btn-toggle-thermal", "btn-toggle-preview-mode", "btn-open-ptan", "btn-save-ptan", "btn-export-pdf",
         "btn-export-batch-pdf", "btn-print", "outline-list", "inspector",
@@ -80,7 +81,10 @@ async function restoreOrCreateProject() {
     if (lastId) {
         try {
             const draft = await loadDraft(lastId);
-            if (draft) return draft;
+            if (draft) {
+                const result = loadProject(draft);
+                if (result.ok) return result.project;
+            }
         } catch {
             // IndexedDB 讀取失敗就當作沒有草稿，往下建立新專案
         }
@@ -93,25 +97,41 @@ async function restoreOrCreateProject() {
 
 // ---- 頂部工具列 ----
 
+// 型號選單用 Tocas 原生 .ts-dropdown（同 row-ratio-dropdown／pitrace 專案選單慣例），
+// 不用原生 <select>：瀏覽器對 <select> 展開後的選項清單無法套用自訂樣式，
+// 一定是作業系統原生外觀，跟頁面其他地方的 Tocas 視覺不一致。
 function populatePrinterProfileSelect() {
-    const sel = els["printer-profile-select"];
-    sel.innerHTML = "";
+    const dropdown = els["printer-profile-dropdown"];
+    dropdown.querySelectorAll(".item[data-profile-id]").forEach((item) => item.remove());
+    const currentId = state.project.printerProfile.id;
+
     for (const profile of listPrinterProfiles()) {
-        const opt = document.createElement("option");
-        opt.value = profile.id;
-        opt.textContent = `${profile.brand} ${profile.model}`;
-        sel.appendChild(opt);
-    }
-    sel.value = state.project.printerProfile.id;
-    sel.addEventListener("change", () => {
-        state.project.printerProfile.id = sel.value;
-        const profile = getPrinterProfile(sel.value);
-        if (!profile.paperWidths.some((w) => w.id === state.project.paper.widthId)) {
-            state.project.paper.widthId = profile.defaultPaperWidthId;
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "item";
+        item.dataset.profileId = profile.id;
+        if (profile.id === currentId) {
+            const check = document.createElement("span");
+            check.className = "ts-icon is-check-icon";
+            check.setAttribute("aria-hidden", "true");
+            item.appendChild(check);
         }
-        populatePaperWidthTabs();
-        onModelChange();
-    });
+        item.append(`${profile.brand} ${profile.model}`);
+        item.addEventListener("click", () => {
+            if (profile.id === state.project.printerProfile.id) return;
+            state.project.printerProfile.id = profile.id;
+            if (!profile.paperWidths.some((w) => w.id === state.project.paper.widthId)) {
+                state.project.paper.widthId = profile.defaultPaperWidthId;
+            }
+            populatePrinterProfileSelect();
+            populatePaperWidthTabs();
+            onModelChange();
+        });
+        dropdown.appendChild(item);
+    }
+
+    const current = getPrinterProfile(currentId);
+    els["printer-profile-label"].textContent = `${current.brand} ${current.model}`;
 }
 
 function populatePaperWidthTabs() {
@@ -424,7 +444,7 @@ const TYPE_ICON = { text: "font", image: "image", spacer: "arrows-up-down", divi
 
 function elementLabel(el) {
     switch (el.type) {
-        case "text": return el.text ? el.text.slice(0, 14) : "（空白文字）";
+        case "text": { const t = getTextContent(el); return t ? t.slice(0, 14) : "（空白文字）"; }
         case "image": return el.assetId ? "圖片" : "圖片（未設定）";
         case "spacer": return `間隔 ${el.heightDots}dot`;
         case "divider": return "分隔線";
@@ -501,7 +521,7 @@ function renderInspector() {
     panel.innerHTML = "";
     const el = state.selectedId ? findElementById(state.project.template.elements, state.selectedId) : null;
     if (!el) {
-        panel.appendChild(emptyState("sliders", "尚未選取元素", "請先在左側版面結構中選取一個元素"));
+        panel.appendChild(emptyState("sliders", "尚未選取元素"));
         return;
     }
 
@@ -523,7 +543,7 @@ function emptyState(icon, title, description) {
     wrap.innerHTML = `
         <span class="ts-icon is-${icon}-icon is-heading" aria-hidden="true"></span>
         <div class="ts-text is-description">${title}</div>
-        <div class="ts-text is-description">${description}</div>
+        ${description ? `<div class="ts-text is-description">${description}</div>` : ""}
     `;
     return wrap;
 }
@@ -599,17 +619,6 @@ function textInput(value, onInput, type = "text") {
     return wrap;
 }
 
-function textareaInput(value, onInput) {
-    const wrap = document.createElement("div");
-    wrap.className = "ts-input is-small is-fluid";
-    const textarea = document.createElement("textarea");
-    textarea.rows = 3;
-    textarea.value = value;
-    textarea.addEventListener("input", () => onInput(textarea.value));
-    wrap.appendChild(textarea);
-    return wrap;
-}
-
 function selectInput(options, value, onChange) {
     const wrap = document.createElement("div");
     wrap.className = "ts-select is-small is-fluid";
@@ -641,23 +650,147 @@ function checkboxInput(checked, onChange, labelText) {
     return label;
 }
 
+// 可選字體（比照 Figma 對齊等段落屬性維持在元素層級，這裡列的字體/字級/粗體/
+// 斜體/底線/刪除線則是「片段（run）」層級，同一個文字元素裡的每個片段可以各自
+// 覆寫；片段沒指定時繼承這份清單第一項以外的元素預設值（見 renderer.js resolveRunStyle）。
+const FONT_CHOICES = [
+    ['"Noto Sans TC", "Microsoft JhengHei", sans-serif', "思源黑體（無襯線）"],
+    ['"Noto Serif TC", PMingLiU, serif', "思源宋體（襯線）"],
+    ['DFKai-SB, BiauKai, "Kaiti TC", serif', "標楷體"],
+    ["ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", "等寬（數字／條碼文字）"],
+];
+
+function fontFamilySelect(value, onChange, inheritLabel) {
+    return selectInput([["", inheritLabel], ...FONT_CHOICES], value || "", (v) => onChange(v || null));
+}
+
+/** 選取範圍樣式工具列上的單一切換按鈕；value 為 MIXED 時顯示「混合」視覺狀態，沒有選取範圍時停用。 */
+function rangeToggleButton(icon, label, value, hasRange, onToggle) {
+    const isMixed = value === MIXED;
+    const active = value === true;
+    const btn = document.createElement("button");
+    btn.className = "ts-button is-icon is-outlined is-small";
+    btn.classList.toggle("is-active", active);
+    btn.classList.toggle("is-mixed", isMixed);
+    btn.type = "button";
+    btn.disabled = !hasRange;
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("aria-pressed", String(active));
+    btn.dataset.tooltip = label;
+    btn.innerHTML = `<span class="ts-icon is-${icon}-icon" aria-hidden="true"></span>`;
+    btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onToggle(isMixed ? true : !active);
+    });
+    return btn;
+}
+
+function rangeFontFamilySelect(value, hasRange, onChange) {
+    const wrap = document.createElement("div");
+    wrap.className = "ts-select is-small is-fluid";
+    const select = document.createElement("select");
+    select.disabled = !hasRange;
+    const options = [["", "跟隨段落預設"], ...FONT_CHOICES];
+    if (value === MIXED) options.unshift(["__mixed__", "混合"]);
+    for (const [v, label] of options) {
+        const opt = document.createElement("option");
+        opt.value = v;
+        opt.textContent = label;
+        opt.selected = value === MIXED ? v === "__mixed__" : v === (value || "");
+        select.appendChild(opt);
+    }
+    select.addEventListener("change", () => onChange(select.value || null));
+    wrap.appendChild(select);
+    return wrap;
+}
+
+function rangeFontSizeInput(value, hasRange, onChange) {
+    const wrap = document.createElement("div");
+    wrap.className = "ts-input is-small is-fluid";
+    const input = document.createElement("input");
+    input.type = "number";
+    input.disabled = !hasRange;
+    if (value === MIXED) {
+        input.value = "";
+        input.placeholder = "混合";
+    } else {
+        input.value = value || "";
+    }
+    input.addEventListener("input", () => onChange(input.value ? Number(input.value) : null));
+    wrap.appendChild(input);
+    return wrap;
+}
+
 function buildTextInspector(panel, el) {
-    panel.appendChild(sectionHeader("align-left", "內容"));
-    panel.appendChild(field("文字內容（可用 {{變數}}）", textareaInput(el.text, (v) => { el.text = v; onModelChange({ skipInspector: true }); })));
+    panel.appendChild(sectionHeader("align-left", "內容（可用 {{變數}}）"));
+
+    const sel = { start: 0, end: 0 };
+    const toolbar = document.createElement("div");
+    toolbar.className = "pane-toolbar has-top-spaced-small";
+    panel.appendChild(toolbar);
+    const styleRow = document.createElement("div");
+    panel.appendChild(styleRow);
+
+    const textareaWrap = document.createElement("div");
+    textareaWrap.className = "ts-input is-small is-fluid has-top-spaced-small";
+    const textarea = document.createElement("textarea");
+    textarea.rows = 4;
+    textarea.value = getTextContent(el);
+    textareaWrap.appendChild(textarea);
+    panel.appendChild(textareaWrap);
+
+    function renderStyleControls() {
+        const hasRange = sel.start !== sel.end;
+        const style = getRangeStyle(el, sel.start, sel.end);
+        toolbar.innerHTML = "";
+        toolbar.appendChild(rangeToggleButton("bold", "粗體", style.bold, hasRange, (v) => applyRangeStyle("bold", v)));
+        toolbar.appendChild(rangeToggleButton("italic", "斜體", style.italic, hasRange, (v) => applyRangeStyle("italic", v)));
+        toolbar.appendChild(rangeToggleButton("underline", "底線", style.underline, hasRange, (v) => applyRangeStyle("underline", v)));
+        toolbar.appendChild(rangeToggleButton("strikethrough", "刪除線", style.strikethrough, hasRange, (v) => applyRangeStyle("strikethrough", v)));
+
+        styleRow.innerHTML = "";
+        styleRow.appendChild(fieldRow([
+            ["字體", rangeFontFamilySelect(style.fontFamily, hasRange, (v) => applyRangeStyle("fontFamily", v))],
+            ["字級 (dot)", rangeFontSizeInput(style.fontSize, hasRange, (v) => applyRangeStyle("fontSize", v))],
+        ]));
+    }
+
+    function applyRangeStyle(field, value) {
+        applyStyleToRange(el, sel.start, sel.end, field, value);
+        onModelChange({ skipInspector: true });
+        renderStyleControls();
+    }
+
+    function trackSelection() {
+        sel.start = textarea.selectionStart;
+        sel.end = textarea.selectionEnd;
+        renderStyleControls();
+    }
+    ["select", "keyup", "mouseup", "click", "focus"].forEach((evt) => textarea.addEventListener(evt, trackSelection));
+    textarea.addEventListener("input", () => {
+        replaceFullText(el, textarea.value);
+        onModelChange({ skipInspector: true });
+        trackSelection();
+    });
+
+    renderStyleControls();
 
     panel.appendChild(sectionDivider());
-    panel.appendChild(sectionHeader("font", "文字樣式"));
+    panel.appendChild(sectionHeader("font", "段落樣式"));
     panel.appendChild(fieldRow([
-        ["字級 (dot)", textInput(el.fontSize, (v) => { el.fontSize = v; onModelChange({ skipInspector: true }); }, "number")],
+        ["預設字體", fontFamilySelect(el.fontFamily, (v) => { el.fontFamily = v; onModelChange({ skipInspector: true }); }, "跟隨全域預設")],
+        ["預設字級 (dot)", textInput(el.fontSize, (v) => { el.fontSize = v; onModelChange({ skipInspector: true }); }, "number")],
+    ]));
+    panel.appendChild(fieldRow([
         ["行高倍數", textInput(el.lineHeight, (v) => { el.lineHeight = v; onModelChange({ skipInspector: true }); }, "number")],
+        ["字距 (dot)", textInput(el.letterSpacing, (v) => { el.letterSpacing = v; onModelChange({ skipInspector: true }); }, "number")],
     ]));
     panel.appendChild(fieldRow([
-        ["字距 (dot)", textInput(el.letterSpacing, (v) => { el.letterSpacing = v; onModelChange({ skipInspector: true }); }, "number")],
         ["對齊", selectInput([["left", "靠左"], ["center", "置中"], ["right", "靠右"]], el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })],
+        ["最多行數（0＝不限制）", textInput(el.maxLines, (v) => { el.maxLines = v; onModelChange({ skipInspector: true }); }, "number")],
     ]));
-    panel.appendChild(field(null, checkboxInput(el.bold, (v) => { el.bold = v; onModelChange({ skipInspector: true }); }, "粗體")));
+    panel.appendChild(field(null, checkboxInput(el.bold, (v) => { el.bold = v; onModelChange({ skipInspector: true }); }, "預設粗體")));
     panel.appendChild(field(null, checkboxInput(el.wrap, (v) => { el.wrap = v; onModelChange({ skipInspector: true }); }, "自動換行")));
-    panel.appendChild(field("最多行數（0＝不限制）", textInput(el.maxLines, (v) => { el.maxLines = v; onModelChange({ skipInspector: true }); }, "number")));
 }
 
 function buildImageInspector(panel, el) {
@@ -679,7 +812,7 @@ function buildImageInspector(panel, el) {
         els["image-file-input"].click();
     }, { outlined: true });
     panel.appendChild(field(null, pickBtn));
-    panel.appendChild(field("或指定變數（例如 {{image}}，由資料提供圖片網址）", textInput(el.assetId || "", (v) => { el.assetId = v; onModelChange({ skipInspector: true }); })));
+    panel.appendChild(field("或指定變數（例如 {{image}}）", textInput(el.assetId || "", (v) => { el.assetId = v; onModelChange({ skipInspector: true }); })));
 
     panel.appendChild(sectionDivider());
     panel.appendChild(sectionHeader("ruler", "尺寸"));

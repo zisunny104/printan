@@ -24,7 +24,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
 </head>
 
 <body>
-    <div class="ts-content">
+    <div class="main-content">
         <div class="ts-container" style="max-width:1400px">
 
             <div class="ts-grid is-middle-aligned">
@@ -44,9 +44,11 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
             <div class="ts-divider has-vertically-spaced"></div>
 
             <div id="toolbar" class="pane-toolbar" role="toolbar" aria-label="編輯工具">
-                <div class="ts-select is-small">
-                    <select id="printer-profile-select" aria-label="印表機規格"></select>
-                </div>
+                <button type="button" class="ts-button is-small is-outlined is-end-icon"
+                    data-dropdown="printer-profile-dropdown" aria-haspopup="true" aria-label="印表機規格與設定">
+                    <span id="printer-profile-label">印表機</span>
+                    <span class="ts-icon is-chevron-down-icon" aria-hidden="true"></span>
+                </button>
                 <div class="ts-selection is-small" id="paper-width-tabs" role="radiogroup" aria-label="紙寬"></div>
                 <div class="ts-divider is-vertical" style="height:1.4em"></div>
                 <div class="ts-buttons">
@@ -76,10 +78,6 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         data-tooltip="切換編輯／預覽模式" aria-label="切換編輯／預覽模式" aria-pressed="false">
                         <span class="ts-icon is-eye-icon" aria-hidden="true"></span>
                     </button>
-                    <button class="ts-button is-small is-icon is-ghost" id="btn-printer-settings"
-                        data-tooltip="印表機設定" aria-label="印表機設定">
-                        <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
-                    </button>
                 </div>
                 <span class="toolbar-spacer"></span>
                 <div class="ts-buttons">
@@ -93,6 +91,12 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         <span class="ts-icon is-file-pdf-icon" aria-hidden="true"></span> 匯出 PDF
                     </button>
                 </div>
+                <!-- 印表機設定（USB 連線／走紙／切紙）跟「列印」是同一件事的兩個開關，
+                     放在按鈕正左邊，不跟型號選單混在一起（型號是版面設定，走紙/連線是列印行為） -->
+                <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-printer-settings"
+                    data-tooltip="印表機設定（USB 連線／走紙／切紙）" aria-label="印表機設定">
+                    <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
+                </button>
                 <button class="ts-button is-small is-primary is-start-icon" id="btn-print">
                     <span class="ts-icon is-print-icon" aria-hidden="true"></span> 列印
                 </button>
@@ -106,6 +110,12 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <a class="item" data-ratio="1,1,1">1 / 1 / 1</a>
             </div>
 
+            <!-- 印表機型號選單：只列型號（會改變紙寬／點陣寬度，屬於版面設定，編輯時就要看得到）。
+                 連線／走紙／切紙是「列印」當下的行為，放在列印按鈕旁邊，見 btn-print 附近。 -->
+            <div class="ts-dropdown" id="printer-profile-dropdown">
+                <!-- 型號清單由 JS 動態產生 -->
+            </div>
+
             <!-- 印表機設定：WebUSB 直連 + 走紙／切紙偏好，跟編輯器本體一樣是本機操作習慣 -->
             <dialog id="printer-settings-dialog" class="ts-modal">
                 <div class="content">
@@ -113,9 +123,6 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         <div class="ts-header is-start-icon">
                             <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
                             印表機設定
-                        </div>
-                        <div class="ts-text is-description has-top-spaced-small">
-                            設定完成且已連接時，工具列的「列印」會直接送出 ESC/POS 指令給印表機，不再跳出系統列印對話框。
                         </div>
                     </div>
                     <div class="ts-divider"></div>
@@ -203,7 +210,6 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                             <div class="pane-empty-state-static">
                                 <span class="ts-icon is-sliders-icon is-heading" aria-hidden="true"></span>
                                 <div class="ts-text is-description">尚未選取元素</div>
-                                <div class="ts-text is-description">請先在左側版面結構中選取一個元素</div>
                             </div>
                         </div>
                     </div>

@@ -10,20 +10,189 @@ function nextId(prefix) {
 
 export const ELEMENT_TYPES = ["text", "image", "spacer", "divider", "row"];
 
+/**
+ * 一個文字元素的內容由多個 run 組成（比照 Figma：同一段文字裡不同片段可以各自
+ * 覆寫字體／字級／粗體／斜體／底線／刪除線）。run 沒指定的樣式欄位會繼承所屬
+ * 文字元素的預設值（fontFamily/fontSize/bold），斜體／底線／刪除線沒有元素層級
+ * 預設值，未指定一律視為 false。align／wrap／maxLines／lineHeight／letterSpacing
+ * 是「段落」層級設定，仍然掛在元素上，不隨 run 變化。
+ */
+export function createTextRun(overrides = {}) {
+    return {
+        text: "",
+        ...overrides,
+    };
+}
+
 export function createTextElement(overrides = {}) {
     return {
         id: nextId("text"),
         type: "text",
-        text: "文字內容",
-        fontSize: 32, // dots
+        runs: [createTextRun({ text: "文字內容" })],
+        fontFamily: null, // null = 使用渲染時的全域預設字體
+        fontSize: 32, // dots，run 沒指定字級時的預設值
         lineHeight: 1.3,
         letterSpacing: 0, // dots
-        bold: false,
+        bold: false, // run 沒指定粗體時的預設值
         align: "left", // left | center | right
         wrap: true,
         maxLines: 0, // 0 = 不限制；>0 時超出以「…」截斷
         ...overrides,
     };
+}
+
+/** 把文字元素的所有 run 接成單一字串（大綱標籤預覽、變數掃描等用途）。 */
+export function getTextContent(el) {
+    if (!Array.isArray(el.runs)) return "";
+    return el.runs.map((r) => r.text || "").join("");
+}
+
+/** 把舊版（v1 之前）扁平 text 欄位的文字元素轉成 runs 陣列，供 schema migrate() 呼叫。 */
+export function normalizeTextElement(el) {
+    if (Array.isArray(el.runs)) return el;
+    const { text, ...rest } = el;
+    return { ...rest, runs: [createTextRun({ text: text || "" })] };
+}
+
+// ---- Run 編輯（比照 Figma：單一文字框 + 選取範圍套用樣式） ----
+// 以下函式把「字元偏移範圍」對應到 runs 陣列的切分/合併，供 editor.js 的富文字編輯器使用。
+
+export const RUN_STYLE_FIELDS = ["fontFamily", "fontSize", "bold", "italic", "underline", "strikethrough"];
+
+/** 選取範圍內各 run 的某欄位值不一致時的標記值（不會被序列化保存，僅供 UI 顯示「混合」）。 */
+export const MIXED = Symbol("mixed");
+
+function runFieldValue(el, run, field) {
+    if (field === "bold") return run.bold ?? el.bold ?? false;
+    if (field === "italic" || field === "underline" || field === "strikethrough") return !!run[field];
+    return run[field] ?? null; // fontFamily / fontSize：null 表示跟隨段落預設
+}
+
+/** 在 offset 這個字元位置切開 runs（如果剛好落在 run 邊界則不動作）。 */
+function splitRunsAtOffset(runs, offset) {
+    if (offset <= 0) return;
+    let pos = 0;
+    for (let i = 0; i < runs.length; i++) {
+        const text = runs[i].text || "";
+        if (offset === pos) return;
+        if (offset < pos + text.length) {
+            const run = runs[i];
+            const cut = offset - pos;
+            runs.splice(i, 1, { ...run, text: text.slice(0, cut) }, { ...run, text: text.slice(cut) });
+            return;
+        }
+        pos += text.length;
+    }
+}
+
+/** 找出涵蓋 offset 這個字元位置的 run 索引（offset 等於總長度時回傳最後一個 run）。 */
+function runIndexAtOffset(runs, offset) {
+    let pos = 0;
+    for (let i = 0; i < runs.length; i++) {
+        const len = (runs[i].text || "").length;
+        if (offset < pos + len || i === runs.length - 1) return i;
+        pos += len;
+    }
+    return Math.max(0, runs.length - 1);
+}
+
+/** 假設 runs 已經在 start/end 切好邊界，回傳完全落在 [start, end) 內的 run 索引。 */
+function runIndicesInRange(runs, start, end) {
+    const indices = [];
+    let pos = 0;
+    for (let i = 0; i < runs.length; i++) {
+        const len = (runs[i].text || "").length;
+        if (pos >= start && pos + len <= end && len > 0) indices.push(i);
+        pos += len;
+    }
+    return indices;
+}
+
+function stylesMatch(a, b) {
+    return RUN_STYLE_FIELDS.every((f) => (a[f] ?? null) === (b[f] ?? null));
+}
+
+/** 合併相鄰且樣式完全相同的 run，並移除空字串 run（避免編輯後 run 數量無限增生）。 */
+export function mergeAdjacentRuns(el) {
+    const kept = el.runs.filter((r) => r.text !== "");
+    const merged = [];
+    for (const run of kept) {
+        const last = merged[merged.length - 1];
+        if (last && stylesMatch(last, run)) {
+            last.text += run.text;
+        } else {
+            merged.push({ ...run });
+        }
+    }
+    el.runs = merged.length ? merged : [createTextRun()];
+}
+
+/**
+ * 取得選取範圍 [start, end) 目前的樣式；range 有多個 run 且欄位值不一致時回傳 MIXED。
+ * start === end（游標，沒有選取範圍）時，回傳游標前一個字元所在 run 的樣式（下一個字會沿用）。
+ */
+export function getRangeStyle(el, start, end) {
+    const runs = el.runs;
+    let indices;
+    if (start === end) {
+        indices = [runIndexAtOffset(runs, start > 0 ? start - 1 : 0)];
+    } else {
+        indices = runIndicesInRange(runs, start, end);
+        if (!indices.length) indices = [runIndexAtOffset(runs, start)];
+    }
+    const result = {};
+    for (const field of RUN_STYLE_FIELDS) {
+        const values = indices.map((i) => runFieldValue(el, runs[i], field));
+        result[field] = values.every((v) => v === values[0]) ? values[0] : MIXED;
+    }
+    return result;
+}
+
+/** 把某個樣式欄位套用到選取範圍 [start, end)；start === end（沒有範圍）時不動作。 */
+export function applyStyleToRange(el, start, end, field, value) {
+    if (start === end) return;
+    const runs = el.runs;
+    splitRunsAtOffset(runs, start);
+    splitRunsAtOffset(runs, end);
+    for (const i of runIndicesInRange(runs, start, end)) runs[i][field] = value;
+    mergeAdjacentRuns(el);
+}
+
+/** 把 [start, end) 這段字元換成 newText，新文字沿用選取起點前一個字元的樣式。 */
+export function replaceTextRange(el, start, end, newText) {
+    const runs = el.runs;
+    splitRunsAtOffset(runs, start);
+    splitRunsAtOffset(runs, end);
+    const indices = runIndicesInRange(runs, start, end);
+    const styleSourceIdx = runs.length ? runIndexAtOffset(runs, start > 0 ? start - 1 : 0) : -1;
+    const styleSource = styleSourceIdx >= 0 ? runs[styleSourceIdx] : null;
+    let newRun = null;
+    if (newText) {
+        const overrides = { text: newText };
+        if (styleSource) {
+            for (const f of RUN_STYLE_FIELDS) if (styleSource[f] !== undefined) overrides[f] = styleSource[f];
+        }
+        newRun = createTextRun(overrides);
+    }
+    if (indices.length) {
+        runs.splice(indices[0], indices.length, ...(newRun ? [newRun] : []));
+    } else if (newRun) {
+        runs.splice(styleSourceIdx >= 0 ? styleSourceIdx + 1 : 0, 0, newRun);
+    }
+    mergeAdjacentRuns(el);
+}
+
+/** 把整份文字框的內容換成 newText（textarea 編輯用），用最長共同前後綴找出實際變動範圍，其餘文字保留原本樣式。 */
+export function replaceFullText(el, newText) {
+    const oldText = getTextContent(el);
+    if (newText === oldText) return;
+    const maxPrefix = Math.min(oldText.length, newText.length);
+    let prefix = 0;
+    while (prefix < maxPrefix && oldText[prefix] === newText[prefix]) prefix++;
+    const maxSuffix = Math.min(oldText.length, newText.length) - prefix;
+    let suffix = 0;
+    while (suffix < maxSuffix && oldText[oldText.length - 1 - suffix] === newText[newText.length - 1 - suffix]) suffix++;
+    replaceTextRange(el, prefix, oldText.length - suffix, newText.slice(prefix, newText.length - suffix));
 }
 
 export function createImageElement(overrides = {}) {
@@ -112,7 +281,7 @@ export function extractPlaceholders(elements) {
     const names = new Set();
     walkElements(elements, (el) => {
         if (el.type === "text") {
-            for (const n of extractPlaceholdersFromText(el.text)) names.add(n);
+            for (const n of extractPlaceholdersFromText(getTextContent(el))) names.add(n);
         }
         if (el.type === "image" && typeof el.assetId === "string") {
             for (const n of extractPlaceholdersFromText(el.assetId)) names.add(n);

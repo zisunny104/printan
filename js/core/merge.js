@@ -20,8 +20,8 @@ function substitute(text, data) {
 export function applyDataToElements(elements, data = {}) {
     const cloned = JSON.parse(JSON.stringify(elements));
     walkElements(cloned, (el) => {
-        if (el.type === "text") {
-            el.text = substitute(el.text, data);
+        if (el.type === "text" && Array.isArray(el.runs)) {
+            for (const run of el.runs) run.text = substitute(run.text, data);
         }
         if (el.type === "image" && typeof el.assetId === "string") {
             el.assetId = substitute(el.assetId, data);

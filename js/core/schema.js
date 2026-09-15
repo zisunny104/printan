@@ -1,6 +1,8 @@
 // Printan .ptan 專案檔格式定義與驗證。
 // 這個檔案是 core 的一部分：不得依賴 DOM／window／editor 狀態。
 
+import { normalizeTextElement } from "./document-model.js";
+
 export const PTAN_FORMAT = "ptan";
 export const PTAN_VERSION = 1;
 
@@ -85,7 +87,19 @@ function migrate(project) {
         printerProfile: p.printerProfile || {},
         paper: p.paper || {},
     };
+    p = { ...p, template: { elements: migrateElements(p.template.elements) } };
     return { ok: true, project: p };
+}
+
+/** 文字元素舊版扁平 text 欄位 → runs 陣列（見 document-model.js normalizeTextElement）。 */
+function migrateElements(elements) {
+    return elements.map((el) => {
+        if (el.type === "text") return normalizeTextElement(el);
+        if (el.type === "row" && Array.isArray(el.columns)) {
+            return { ...el, columns: el.columns.map(migrateElements) };
+        }
+        return el;
+    });
 }
 
 export function serializeProject(project) {

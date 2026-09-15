@@ -103,10 +103,9 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap) {
     let y = 0;
     for (const el of elements) {
         if (el.type === "text") {
-            const { lines, lineHeightDots } = layoutText(el, widthDots, ctx, fontFamily);
-            const height = lines.length * lineHeightDots;
-            items.push({ el, y, height, widthDots, lines, lineHeightDots });
-            y += height;
+            const { lines, totalHeight } = layoutText(el, widthDots, ctx, fontFamily);
+            items.push({ el, y, height: totalHeight, widthDots, lines });
+            y += totalHeight;
         } else if (el.type === "spacer") {
             items.push({ el, y, height: el.heightDots, widthDots });
             y += el.heightDots;
@@ -140,52 +139,127 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap) {
     return { items, height: y };
 }
 
-function layoutText(el, widthDots, ctx, fontFamily) {
-    ctx.font = `${el.bold ? "bold " : ""}${el.fontSize}px ${fontFamily}`;
-    if ("letterSpacing" in ctx) ctx.letterSpacing = `${el.letterSpacing || 0}px`;
+// ---- Rich text：一個文字元素的內容是多個 run，各自可覆寫字體／字級／粗體／
+// 斜體／底線／刪除線（比照 Figma）。排版時把 runs 展開成「字元＋樣式」的
+// glyph 串流，用跟舊版相同的逐字貪婪換行邏輯決定斷行，斷行後再依樣式相同與否
+// 合併成 segment 供繪製，同一行內若有不同字級，行高取該行最大字級換算。
 
-    const paragraphs = String(el.text ?? "").split("\n");
-    let lines = [];
-    if (el.wrap) {
-        for (const para of paragraphs) lines.push(...wrapParagraph(para, widthDots, ctx));
-    } else {
-        lines = paragraphs;
+function resolveRunStyle(el, run, fallbackFontFamily) {
+    return {
+        fontFamily: run.fontFamily || el.fontFamily || fallbackFontFamily,
+        fontSize: run.fontSize || el.fontSize,
+        bold: run.bold ?? el.bold ?? false,
+        italic: run.italic ?? false,
+        underline: run.underline ?? false,
+        strikethrough: run.strikethrough ?? false,
+    };
+}
+
+function fontString(style) {
+    return `${style.italic ? "italic " : ""}${style.bold ? "bold " : ""}${style.fontSize}px ${style.fontFamily}`;
+}
+
+function stylesEqual(a, b) {
+    return a.fontFamily === b.fontFamily && a.fontSize === b.fontSize && a.bold === b.bold
+        && a.italic === b.italic && a.underline === b.underline && a.strikethrough === b.strikethrough;
+}
+
+/** 把 el.runs 展開成 [[{ch, style}, ...], ...] 段落陣列（在 "\n" 處切段落，run 邊界不影響斷段）。 */
+function buildParagraphs(el, fallbackFontFamily) {
+    const paragraphs = [[]];
+    for (const run of el.runs || []) {
+        const style = resolveRunStyle(el, run, fallbackFontFamily);
+        for (const ch of String(run.text ?? "")) {
+            if (ch === "\n") paragraphs.push([]);
+            else paragraphs[paragraphs.length - 1].push({ ch, style });
+        }
     }
-    if (el.maxLines > 0 && lines.length > el.maxLines) {
-        lines = lines.slice(0, el.maxLines);
-        lines[lines.length - 1] = truncateWithEllipsis(lines[lines.length - 1], widthDots, ctx);
+    return paragraphs;
+}
+
+/** 把一串 glyph 依「樣式是否相同」合併成連續文字段落，繪製／量寬都以 segment 為單位。 */
+function coalesceSegments(glyphs) {
+    const segments = [];
+    let i = 0;
+    while (i < glyphs.length) {
+        let j = i + 1;
+        while (j < glyphs.length && stylesEqual(glyphs[j].style, glyphs[i].style)) j++;
+        segments.push({ text: glyphs.slice(i, j).map((g) => g.ch).join(""), style: glyphs[i].style });
+        i = j;
     }
-    const lineHeightDots = Math.round(el.fontSize * (el.lineHeight || 1.3));
-    return { lines, lineHeightDots };
+    return segments;
+}
+
+function measureGlyphs(glyphs, ctx) {
+    let width = 0;
+    for (const seg of coalesceSegments(glyphs)) {
+        ctx.font = fontString(seg.style);
+        width += ctx.measureText(seg.text).width;
+    }
+    return width;
 }
 
 // 以字元為單位貪婪換行（同時適用中日韓字元與西文，西文長單字可能被截斷，
-// 屬於第一階段的已知限制）。
-function wrapParagraph(text, maxWidth, ctx) {
-    if (text === "") return [""];
+// 屬於第一階段的已知限制），沿用舊版邏輯，改成量測 glyph（含樣式）而非純文字。
+function wrapParagraphGlyphs(glyphs, maxWidth, ctx) {
+    if (glyphs.length === 0) return [[]];
     const lines = [];
-    let current = "";
-    for (const ch of text) {
-        const test = current + ch;
-        if (current !== "" && ctx.measureText(test).width > maxWidth) {
+    let current = [];
+    for (const g of glyphs) {
+        const test = current.concat([g]);
+        if (current.length > 0 && measureGlyphs(test, ctx) > maxWidth) {
             lines.push(current);
-            current = ch;
+            current = [g];
         } else {
             current = test;
         }
     }
-    if (current) lines.push(current);
+    if (current.length) lines.push(current);
     return lines;
 }
 
-function truncateWithEllipsis(line, maxWidth, ctx) {
-    const ellipsis = "…";
-    if (ctx.measureText(line).width <= maxWidth) return line;
-    let result = line;
-    while (result.length > 0 && ctx.measureText(result + ellipsis).width > maxWidth) {
+function truncateGlyphLine(glyphs, maxWidth, ctx, fallbackStyle) {
+    if (measureGlyphs(glyphs, ctx) <= maxWidth) return glyphs;
+    const ellipsisStyle = glyphs.length ? glyphs[glyphs.length - 1].style : fallbackStyle;
+    let result = glyphs.slice();
+    while (result.length > 0 && measureGlyphs(result.concat([{ ch: "…", style: ellipsisStyle }]), ctx) > maxWidth) {
         result = result.slice(0, -1);
     }
-    return result + ellipsis;
+    return result.concat([{ ch: "…", style: ellipsisStyle }]);
+}
+
+function layoutText(el, widthDots, ctx, fallbackFontFamily) {
+    if ("letterSpacing" in ctx) ctx.letterSpacing = `${el.letterSpacing || 0}px`;
+
+    const paragraphs = buildParagraphs(el, fallbackFontFamily);
+    let lineGlyphsList = [];
+    for (const para of paragraphs) {
+        if (el.wrap) lineGlyphsList.push(...wrapParagraphGlyphs(para, widthDots, ctx));
+        else lineGlyphsList.push(para);
+    }
+
+    if (el.maxLines > 0 && lineGlyphsList.length > el.maxLines) {
+        lineGlyphsList = lineGlyphsList.slice(0, el.maxLines);
+        const fallbackStyle = resolveRunStyle(el, {}, fallbackFontFamily);
+        const lastIdx = lineGlyphsList.length - 1;
+        lineGlyphsList[lastIdx] = truncateGlyphLine(lineGlyphsList[lastIdx], widthDots, ctx, fallbackStyle);
+    }
+
+    const lines = lineGlyphsList.map((glyphs) => {
+        const segments = coalesceSegments(glyphs);
+        let width = 0;
+        let maxFontSize = el.fontSize;
+        for (const g of glyphs) maxFontSize = Math.max(maxFontSize, g.style.fontSize);
+        for (const seg of segments) {
+            ctx.font = fontString(seg.style);
+            width += ctx.measureText(seg.text).width;
+        }
+        const lineHeightDots = Math.round(maxFontSize * (el.lineHeight || 1.3));
+        return { segments, width, lineHeightDots };
+    });
+
+    const totalHeight = lines.reduce((sum, line) => sum + line.lineHeightDots, 0);
+    return { lines, totalHeight };
 }
 
 async function resolveImage(el, assetMap) {
@@ -211,7 +285,7 @@ function paint(items, ctx, xBase, yBase, fontFamily) {
     for (const item of items) {
         const absY = yBase + item.y;
         const { el } = item;
-        if (el.type === "text") paintText(ctx, item, xBase, absY, fontFamily);
+        if (el.type === "text") paintText(ctx, item, xBase, absY);
         else if (el.type === "divider") paintDivider(ctx, item, xBase, absY);
         else if (el.type === "image") paintImage(ctx, item, xBase, absY);
         else if (el.type === "row") {
@@ -220,22 +294,45 @@ function paint(items, ctx, xBase, yBase, fontFamily) {
     }
 }
 
-function paintText(ctx, item, x, y, fontFamily) {
-    const { el, lines, lineHeightDots, widthDots } = item;
+function paintText(ctx, item, x, y) {
+    const { el, lines, widthDots } = item;
     ctx.save();
     ctx.fillStyle = "#000";
-    ctx.font = `${el.bold ? "bold " : ""}${el.fontSize}px ${fontFamily}`;
     ctx.textBaseline = "top";
     if ("letterSpacing" in ctx) ctx.letterSpacing = `${el.letterSpacing || 0}px`;
-    lines.forEach((line, i) => {
-        const lineY = y + i * lineHeightDots;
-        let lineX = x;
+    let lineY = y;
+    for (const line of lines) {
+        let cursorX = x;
         if (el.align === "center" || el.align === "right") {
-            const w = ctx.measureText(line).width;
-            lineX = el.align === "center" ? x + (widthDots - w) / 2 : x + (widthDots - w);
+            cursorX = el.align === "center" ? x + (widthDots - line.width) / 2 : x + (widthDots - line.width);
         }
-        ctx.fillText(line, lineX, lineY);
-    });
+        for (const seg of line.segments) {
+            ctx.font = fontString(seg.style);
+            const segWidth = ctx.measureText(seg.text).width;
+            ctx.fillStyle = "#000";
+            ctx.fillText(seg.text, cursorX, lineY);
+            if (seg.style.underline || seg.style.strikethrough) {
+                ctx.save();
+                ctx.strokeStyle = "#000";
+                ctx.lineWidth = Math.max(1, Math.round(seg.style.fontSize / 16));
+                ctx.beginPath();
+                if (seg.style.underline) {
+                    const underlineY = lineY + seg.style.fontSize * 0.92;
+                    ctx.moveTo(cursorX, underlineY);
+                    ctx.lineTo(cursorX + segWidth, underlineY);
+                }
+                if (seg.style.strikethrough) {
+                    const strikeY = lineY + seg.style.fontSize * 0.55;
+                    ctx.moveTo(cursorX, strikeY);
+                    ctx.lineTo(cursorX + segWidth, strikeY);
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
+            cursorX += segWidth;
+        }
+        lineY += line.lineHeightDots;
+    }
     ctx.restore();
 }
 
