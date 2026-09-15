@@ -16,7 +16,7 @@ import { BARCODE_FORMATS } from "../core/barcode.js";
 import { splitDotsByRatio } from "../core/units.js";
 import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js";
 import { exportToPdf } from "../core/pdf-export.js";
-import { saveDraft, loadDraft } from "../core/storage.js";
+import { saveDraft, loadDraft, deleteDraft, listRecent } from "../core/storage.js";
 import { SystemDialogAdapter, WebUsbEscposAdapter, WebSerialEscposAdapter, detectBrowserCapabilities } from "../core/printer-adapter.js";
 import { wireResizableColumns } from "./resizable-columns.js";
 
@@ -52,6 +52,7 @@ async function init() {
     loadPrintPrefs();
     populatePrinterProfileSelect();
     populatePaperWidthTabs();
+    populateRecentDrafts();
     bindToolbar();
     bindFileInputs();
     bindBatchPanel();
@@ -67,7 +68,9 @@ function cacheDom() {
     [
         "save-status", "printer-profile-label", "printer-profile-list", "paper-width-tabs",
         "btn-add-text", "btn-add-image", "btn-add-spacer", "btn-add-divider", "btn-add-barcode",
-        "btn-toggle-thermal", "btn-toggle-preview-mode", "btn-open-ptan", "btn-save-ptan", "btn-export-pdf",
+        "btn-toggle-thermal", "btn-toggle-preview-mode",
+        "btn-new-ptan", "btn-open-ptan", "open-project-from-file", "recent-drafts-list",
+        "btn-save-ptan", "btn-export-pdf",
         "btn-export-batch-pdf", "btn-print", "outline-list", "inspector",
         "variables-panel", "variables-card", "variables-card-spacer", "batch-data", "paper-viewport", "paper-shadow", "safe-area-guide",
         "canvas-host", "image-file-input", "ptan-file-input",
@@ -235,7 +238,8 @@ function bindToolbar() {
         renderEditOverlay();
     });
 
-    els["btn-open-ptan"].addEventListener("click", () => els["ptan-file-input"].click());
+    els["btn-new-ptan"].addEventListener("click", startNewProject);
+    els["open-project-from-file"].addEventListener("click", () => els["ptan-file-input"].click());
     els["btn-save-ptan"].addEventListener("click", () => {
         downloadPtan(state.project, state.project.meta.name || "printan");
     });
@@ -265,13 +269,87 @@ function bindFileInputs() {
             alert(`開啟失敗：${result.error}`);
             return;
         }
-        state.project = result.project;
-        state.selectedId = null;
-        state.insertionTarget = null;
-        state.previewData = {};
-        endBatchPreview();
-        onModelChange();
+        loadProjectIntoEditor(result.project);
     });
+}
+
+// ---- 新增空白版型 / 開啟最近編輯（IndexedDB 草稿）----
+// 「新增」不會刪除目前版型：目前版型早就被 scheduleSave 自動存進 IndexedDB 了，
+// 換成空白版型後舊的還在，可以從「開啟」下拉選單的「最近編輯」清單找回來。
+
+function loadProjectIntoEditor(project) {
+    state.project = project;
+    state.selectedId = null;
+    state.insertionTarget = null;
+    state.previewData = {};
+    endBatchPreview();
+    populatePrinterProfileSelect();
+    populatePaperWidthTabs();
+    populateRecentDrafts();
+    onModelChange();
+}
+
+function startNewProject() {
+    loadProjectIntoEditor(createEmptyProject({
+        printerProfileId: state.project.printerProfile.id,
+        paperWidthId: state.project.paper.widthId,
+    }));
+}
+
+function populateRecentDrafts() {
+    const list = els["recent-drafts-list"];
+    list.innerHTML = "";
+    const recent = listRecent().filter((r) => r.id !== state.project.id);
+    if (recent.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "ts-text is-description is-small recent-draft-empty";
+        empty.textContent = "尚無其他最近編輯的版型";
+        list.appendChild(empty);
+        return;
+    }
+    for (const r of recent) {
+        const row = document.createElement("div");
+        row.className = "item recent-draft-item";
+
+        const info = document.createElement("span");
+        info.className = "recent-draft-info";
+        const name = document.createElement("span");
+        name.className = "recent-draft-name";
+        name.textContent = r.name || "未命名版型";
+        const time = document.createElement("span");
+        time.className = "ts-text is-description is-small recent-draft-time";
+        time.textContent = new Date(r.updatedAt).toLocaleString("zh-TW", { hour12: false });
+        info.append(name, time);
+
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "ts-button is-icon is-tiny recent-draft-delete";
+        del.dataset.tooltip = "刪除這份草稿";
+        del.setAttribute("aria-label", "刪除這份草稿");
+        del.innerHTML = '<span class="ts-icon is-trash-icon" aria-hidden="true"></span>';
+        del.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            await deleteDraft(r.id);
+            populateRecentDrafts();
+        });
+
+        row.append(info, del);
+        row.addEventListener("click", async () => {
+            const draft = await loadDraft(r.id);
+            if (!draft) {
+                populateRecentDrafts();
+                return;
+            }
+            const result = loadProject(draft);
+            if (!result.ok) {
+                alert(`開啟失敗：${result.error}`);
+                return;
+            }
+            localStorage.setItem(LAST_DRAFT_KEY, r.id);
+            loadProjectIntoEditor(result.project);
+        });
+        list.appendChild(row);
+    }
 }
 
 // ---- Element tree 操作 ----
@@ -1584,6 +1662,7 @@ function scheduleSave() {
     saveTimer = setTimeout(async () => {
         const id = await saveDraft(state.project);
         localStorage.setItem(LAST_DRAFT_KEY, id);
+        populateRecentDrafts();
         const time = new Date().toLocaleTimeString("zh-TW", { hour12: false });
         els["save-status"].textContent = `已自動儲存 ${time}`;
     }, 500);

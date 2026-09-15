@@ -61,7 +61,12 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <div class="ts-divider is-vertical" style="height:1.4em"></div>
                 <span class="toolbar-spacer"></span>
                 <div class="ts-buttons">
-                    <button class="ts-button is-small is-outlined is-start-icon" id="btn-open-ptan">
+                    <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-new-ptan"
+                        data-tooltip="新增空白版型（目前版型會留在「最近編輯」清單，不會遺失）">
+                        <span class="ts-icon is-file-circle-plus-icon" aria-hidden="true"></span> 新增
+                    </button>
+                    <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-open-ptan"
+                        data-dropdown="open-project-dropdown" aria-haspopup="true">
                         <span class="ts-icon is-folder-open-icon" aria-hidden="true"></span> 開啟
                     </button>
                     <button class="ts-button is-small is-outlined is-start-icon" id="btn-save-ptan">
@@ -82,6 +87,18 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <a class="item" data-ratio="2,1">2 / 1</a>
                 <a class="item" data-ratio="1,2">1 / 2</a>
                 <a class="item" data-ratio="1,1,1">1 / 1 / 1</a>
+            </div>
+
+            <!-- 開啟：本機 .ptan 檔案，或最近編輯過、還沒手動匯出的版型（存在瀏覽器 IndexedDB
+                 草稿裡）。清單由 populateRecentDrafts() 動態產生，見「新增」按鈕的說明：
+                 新增空白版型不會刪掉舊的，舊版型會留在這份清單裡可以再打開。 -->
+            <div class="ts-dropdown" id="open-project-dropdown">
+                <a class="item" id="open-project-from-file">
+                    <span class="ts-icon is-folder-open-icon" aria-hidden="true"></span> 從電腦開啟 .ptan 檔…
+                </a>
+                <div class="divider"></div>
+                <div class="header">最近編輯</div>
+                <div id="recent-drafts-list"></div>
             </div>
 
             <!-- 印表機設定：型號 + WebUSB／WebSerial 直連 + 走紙／切紙偏好，同一台印表機的設定全部放一起 -->
