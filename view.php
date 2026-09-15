@@ -214,9 +214,9 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         </div>
                     </div>
 
-                    <div class="ts-space"></div>
+                    <div class="ts-space" id="variables-card-spacer" hidden></div>
 
-                    <div class="ts-box is-rounded">
+                    <div class="ts-box is-rounded" id="variables-card" hidden>
                         <div class="pane-card-header">
                             <span class="pane-card-header-title">
                                 <span class="ts-icon is-list-check-icon" aria-hidden="true"></span>
@@ -228,9 +228,9 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         </div>
                     </div>
 
-                    <div class="ts-space"></div>
+                    <div class="ts-space" id="batch-card-spacer" hidden></div>
 
-                    <div class="ts-box is-rounded">
+                    <div class="ts-box is-rounded" id="batch-card" hidden>
                         <div class="pane-card-header">
                             <span class="pane-card-header-title">
                                 <span class="ts-icon is-clipboard-list-icon" aria-hidden="true"></span>

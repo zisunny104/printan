@@ -64,9 +64,9 @@ function cacheDom() {
         "btn-add-text", "btn-add-image", "btn-add-spacer", "btn-add-divider",
         "btn-toggle-thermal", "btn-toggle-preview-mode", "btn-open-ptan", "btn-save-ptan", "btn-export-pdf",
         "btn-export-batch-pdf", "btn-print", "outline-list", "inspector",
-        "variables-panel", "batch-data", "paper-viewport", "paper-shadow", "safe-area-guide",
+        "variables-panel", "variables-card", "variables-card-spacer", "batch-data", "paper-viewport", "paper-shadow", "safe-area-guide",
         "canvas-host", "image-file-input", "ptan-file-input",
-        "batch-panel-toggle", "batch-panel-body", "btn-preview-batch", "batch-preview-nav",
+        "batch-card", "batch-card-spacer", "batch-panel-toggle", "batch-panel-body", "btn-preview-batch", "batch-preview-nav",
         "btn-batch-prev", "btn-batch-next", "batch-preview-counter", "btn-batch-end-preview",
         "btn-printer-settings", "printer-settings-dialog", "printer-webusb-unsupported",
         "printer-connection-status", "btn-printer-connect", "btn-printer-disconnect",
@@ -856,12 +856,16 @@ function buildRowInspector(panel, el) {
 function renderVariables() {
     const names = extractPlaceholders(state.project.template.elements);
     state.project.variables = names;
+
+    const hasVariables = names.length > 0;
+    els["variables-card"].hidden = !hasVariables;
+    els["variables-card-spacer"].hidden = !hasVariables;
+    els["batch-card"].hidden = !hasVariables;
+    els["batch-card-spacer"].hidden = !hasVariables;
+
     const panel = els["variables-panel"];
     panel.innerHTML = "";
-    if (!names.length) {
-        panel.appendChild(emptyState("list-check", "尚未使用變數", "在文字或圖片來源中輸入 {{變數名稱}} 即可建立變數"));
-        return;
-    }
+    if (!hasVariables) return;
     names.forEach((name, i) => {
         const row = document.createElement("div");
         row.className = i > 0 ? "ts-grid is-middle-aligned has-top-spaced-small" : "ts-grid is-middle-aligned";
