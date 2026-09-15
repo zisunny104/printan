@@ -124,6 +124,16 @@ body {
     display: none;
 }
 
+/* 畫布區自己是直向 flex 容器（紙張預覽＋下方浮動工具列），跟外層 .editor-shell
+   排欄／堆疊無關，任何寬度都需要，所以不放進 desktop+ 的 media query 裡。
+   浮動工具列改用 position:fixed 後不再佔用文件流高度，這裡補一段底部留白，
+   避免捲到紙張最底端時內容一直被固定在視窗下緣的工具列蓋住。 */
+.editor-canvas-pane {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 4.5rem;
+}
+
 @media (min-width: 1024px) {
     .editor-shell {
         flex-direction: row;
@@ -326,6 +336,40 @@ body {
 
 .paper-viewport.is-preview-mode .safe-area-guide {
     display: none;
+}
+
+/* ---- 畫布下方置中的浮動工具列（快速新增元素），比照 koilisu/apps/pitrace 的
+   .canvas-floating-toolbar pill 樣式。pitrace 的畫布區是固定 100vh、內部自己捲動，
+   工具列用 position:absolute 錨定在那個有界的容器裡；printan 的紙張預覽走一般文件流
+   （紙張可能很長，靠整頁捲動），本來想用 position:sticky 比照「捲動時仍浮在視窗下緣」，
+   但實測發現 Tocas UI 在 <body> 設了 overflow-x:hidden，CSS 規範會連帶把 overflow-y
+   提升成 auto，使 <body> 變成一個 sticky 的捲動容器基準，可是 <body> 自己的 scrollTop
+   永遠是 0（實際捲動是瀏覽器視窗在捲）──sticky 因此完全失效，這是整個 Tocas 系列頁面
+   共通的限制，不是這個功能獨有的問題。改用 position:fixed 直接錨定視窗底部置中，
+   水平置中則由 editor.js 量測 .editor-canvas-pane 目前的中心點寫回 left（見
+   positionFloatingToolbar），這樣完全不受欄寬拖曳（.col-resizer）或斷點堆疊影響，
+   也完全不用把畫布區改成固定高度容器。left:50%/transform 只是 JS 尚未量測前的預設值。 ---- */
+.canvas-floating-toolbar {
+    position: fixed;
+    left: 50%;
+    bottom: 1rem;
+    transform: translateX(-50%);
+    z-index: 10;
+    max-width: calc(100% - 2rem);
+    overflow-x: auto;
+    background: var(--ts-gray-100, #f2f2f2);
+    border: 1px solid var(--ts-gray-300, #ddd);
+    border-radius: 12px;
+    padding: .35rem .4rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+}
+
+.canvas-floating-toolbar.pane-toolbar {
+    flex-wrap: nowrap;
+}
+
+.canvas-floating-toolbar.pane-toolbar>* {
+    flex-shrink: 0;
 }
 
 /* ---- 編輯模式畫布疊層：每個元素的虛線外框、拖曳排序、拖曳縮放把手 ---- */

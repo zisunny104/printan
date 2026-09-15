@@ -55,6 +55,7 @@ async function init() {
     bindBatchPanel();
     bindPrinterSettings();
     wireResizableColumns();
+    wireFloatingToolbarPosition();
     onModelChange({ skipInspector: false });
     await attemptSilentPrinterReconnect();
 }
@@ -158,6 +159,24 @@ function populatePaperWidthTabs() {
         label.appendChild(text);
         wrap.appendChild(label);
     }
+}
+
+// .canvas-floating-toolbar 用 position:fixed 錨定視窗底部（見 editor.css 註解：
+// Tocas UI 在 <body> 設 overflow-x:hidden 會連帶讓 overflow-y 被規範提升成 auto，
+// 使 sticky 的捲動基準變成永遠 scrollTop=0 的 <body>，因此失效，改用 fixed）。
+// 水平置中量測的是 .editor-canvas-pane 而不是整個視窗，用 ResizeObserver 盯著這個
+// pane 本身的 box，欄寬拖曳（.col-resizer）、桌面/手機斷點造成的堆疊都會自動反映，
+// 不用另外掛 window resize。
+function wireFloatingToolbarPosition() {
+    const pane = document.getElementById("canvasPane");
+    const toolbar = document.querySelector(".canvas-floating-toolbar");
+    if (!pane || !toolbar) return;
+    function reposition() {
+        const rect = pane.getBoundingClientRect();
+        toolbar.style.left = `${rect.left + rect.width / 2}px`;
+    }
+    new ResizeObserver(reposition).observe(pane);
+    reposition();
 }
 
 function bindToolbar() {

@@ -56,27 +56,6 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <div class="ts-selection is-small" id="paper-width-tabs" role="radiogroup" aria-label="紙寬"></div>
                 <div class="ts-divider is-vertical" style="height:1.4em"></div>
                 <div class="ts-buttons">
-                    <button class="ts-button is-small is-outlined is-start-icon" id="btn-add-text">
-                        <span class="ts-icon is-font-icon" aria-hidden="true"></span> 文字
-                    </button>
-                    <button class="ts-button is-small is-outlined is-start-icon" id="btn-add-image">
-                        <span class="ts-icon is-image-icon" aria-hidden="true"></span> 圖片
-                    </button>
-                    <button class="ts-button is-small is-outlined is-start-icon" id="btn-add-spacer">
-                        <span class="ts-icon is-arrows-up-down-icon" aria-hidden="true"></span> 間隔
-                    </button>
-                    <button class="ts-button is-small is-outlined is-start-icon" id="btn-add-divider">
-                        <span class="ts-icon is-minus-icon" aria-hidden="true"></span> 分隔線
-                    </button>
-                    <button class="ts-button is-small is-outlined is-start-icon" id="btn-add-barcode">
-                        <span class="ts-icon is-qrcode-icon" aria-hidden="true"></span> 條碼
-                    </button>
-                </div>
-                <button class="ts-button is-small is-outlined is-start-icon" data-dropdown="row-ratio-dropdown">
-                    <span class="ts-icon is-table-columns-icon" aria-hidden="true"></span> 多欄
-                </button>
-                <div class="ts-divider is-vertical" style="height:1.4em"></div>
-                <div class="ts-buttons">
                     <button class="ts-button is-small is-icon is-ghost" id="btn-toggle-thermal"
                         data-tooltip="切換熱感輸出預覽" aria-label="切換熱感輸出預覽" aria-pressed="false">
                         <span class="ts-icon is-circle-half-stroke-icon" aria-hidden="true"></span>
@@ -197,6 +176,37 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                             <div class="safe-area-guide" id="safe-area-guide"></div>
                             <div id="canvas-host" class="canvas-host"></div>
                         </div>
+                    </div>
+
+                    <!-- 浮動工具列：快速新增元素，比照 koilisu/apps/pitrace 的
+                         .canvas-floating-toolbar。元素設定仍在右側「元素設定」面板，
+                         這裡只放「新增」這類畫布層級的快速操作。 -->
+                    <div class="canvas-floating-toolbar pane-toolbar" role="toolbar" aria-label="新增元素">
+                        <button class="ts-button is-icon" id="btn-add-text" data-tooltip="新增文字"
+                            aria-label="新增文字">
+                            <span class="ts-icon is-font-icon" aria-hidden="true"></span>
+                        </button>
+                        <button class="ts-button is-icon" id="btn-add-image" data-tooltip="新增圖片"
+                            aria-label="新增圖片">
+                            <span class="ts-icon is-image-icon" aria-hidden="true"></span>
+                        </button>
+                        <button class="ts-button is-icon" id="btn-add-spacer" data-tooltip="新增間隔"
+                            aria-label="新增間隔">
+                            <span class="ts-icon is-arrows-up-down-icon" aria-hidden="true"></span>
+                        </button>
+                        <button class="ts-button is-icon" id="btn-add-divider" data-tooltip="新增分隔線"
+                            aria-label="新增分隔線">
+                            <span class="ts-icon is-minus-icon" aria-hidden="true"></span>
+                        </button>
+                        <button class="ts-button is-icon" id="btn-add-barcode" data-tooltip="新增條碼／QR Code"
+                            aria-label="新增條碼／QR Code">
+                            <span class="ts-icon is-qrcode-icon" aria-hidden="true"></span>
+                        </button>
+                        <div class="ts-divider is-vertical" style="height:1.4em"></div>
+                        <button type="button" class="ts-button is-icon" data-dropdown="row-ratio-dropdown"
+                            data-tooltip="多欄" aria-label="多欄" aria-haspopup="true">
+                            <span class="ts-icon is-table-columns-icon" aria-hidden="true"></span>
+                        </button>
                     </div>
                 </div>
 
