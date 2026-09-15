@@ -223,11 +223,102 @@ export class WebUsbEscposAdapter {
     }
 }
 
+const DEFAULT_SERIAL_BAUD_RATE = 9600; // ESC/POS 序列印表機常見出廠預設值，各機型可能透過 DIP 開關調整，故 UI 開放使用者覆寫
+
+/**
+ * WebSerial 直送 ESC/POS 指令，給 RS-232／USB-to-Serial 介面的印表機使用。
+ * 跟 WebUsbEscposAdapter 共用同一套 ESC/POS raster 組包邏輯（buildEscposJob），
+ * 差別只在連線層：這裡走 navigator.serial 的 port，不是 navigator.usb 的 device。
+ * 有些印表機用 USB 傳輸線但實際是 USB-to-Serial 晶片，作業系統會把它列成序列埠而不是
+ * WebUSB 裝置，這種情況也走這個 Adapter。
+ */
+export class WebSerialEscposAdapter {
+    constructor() {
+        this.port = null;
+        this.writer = null;
+    }
+
+    isSupported() {
+        return typeof navigator !== "undefined" && "serial" in navigator;
+    }
+
+    /** 瀏覽器已經授權過（之前 requestPort 選過）的序列埠，讀取不會跳出授權對話框。 */
+    async listAuthorizedPorts() {
+        if (!this.isSupported()) return [];
+        return navigator.serial.getPorts();
+    }
+
+    /**
+     * 嘗試沿用瀏覽器記住的序列埠授權直接重新連線，不跳出選擇對話框。
+     * @returns {Promise<boolean>} 是否成功恢復連線
+     */
+    async reconnectIfAuthorized(vendorId, baudRate = DEFAULT_SERIAL_BAUD_RATE) {
+        const ports = await this.listAuthorizedPorts();
+        const port = vendorId
+            ? ports.find((p) => p.getInfo().usbVendorId === vendorId)
+            : ports[0];
+        if (!port) return false;
+        await this._openPort(port, baudRate);
+        return true;
+    }
+
+    /**
+     * 跳出瀏覽器序列埠選擇對話框——必須在使用者手勢（例如按鈕 click handler）內呼叫，
+     * 否則瀏覽器會直接拒絕。vendorId 有值時只用來篩選裝置清單（USB-to-Serial 晶片才有
+     * usbVendorId），真正的 RS-232 序列埠沒有這個欄位，篩選不到就顯示全部序列埠讓使用者自己選。
+     */
+    async connect({ vendorId, baudRate = DEFAULT_SERIAL_BAUD_RATE } = {}) {
+        if (!this.isSupported()) throw new Error("此瀏覽器不支援 Web Serial API，請改用 Chrome 或 Edge");
+        if (await this.reconnectIfAuthorized(vendorId, baudRate)) return;
+        const port = await navigator.serial.requestPort(vendorId ? { filters: [{ usbVendorId: vendorId }] } : {});
+        await this._openPort(port, baudRate);
+    }
+
+    async _openPort(port, baudRate) {
+        await port.open({ baudRate });
+        this.port = port;
+        this.writer = port.writable.getWriter();
+    }
+
+    /** 目前連接序列埠的顯示名稱，尚未連接時回傳空字串。序列埠沒有裝置名稱可讀，只能顯示 VID。 */
+    get deviceLabel() {
+        if (!this.port) return "";
+        const info = this.port.getInfo();
+        return info.usbVendorId ? `序列埠印表機（VID 0x${info.usbVendorId.toString(16)}）` : "序列埠印表機";
+    }
+
+    /**
+     * @param {{canvas: HTMLCanvasElement}} renderResult
+     * @param {{feedLines?: number, cutPaper?: boolean}} options
+     */
+    async print(renderResult, options = {}) {
+        if (!this.writer) throw new Error("尚未連接印表機");
+        const bytes = buildEscposJob(renderResult, options);
+        for (let offset = 0; offset < bytes.length; offset += ESCPOS_CHUNK_SIZE) {
+            await this.writer.write(bytes.subarray(offset, offset + ESCPOS_CHUNK_SIZE));
+        }
+    }
+
+    async disconnect() {
+        if (!this.port) return;
+        try {
+            if (this.writer) {
+                await this.writer.close();
+                this.writer = null;
+            }
+            await this.port.close();
+        } finally {
+            this.port = null;
+            this.writer = null;
+        }
+    }
+}
+
 // 未來可能新增：
-//   - WebSerialEscposAdapter：透過 navigator.serial 走 RS-232 介面
 //   - NetworkAdapter：Ethernet 介面印表機，瀏覽器無法直接開 TCP socket，
 //     需要經由後端 / 本機代理服務轉送
 export const PRINTER_ADAPTERS = {
     "system-dialog": SystemDialogAdapter,
     "webusb-escpos": WebUsbEscposAdapter,
+    "webserial-escpos": WebSerialEscposAdapter,
 };

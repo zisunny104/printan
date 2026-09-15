@@ -17,7 +17,7 @@ import { splitDotsByRatio } from "../core/units.js";
 import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js";
 import { exportToPdf } from "../core/pdf-export.js";
 import { saveDraft, loadDraft } from "../core/storage.js";
-import { SystemDialogAdapter, WebUsbEscposAdapter, detectBrowserCapabilities } from "../core/printer-adapter.js";
+import { SystemDialogAdapter, WebUsbEscposAdapter, WebSerialEscposAdapter, detectBrowserCapabilities } from "../core/printer-adapter.js";
 import { wireResizableColumns } from "./resizable-columns.js";
 
 const LAST_DRAFT_KEY = "printan:lastDraftId";
@@ -33,10 +33,12 @@ const state = {
     previewGeneration: 0,
     batchPreview: { active: false, records: [], index: 0 }, // 逐筆預覽批次資料時取代 previewData
     usbConnected: false, // WebUSB 印表機是否已連接；true 時「列印」按鈕直接送 ESC/POS，不走系統對話框
-    printPrefs: { feedLines: 4, cutPaper: true }, // 走紙／切紙偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）
+    serialConnected: false, // WebSerial 印表機是否已連接；跟 usbConnected 是兩條獨立連線，printCurrent 會優先用 USB
+    printPrefs: { feedLines: 4, cutPaper: true, serialBaudRate: 9600 }, // 走紙／切紙／序列傳輸速率偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）
 };
 
 const usbAdapter = new WebUsbEscposAdapter(); // 整個編輯器共用同一個連線實例
+const serialAdapter = new WebSerialEscposAdapter(); // 跟 usbAdapter 一樣整個編輯器共用同一個連線實例
 
 const BATCH_PANEL_EXPANDED_KEY = "printan-batch-panel-expanded";
 const PRINT_PREFS_KEY = "printan:printPrefs";
@@ -73,6 +75,8 @@ function cacheDom() {
         "btn-batch-prev", "btn-batch-next", "batch-preview-counter", "btn-batch-end-preview",
         "btn-printer-settings", "printer-settings-dialog", "printer-webusb-unsupported",
         "printer-connection-status", "btn-printer-connect", "btn-printer-disconnect",
+        "printer-webserial-unsupported", "printer-serial-connection-status",
+        "btn-printer-serial-connect", "btn-printer-serial-disconnect", "pref-serial-baud-rate",
         "pref-feed-lines", "pref-cut-paper", "btn-printer-settings-close",
     ].forEach((id) => (els[id] = document.getElementById(id)));
 }
@@ -1385,6 +1389,15 @@ async function printCurrent() {
             updatePrinterConnectionUi();
             alert(`印表機列印失敗，已改用系統列印對話框：${err.message}`);
         }
+    } else if (state.serialConnected) {
+        try {
+            await serialAdapter.print(result, state.printPrefs);
+            return;
+        } catch (err) {
+            state.serialConnected = false;
+            updatePrinterConnectionUi();
+            alert(`印表機列印失敗，已改用系統列印對話框：${err.message}`);
+        }
     }
 
     const adapter = new SystemDialogAdapter();
@@ -1392,7 +1405,7 @@ async function printCurrent() {
     await adapter.print(result);
 }
 
-// ---- 印表機設定（WebUSB 直連 + 走紙／切紙偏好） ----
+// ---- 印表機設定（WebUSB／WebSerial 直連 + 走紙／切紙偏好） ----
 // 連線狀態、走紙／切紙偏好都是「這台瀏覽器、這台印表機」的本機操作習慣，不寫進 .ptan，
 // 同一份版型換人、換印表機開啟時不應該被綁死。
 
@@ -1414,38 +1427,60 @@ function currentWebUsbVendorId() {
 }
 
 async function attemptSilentPrinterReconnect() {
-    if (!usbAdapter.isSupported()) return;
-    try {
-        state.usbConnected = await usbAdapter.reconnectIfAuthorized(currentWebUsbVendorId());
-    } catch {
-        state.usbConnected = false;
+    if (usbAdapter.isSupported()) {
+        try {
+            state.usbConnected = await usbAdapter.reconnectIfAuthorized(currentWebUsbVendorId());
+        } catch {
+            state.usbConnected = false;
+        }
+    }
+    if (serialAdapter.isSupported()) {
+        try {
+            state.serialConnected = await serialAdapter.reconnectIfAuthorized(currentWebUsbVendorId(), state.printPrefs.serialBaudRate);
+        } catch {
+            state.serialConnected = false;
+        }
     }
     updatePrinterConnectionUi();
 }
 
 function updatePrinterConnectionUi() {
-    const supported = usbAdapter.isSupported();
-    els["printer-webusb-unsupported"].hidden = supported;
-    els["btn-printer-connect"].hidden = !supported || state.usbConnected;
-    els["btn-printer-disconnect"].hidden = !supported || !state.usbConnected;
-    els["printer-connection-status"].textContent = !supported
+    const usbSupported = usbAdapter.isSupported();
+    els["printer-webusb-unsupported"].hidden = usbSupported;
+    els["btn-printer-connect"].hidden = !usbSupported || state.usbConnected;
+    els["btn-printer-disconnect"].hidden = !usbSupported || !state.usbConnected;
+    els["printer-connection-status"].textContent = !usbSupported
         ? "此瀏覽器不支援 WebUSB，列印會走系統列印對話框"
         : state.usbConnected
             ? `已連接：${usbAdapter.deviceLabel}`
             : "尚未連接，列印會走系統列印對話框";
 
+    const serialSupported = serialAdapter.isSupported();
+    els["printer-webserial-unsupported"].hidden = serialSupported;
+    els["btn-printer-serial-connect"].hidden = !serialSupported || state.serialConnected;
+    els["btn-printer-serial-disconnect"].hidden = !serialSupported || !state.serialConnected;
+    els["printer-serial-connection-status"].textContent = !serialSupported
+        ? "此瀏覽器不支援 Web Serial API，列印會走系統列印對話框"
+        : state.serialConnected
+            ? `已連接：${serialAdapter.deviceLabel}`
+            : "尚未連接，列印會走系統列印對話框";
+
+    const connected = state.usbConnected || state.serialConnected;
+    const connectedLabel = state.usbConnected ? usbAdapter.deviceLabel : serialAdapter.deviceLabel;
+
     // 工具列上的印表機設定鈕本身就是唯一入口，連線狀態要能在不開 modal 的情況下看出來，
     // 用一顆小圓點（見 editor.css .is-connected::after）而不是整個按鈕變色，避免跟
     // 顯示模式那組填色的 .is-active 語意搞混（那個代表「目前開啟」，這個代表「有連線」）。
-    els["btn-printer-settings"].classList.toggle("is-connected", state.usbConnected);
-    els["btn-printer-settings"].dataset.tooltip = state.usbConnected
-        ? `印表機設定（已連接：${usbAdapter.deviceLabel}）`
-        : "印表機設定（USB 連線／走紙／切紙）";
+    els["btn-printer-settings"].classList.toggle("is-connected", connected);
+    els["btn-printer-settings"].dataset.tooltip = connected
+        ? `印表機設定（已連接：${connectedLabel}）`
+        : "印表機設定（USB／序列埠連線、走紙、切紙）";
 }
 
 function bindPrinterSettings() {
     els["pref-feed-lines"].value = state.printPrefs.feedLines;
     els["pref-cut-paper"].checked = state.printPrefs.cutPaper;
+    els["pref-serial-baud-rate"].value = state.printPrefs.serialBaudRate;
     updatePrinterConnectionUi();
 
     els["btn-printer-settings"].addEventListener("click", () => {
@@ -1472,6 +1507,23 @@ function bindPrinterSettings() {
         updatePrinterConnectionUi();
     });
 
+    els["btn-printer-serial-connect"].addEventListener("click", async () => {
+        try {
+            await serialAdapter.connect({ vendorId: currentWebUsbVendorId(), baudRate: state.printPrefs.serialBaudRate });
+            state.serialConnected = true;
+        } catch (err) {
+            state.serialConnected = false;
+            alert(`連接印表機失敗：${err.message}`);
+        }
+        updatePrinterConnectionUi();
+    });
+
+    els["btn-printer-serial-disconnect"].addEventListener("click", async () => {
+        await serialAdapter.disconnect();
+        state.serialConnected = false;
+        updatePrinterConnectionUi();
+    });
+
     els["pref-feed-lines"].addEventListener("change", () => {
         const n = Math.max(0, Math.round(Number(els["pref-feed-lines"].value) || 0));
         state.printPrefs.feedLines = n;
@@ -1484,10 +1536,26 @@ function bindPrinterSettings() {
         savePrintPrefs();
     });
 
+    els["pref-serial-baud-rate"].addEventListener("change", () => {
+        const n = Math.max(1200, Math.round(Number(els["pref-serial-baud-rate"].value) || 9600));
+        state.printPrefs.serialBaudRate = n;
+        els["pref-serial-baud-rate"].value = n;
+        savePrintPrefs();
+    });
+
     if (usbAdapter.isSupported()) {
         navigator.usb.addEventListener("disconnect", (e) => {
             if (e.device === usbAdapter.device) {
                 state.usbConnected = false;
+                updatePrinterConnectionUi();
+            }
+        });
+    }
+
+    if (serialAdapter.isSupported()) {
+        navigator.serial.addEventListener("disconnect", (e) => {
+            if (e.target === serialAdapter.port) {
+                state.serialConnected = false;
                 updatePrinterConnectionUi();
             }
         });

@@ -84,7 +84,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <a class="item" data-ratio="1,1,1">1 / 1 / 1</a>
             </div>
 
-            <!-- 印表機設定：型號 + WebUSB 直連 + 走紙／切紙偏好，同一台印表機的設定全部放一起 -->
+            <!-- 印表機設定：型號 + WebUSB／WebSerial 直連 + 走紙／切紙偏好，同一台印表機的設定全部放一起 -->
             <dialog id="printer-settings-dialog" class="ts-modal">
                 <div class="content">
                     <div class="ts-content">
@@ -112,6 +112,26 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                             <span class="ts-icon is-plug-icon" aria-hidden="true"></span> 連接印表機
                         </button>
                         <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-disconnect" hidden>
+                            <span class="ts-icon is-plug-circle-xmark-icon" aria-hidden="true"></span> 中斷連接
+                        </button>
+                    </div>
+                    <div class="ts-divider"></div>
+                    <div class="ts-content">
+                        <div class="ts-text is-label">序列埠連線（RS-232 / Web Serial）</div>
+                        <div id="printer-webserial-unsupported" class="ts-text is-negative has-top-spaced-small" hidden>
+                            此瀏覽器不支援 Web Serial API，請改用 Chrome 或 Edge，或繼續使用系統列印對話框。
+                        </div>
+                        <div class="ts-text is-description has-top-spaced-small" id="printer-serial-connection-status">尚未連接</div>
+                        <div class="ts-space is-small"></div>
+                        <label class="ts-text is-label" for="pref-serial-baud-rate">傳輸速率（baud rate）</label>
+                        <div class="ts-input is-small is-fluid has-top-spaced-small">
+                            <input type="number" id="pref-serial-baud-rate" min="1200" max="115200" step="1" value="9600">
+                        </div>
+                        <div class="ts-space is-small"></div>
+                        <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-serial-connect">
+                            <span class="ts-icon is-plug-icon" aria-hidden="true"></span> 連接印表機
+                        </button>
+                        <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-serial-disconnect" hidden>
                             <span class="ts-icon is-plug-circle-xmark-icon" aria-hidden="true"></span> 中斷連接
                         </button>
                     </div>
