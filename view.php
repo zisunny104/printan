@@ -302,7 +302,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
     </div>
 
     <!-- 開利手底部 -->
-    <div class="ts-content is-secondary is-vertically-padded">
+    <div id="app-footer" class="ts-content is-secondary is-vertically-padded">
         <div class="ts-container" style="max-width:1400px">
             <div class="ts-divider is-section"></div>
             <div class="ts-grid">

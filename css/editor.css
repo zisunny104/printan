@@ -100,6 +100,24 @@ body {
     color: #fff;
 }
 
+/* 印表機設定鈕的連線狀態：不開 modal 也要看得出來有沒有連接。用角落實心圓點，
+   跟 .is-active 那種整顆填色的「目前開啟」語意分開，避免兩種狀態混淆。 */
+#btn-printer-settings.is-connected {
+    position: relative;
+}
+
+#btn-printer-settings.is-connected::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ts-positive-600, #16a34a);
+    border: 1.5px solid var(--ts-white, #fff);
+}
+
 .pane-collapse-toggle .ts-icon {
     transition: transform .15s ease;
 }
@@ -389,6 +407,14 @@ body {
     border-radius: 12px;
     padding: .35rem .4rem;
     box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+    transition: opacity .15s ease;
+}
+
+/* 頁尾捲進視窗範圍時讓開（見 editor.js wireFloatingToolbarFooterAvoidance），
+   避免 position:fixed 的工具列疊在頁尾文字／連結上面 */
+.canvas-floating-toolbar.is-yielding {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .canvas-floating-toolbar.pane-toolbar {

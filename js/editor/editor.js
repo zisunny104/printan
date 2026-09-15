@@ -33,7 +33,7 @@ const state = {
     previewGeneration: 0,
     batchPreview: { active: false, records: [], index: 0 }, // 逐筆預覽批次資料時取代 previewData
     usbConnected: false, // WebUSB 印表機是否已連接；true 時「列印」按鈕直接送 ESC/POS，不走系統對話框
-    printPrefs: { feedLines: 4, cutPaper: false }, // 走紙／切紙偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件
+    printPrefs: { feedLines: 4, cutPaper: true }, // 走紙／切紙偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）
 };
 
 const usbAdapter = new WebUsbEscposAdapter(); // 整個編輯器共用同一個連線實例
@@ -56,6 +56,7 @@ async function init() {
     bindPrinterSettings();
     wireResizableColumns();
     wireFloatingToolbarPosition();
+    wireFloatingToolbarFooterAvoidance();
     onModelChange({ skipInspector: false });
     await attemptSilentPrinterReconnect();
 }
@@ -165,8 +166,12 @@ function populatePaperWidthTabs() {
 // Tocas UI 在 <body> 設 overflow-x:hidden 會連帶讓 overflow-y 被規範提升成 auto，
 // 使 sticky 的捲動基準變成永遠 scrollTop=0 的 <body>，因此失效，改用 fixed）。
 // 水平置中量測的是 .editor-canvas-pane 而不是整個視窗，用 ResizeObserver 盯著這個
-// pane 本身的 box，欄寬拖曳（.col-resizer）、桌面/手機斷點造成的堆疊都會自動反映，
-// 不用另外掛 window resize。
+// pane 本身的 box，欄寬拖曳（.col-resizer）、桌面/手機斷點造成的堆疊都會自動反映。
+// 但 ResizeObserver 只在 pane 自己的「尺寸」變動時觸發——外層 .ts-container 有
+// max-width:1400px，視窗超過這個寬度後再變寬，容器只是靠 margin:auto 整塊往右挪，
+// pane 的寬度完全沒變、ResizeObserver 不會發火，toolbar.style.left 卻是視窗絕對座標，
+// 於是寬螢幕下 toolbar 會停在舊位置，相對畫面越看越偏左（使用者回報「偏左」的根因）。
+// 額外掛 window resize 補這個「位置變了但尺寸沒變」的情況。
 function wireFloatingToolbarPosition() {
     const pane = document.getElementById("canvasPane");
     const toolbar = document.querySelector(".canvas-floating-toolbar");
@@ -176,7 +181,22 @@ function wireFloatingToolbarPosition() {
         toolbar.style.left = `${rect.left + rect.width / 2}px`;
     }
     new ResizeObserver(reposition).observe(pane);
+    window.addEventListener("resize", reposition);
     reposition();
+}
+
+// 頁面內容短的時候，position:fixed 的浮動工具列會整條疊在頁尾（開利手底部／GitHub
+// 連結／主題切換）上面，兩種「固定在畫面上」的元素互相打架，就是回報裡「底部怪怪的」
+// 的實際成因。頁尾進入視窗範圍時先把工具列淡出、讓開，離開視窗（往上捲回編輯區）再淡入。
+function wireFloatingToolbarFooterAvoidance() {
+    const toolbar = document.querySelector(".canvas-floating-toolbar");
+    const footer = document.getElementById("app-footer");
+    if (!toolbar || !footer || !("IntersectionObserver" in window)) return;
+    const observer = new IntersectionObserver(
+        ([entry]) => toolbar.classList.toggle("is-yielding", entry.isIntersecting),
+        { rootMargin: "0px" }
+    );
+    observer.observe(footer);
 }
 
 function bindToolbar() {
@@ -1411,6 +1431,14 @@ function updatePrinterConnectionUi() {
         : state.usbConnected
             ? `已連接：${usbAdapter.deviceLabel}`
             : "尚未連接，列印會走系統列印對話框";
+
+    // 工具列上的印表機設定鈕本身就是唯一入口，連線狀態要能在不開 modal 的情況下看出來，
+    // 用一顆小圓點（見 editor.css .is-connected::after）而不是整個按鈕變色，避免跟
+    // 顯示模式那組填色的 .is-active 語意搞混（那個代表「目前開啟」，這個代表「有連線」）。
+    els["btn-printer-settings"].classList.toggle("is-connected", state.usbConnected);
+    els["btn-printer-settings"].dataset.tooltip = state.usbConnected
+        ? `印表機設定（已連接：${usbAdapter.deviceLabel}）`
+        : "印表機設定（USB 連線／走紙／切紙）";
 }
 
 function bindPrinterSettings() {
