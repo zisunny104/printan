@@ -14,13 +14,20 @@
 import { getPrinterProfile, getPaperWidth } from "./printer-profiles.js";
 import { applyDataToElements } from "./merge.js";
 import { dotsToMm, splitDotsByRatio } from "./units.js";
-import { applyThermalSimulation } from "./dithering.js";
+import { applyThermalSimulation, toGrayscale, applyDither } from "./dithering.js";
+import { renderBarcodeCanvas } from "./barcode.js";
 
 const DEFAULT_FONT_FAMILY = '"Noto Sans TC", "Microsoft JhengHei", sans-serif';
 
 /**
  * 對單一 template + 單筆資料做完整渲染，回傳 { canvas, widthDots, heightDots, widthMm, heightMm, dpi }。
- * options: { paperWidthId, mode: "screen"|"thermal", ditherMode: "threshold"|"floyd-steinberg", thresholdLevel, fontFamily, assets }
+ * options: { paperWidthId, mode: "screen"|"thermal", thresholdLevel, fontFamily, assets }
+ *
+ * 熱感模式下的網點深淺處理是「按元素類型路由」而非整張畫布套用同一種抖色：相片（image）
+ * 元素本身用 Floyd–Steinberg 誤差擴散（較接近真實灰階觀感），其餘一律是純黑向量或已經是
+ * 純黑白的條碼／QR，套用同一種抖色反而會讓邊緣模糊、字變糊，所以最後對整張畫布只做單純
+ * threshold（把 anti-alias 邊緣二值化），已經 dither 過的相片區塊本身就是 0/255，threshold
+ * 對它們是 no-op，不會被二次破壞。
  */
 export async function renderTemplate(project, data = {}, options = {}) {
     const profile = getPrinterProfile(project.printerProfile.id);
@@ -34,7 +41,6 @@ export async function renderTemplate(project, data = {}, options = {}) {
         assets: assetMap,
         fontFamily: options.fontFamily || DEFAULT_FONT_FAMILY,
         mode: options.mode || "screen",
-        ditherMode: options.ditherMode || "floyd-steinberg",
         thresholdLevel: options.thresholdLevel,
     });
 }
@@ -55,7 +61,6 @@ export async function renderElements(elements, {
     assets,
     fontFamily = DEFAULT_FONT_FAMILY,
     mode = "screen",
-    ditherMode = "floyd-steinberg",
     thresholdLevel = 128,
 } = {}) {
     const assetMap = assets instanceof Map ? assets : new Map(Object.entries(assets || {}));
@@ -73,10 +78,10 @@ export async function renderElements(elements, {
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    paint(items, ctx, 0, 0, fontFamily);
+    paint(items, ctx, 0, 0, fontFamily, mode);
 
     if (mode === "thermal") {
-        applyThermalSimulation(ctx, canvas.width, canvas.height, ditherMode, thresholdLevel);
+        applyThermalSimulation(ctx, canvas.width, canvas.height, "threshold", thresholdLevel);
     }
 
     return {
@@ -120,6 +125,12 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap) {
                 ? el.heightDots
                 : (img ? Math.round(widthDots * (img.naturalHeight / img.naturalWidth)) : 0);
             items.push({ el, y, height: drawHeight, widthDots, img, drawWidth, drawHeight });
+            y += drawHeight;
+        } else if (el.type === "barcode") {
+            const barcodeCanvas = renderBarcodeCanvas(el, widthDots);
+            const drawWidth = barcodeCanvas ? barcodeCanvas.width : 0;
+            const drawHeight = barcodeCanvas ? barcodeCanvas.height : 0;
+            items.push({ el, y, height: drawHeight, widthDots, barcodeCanvas, drawWidth, drawHeight });
             y += drawHeight;
         } else if (el.type === "row") {
             const colWidths = splitDotsByRatio(widthDots, el.ratio);
@@ -281,15 +292,16 @@ function loadImage(src) {
 
 // ---- 繪製（paint pass）----
 
-function paint(items, ctx, xBase, yBase, fontFamily) {
+function paint(items, ctx, xBase, yBase, fontFamily, mode) {
     for (const item of items) {
         const absY = yBase + item.y;
         const { el } = item;
         if (el.type === "text") paintText(ctx, item, xBase, absY);
         else if (el.type === "divider") paintDivider(ctx, item, xBase, absY);
-        else if (el.type === "image") paintImage(ctx, item, xBase, absY);
+        else if (el.type === "image") paintImage(ctx, item, xBase, absY, mode);
+        else if (el.type === "barcode") paintBarcode(ctx, item, xBase, absY);
         else if (el.type === "row") {
-            for (const col of item.columns) paint(col.items, ctx, xBase + col.x, absY, fontFamily);
+            for (const col of item.columns) paint(col.items, ctx, xBase + col.x, absY, fontFamily, mode);
         }
     }
 }
@@ -352,7 +364,44 @@ function paintDivider(ctx, item, x, y) {
     ctx.restore();
 }
 
-function paintImage(ctx, item, x, y) {
+function paintImage(ctx, item, x, y, mode) {
     if (!item.img) return;
-    ctx.drawImage(item.img, x, y, item.drawWidth, item.drawHeight);
+    const { drawWidth, drawHeight, el } = item;
+    const w = Math.max(1, Math.round(drawWidth));
+    const h = Math.max(1, Math.round(drawHeight));
+
+    // 亮度／對比／反相一律先在離屏 canvas 用 filter 套用（螢幕、熱感模式都看得到同樣的
+    // 色調調整），熱感模式再多一步灰階＋依 ditherMode 轉成 1-bit 網點；不縮放、原尺寸
+    // 貼回主畫布，避免合成時 resample 又產生灰階邊緣。
+    const temp = document.createElement("canvas");
+    temp.width = w;
+    temp.height = h;
+    const tctx = temp.getContext("2d");
+    tctx.filter = buildImageFilter(el);
+    tctx.drawImage(item.img, 0, 0, w, h);
+    tctx.filter = "none";
+
+    if (mode === "thermal") {
+        const imageData = tctx.getImageData(0, 0, w, h);
+        toGrayscale(imageData);
+        applyDither(imageData, el.ditherMode || "floyd-steinberg", el.thresholdLevel ?? 128);
+        tctx.putImageData(imageData, 0, 0);
+    }
+    ctx.drawImage(temp, x, y, drawWidth, drawHeight);
+}
+
+function buildImageFilter(el) {
+    const brightness = 100 + (el.brightness || 0);
+    const contrast = 100 + (el.contrast || 0);
+    const invert = el.invert ? 1 : 0;
+    return `brightness(${brightness}%) contrast(${contrast}%) invert(${invert})`;
+}
+
+function paintBarcode(ctx, item, x, y) {
+    if (!item.barcodeCanvas) return;
+    const { el, widthDots, drawWidth, drawHeight } = item;
+    let drawX = x;
+    if (el.align === "center") drawX = x + (widthDots - drawWidth) / 2;
+    else if (el.align === "right") drawX = x + (widthDots - drawWidth);
+    ctx.drawImage(item.barcodeCanvas, drawX, y, drawWidth, drawHeight);
 }

@@ -20,6 +20,10 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
         integrity="sha512-nzuAF7sDvUg8SagRIjY6B5mXfwuMW/3fOU/LITsIukL7PVzfN1srR+2GSfqYr53gRkq8B2y0Sb7Z66ZRMmtxdg=="
         crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"></script>
+    <!-- cdnjs 上的 qrcode-generator 套件實際上沒有檔案（打開會 404／ORB 擋下且無 console 錯誤，很難察覺），改用 jsdelivr 直接讀 npm 套件內容 -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode_UTF8.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
     <link rel="stylesheet" href="<?= $appBasePath ?>/css/editor.css">
 </head>
 
@@ -63,6 +67,9 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                     </button>
                     <button class="ts-button is-small is-outlined is-start-icon" id="btn-add-divider">
                         <span class="ts-icon is-minus-icon" aria-hidden="true"></span> 分隔線
+                    </button>
+                    <button class="ts-button is-small is-outlined is-start-icon" id="btn-add-barcode">
+                        <span class="ts-icon is-qrcode-icon" aria-hidden="true"></span> 條碼
                     </button>
                 </div>
                 <button class="ts-button is-small is-outlined is-start-icon" data-dropdown="row-ratio-dropdown">

@@ -8,10 +8,11 @@ import {
 } from "../core/printer-profiles.js";
 import {
     createTextElement, createImageElement, createSpacerElement, createDividerElement,
-    createRowElement, cloneElementWithNewIds, extractPlaceholders, getTextContent,
+    createRowElement, createBarcodeElement, cloneElementWithNewIds, extractPlaceholders, getTextContent,
     getRangeStyle, applyStyleToRange, replaceFullText, MIXED,
 } from "../core/document-model.js";
 import { renderTemplate, renderBatch } from "../core/renderer.js";
+import { BARCODE_FORMATS } from "../core/barcode.js";
 import { splitDotsByRatio } from "../core/units.js";
 import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js";
 import { exportToPdf } from "../core/pdf-export.js";
@@ -61,7 +62,7 @@ async function init() {
 function cacheDom() {
     [
         "save-status", "printer-profile-label", "printer-profile-dropdown", "paper-width-tabs",
-        "btn-add-text", "btn-add-image", "btn-add-spacer", "btn-add-divider",
+        "btn-add-text", "btn-add-image", "btn-add-spacer", "btn-add-divider", "btn-add-barcode",
         "btn-toggle-thermal", "btn-toggle-preview-mode", "btn-open-ptan", "btn-save-ptan", "btn-export-pdf",
         "btn-export-batch-pdf", "btn-print", "outline-list", "inspector",
         "variables-panel", "variables-card", "variables-card-spacer", "batch-data", "paper-viewport", "paper-shadow", "safe-area-guide",
@@ -163,6 +164,7 @@ function bindToolbar() {
     els["btn-add-text"].addEventListener("click", () => insertElement(createTextElement()));
     els["btn-add-spacer"].addEventListener("click", () => insertElement(createSpacerElement()));
     els["btn-add-divider"].addEventListener("click", () => insertElement(createDividerElement()));
+    els["btn-add-barcode"].addEventListener("click", () => insertElement(createBarcodeElement()));
 
     els["btn-add-image"].addEventListener("click", () => els["image-file-input"].click());
 
@@ -440,7 +442,9 @@ function buildTargetHeader(label, target, depth) {
     return row;
 }
 
-const TYPE_ICON = { text: "font", image: "image", spacer: "arrows-up-down", divider: "minus", row: "table-columns" };
+const TYPE_ICON = { text: "font", image: "image", spacer: "arrows-up-down", divider: "minus", row: "table-columns", barcode: "qrcode" };
+
+const BARCODE_FORMAT_LABEL = Object.fromEntries(BARCODE_FORMATS);
 
 function elementLabel(el) {
     switch (el.type) {
@@ -449,6 +453,7 @@ function elementLabel(el) {
         case "spacer": return `間隔 ${el.heightDots}dot`;
         case "divider": return "分隔線";
         case "row": return `多欄（${el.ratio.join(" : ")}）`;
+        case "barcode": return BARCODE_FORMAT_LABEL[el.format] || "條碼";
         default: return el.type;
     }
 }
@@ -525,7 +530,7 @@ function renderInspector() {
         return;
     }
 
-    const builders = { text: buildTextInspector, image: buildImageInspector, spacer: buildSpacerInspector, divider: buildDividerInspector, row: buildRowInspector };
+    const builders = { text: buildTextInspector, image: buildImageInspector, spacer: buildSpacerInspector, divider: buildDividerInspector, row: buildRowInspector, barcode: buildBarcodeInspector };
     (builders[el.type] || (() => {}))(panel, el);
 
     panel.appendChild(sectionDivider());
@@ -566,6 +571,18 @@ function mkButton(text, icon, onClick, { negative = false, outlined = true } = {
     b.className = `ts-button is-small${outlined ? " is-outlined" : ""}${negative ? " is-negative" : ""}${icon ? " is-start-icon" : ""}`;
     b.type = "button";
     b.innerHTML = icon ? `<span class="ts-icon is-${icon}-icon" aria-hidden="true"></span> ${text}` : text;
+    b.addEventListener("click", onClick);
+    return b;
+}
+
+function iconToggleButton(icon, label, active, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ts-button is-small is-icon is-outlined";
+    b.classList.toggle("is-active", active);
+    b.setAttribute("aria-label", label);
+    b.dataset.tooltip = label;
+    b.innerHTML = `<span class="ts-icon is-${icon}-icon" aria-hidden="true"></span>`;
     b.addEventListener("click", onClick);
     return b;
 }
@@ -632,6 +649,34 @@ function selectInput(options, value, onChange) {
     }
     select.addEventListener("change", () => onChange(select.value));
     wrap.appendChild(select);
+    return wrap;
+}
+
+function sliderField(labelText, value, min, max, onInput) {
+    const wrap = document.createElement("div");
+    wrap.className = "has-top-spaced-small";
+    const label = document.createElement("label");
+    label.className = "ts-text is-label field-label-row";
+    const valueTag = document.createElement("span");
+    valueTag.className = "ts-text is-description";
+    valueTag.textContent = value;
+    label.append(labelText, valueTag);
+
+    const sliderWrap = document.createElement("div");
+    sliderWrap.className = "ts-slider is-small is-fluid has-top-spaced-small";
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = String(min);
+    input.max = String(max);
+    input.value = String(value);
+    input.addEventListener("input", () => {
+        valueTag.textContent = input.value;
+        onInput(Number(input.value));
+    });
+    sliderWrap.appendChild(input);
+
+    wrap.appendChild(label);
+    wrap.appendChild(sliderWrap);
     return wrap;
 }
 
@@ -795,7 +840,9 @@ function buildTextInspector(panel, el) {
 
 function buildImageInspector(panel, el) {
     panel.appendChild(sectionHeader("image", "圖片來源"));
-    const pickBtn = mkButton(el.assetId ? "更換圖片" : "選擇圖片", "upload", () => {
+    const isVariable = typeof el.assetId === "string" && /\{\{.*\}\}/.test(el.assetId);
+
+    const pickBtn = mkButton(el.assetId && !isVariable ? "更換圖片" : "選擇圖片", "upload", () => {
         els["image-file-input"].onchange = null;
         const handler = async (e) => {
             const file = e.target.files[0];
@@ -811,12 +858,40 @@ function buildImageInspector(panel, el) {
         els["image-file-input"].addEventListener("change", handler);
         els["image-file-input"].click();
     }, { outlined: true });
-    panel.appendChild(field(null, pickBtn));
-    panel.appendChild(field("或指定變數（例如 {{image}}）", textInput(el.assetId || "", (v) => { el.assetId = v; onModelChange({ skipInspector: true }); })));
+
+    const varInput = textInput(el.assetId || "", (v) => { el.assetId = v; onModelChange({ skipInspector: true }); });
+    varInput.querySelector("input").placeholder = "{{image}}";
+    const varWrap = field(null, varInput);
+    varWrap.hidden = !isVariable;
+    const varToggle = iconToggleButton("list-check", "改用變數綁定圖片", isVariable, () => {
+        varWrap.hidden = !varWrap.hidden;
+        if (!varWrap.hidden) varInput.querySelector("input").focus();
+    });
+
+    const sourceRow = document.createElement("div");
+    sourceRow.className = "ts-wrap is-compact has-top-spaced-small";
+    sourceRow.appendChild(pickBtn);
+    sourceRow.appendChild(varToggle);
+    panel.appendChild(sourceRow);
+    panel.appendChild(varWrap);
 
     panel.appendChild(sectionDivider());
     panel.appendChild(sectionHeader("ruler", "尺寸"));
     panel.appendChild(field("固定高度 (dot，0＝依欄寬等比縮放)", textInput(el.heightDots, (v) => { el.heightDots = v; onModelChange({ skipInspector: true }); }, "number")));
+
+    panel.appendChild(sectionDivider());
+    panel.appendChild(sectionHeader("sliders", "調整"));
+    panel.appendChild(sliderField("亮度", el.brightness ?? 0, -100, 100, (v) => { el.brightness = v; onModelChange({ skipInspector: true }); }));
+    panel.appendChild(sliderField("對比", el.contrast ?? 0, -100, 100, (v) => { el.contrast = v; onModelChange({ skipInspector: true }); }));
+    panel.appendChild(field(null, checkboxInput(!!el.invert, (v) => { el.invert = v; onModelChange({ skipInspector: true }); }, "反相")));
+    panel.appendChild(field("取樣方式（熱感輸出網點）", selectInput(
+        [["floyd-steinberg", "誤差擴散"], ["ordered", "網點"], ["threshold", "純黑白"]],
+        el.ditherMode || "floyd-steinberg",
+        (v) => { el.ditherMode = v; onModelChange(); },
+    )));
+    if (el.ditherMode === "threshold") {
+        panel.appendChild(sliderField("門檻", el.thresholdLevel ?? 128, 0, 255, (v) => { el.thresholdLevel = v; onModelChange({ skipInspector: true }); }));
+    }
 }
 
 function buildSpacerInspector(panel, el) {
@@ -849,6 +924,31 @@ function buildRowInspector(panel, el) {
         wrap.appendChild(mkButton(ratio.join(" : "), null, () => { setRowRatio(el, ratio); onModelChange(); }, { outlined: !active }));
     }
     panel.appendChild(wrap);
+}
+
+function buildBarcodeInspector(panel, el) {
+    panel.appendChild(sectionHeader("qrcode", "條碼／QR Code"));
+    panel.appendChild(field("類型", selectInput(BARCODE_FORMATS, el.format, (v) => {
+        el.format = v;
+        onModelChange();
+    })));
+    panel.appendChild(field("內容（可用 {{變數}}）", textInput(el.value || "", (v) => {
+        el.value = v;
+        onModelChange({ skipInspector: true });
+    })));
+    if (el.format !== "qrcode") {
+        panel.appendChild(field(null, checkboxInput(el.showText !== false, (v) => {
+            el.showText = v;
+            onModelChange({ skipInspector: true });
+        }, "顯示明碼（條碼下方數字）")));
+    }
+
+    panel.appendChild(sectionDivider());
+    panel.appendChild(sectionHeader("ruler", "尺寸與對齊"));
+    panel.appendChild(fieldRow([
+        ["高度 (dot)", textInput(el.heightDots, (v) => { el.heightDots = v; onModelChange({ skipInspector: true }); }, "number")],
+        ["對齊", selectInput([["left", "靠左"], ["center", "置中"], ["right", "靠右"]], el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })],
+    ]));
 }
 
 // ---- 變數 / 預覽資料 ----
@@ -950,7 +1050,7 @@ function renderEditOverlay() {
 
     walkItems(items, 0, 0, (box, item) => {
         overlay.appendChild(buildEditBlock(box, scale));
-        if (box.el.type === "spacer" || box.el.type === "image") {
+        if (box.el.type === "spacer" || box.el.type === "image" || box.el.type === "barcode") {
             handleBuilders.push(() => buildHeightResizeHandle(box, scale));
         }
         if (box.el.type === "row") {

@@ -8,7 +8,7 @@ function nextId(prefix) {
     return `${prefix}_${Date.now().toString(36)}${idCounter.toString(36)}`;
 }
 
-export const ELEMENT_TYPES = ["text", "image", "spacer", "divider", "row"];
+export const ELEMENT_TYPES = ["text", "image", "spacer", "divider", "row", "barcode"];
 
 /**
  * 一個文字元素的內容由多個 run 組成（比照 Figma：同一段文字裡不同片段可以各自
@@ -202,6 +202,11 @@ export function createImageElement(overrides = {}) {
         assetId: null, // 對應 .ptan assets[].id，或 "{{placeholder}}" 由資料提供
         heightDots: 0, // 0 = 依欄寬等比縮放
         align: "center",
+        brightness: 0, // -100..100
+        contrast: 0, // -100..100
+        invert: false,
+        ditherMode: "floyd-steinberg", // floyd-steinberg | ordered | threshold，決定熱感模式下怎麼轉成網點
+        thresholdLevel: 128, // 僅 ditherMode === "threshold" 時使用，0-255
         ...overrides,
     };
 }
@@ -237,6 +242,23 @@ export function createRowElement(ratio = [1], overrides = {}) {
     };
 }
 
+/**
+ * 條碼／QR Code 元素。format: "qrcode" | "code128" | "ean13"。
+ * showText（明碼：條碼下方的人類可讀數字）只對一維條碼（code128／ean13）有意義，QR 無此欄位可調。
+ */
+export function createBarcodeElement(overrides = {}) {
+    return {
+        id: nextId("barcode"),
+        type: "barcode",
+        format: "qrcode",
+        value: "{{code}}",
+        heightDots: 160, // 條碼本身高度；QR 為正方形邊長
+        showText: true,
+        align: "center",
+        ...overrides,
+    };
+}
+
 export function createElement(type, ...args) {
     switch (type) {
         case "text": return createTextElement(...args);
@@ -244,6 +266,7 @@ export function createElement(type, ...args) {
         case "spacer": return createSpacerElement(...args);
         case "divider": return createDividerElement(...args);
         case "row": return createRowElement(...args);
+        case "barcode": return createBarcodeElement(...args);
         default: throw new Error(`未知的元素類型: ${type}`);
     }
 }
@@ -285,6 +308,9 @@ export function extractPlaceholders(elements) {
         }
         if (el.type === "image" && typeof el.assetId === "string") {
             for (const n of extractPlaceholdersFromText(el.assetId)) names.add(n);
+        }
+        if (el.type === "barcode" && typeof el.value === "string") {
+            for (const n of extractPlaceholdersFromText(el.value)) names.add(n);
         }
     });
     return [...names];

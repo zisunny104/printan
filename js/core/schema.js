@@ -21,7 +21,7 @@ export const PTAN_VERSION = 1;
  *
  * Element（document-model.js 產生）:
  * {
- *   id, type: "text"|"image"|"spacer"|"divider"|"row",
+ *   id, type: "text"|"image"|"spacer"|"divider"|"row"|"barcode",
  *   ...type 專屬欄位,
  *   columns?: Element[][]   // 僅 row 使用：每欄是一個子 element 陣列
  *   ratio?: number[]        // 僅 row 使用：各欄相對比例，例如 [1,1] 或 [2,1]

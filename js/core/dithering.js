@@ -22,7 +22,7 @@ export function threshold(imageData, level = 128) {
 }
 
 /** Floyd–Steinberg 誤差擴散抖色，畫質比單純閾值更接近真實熱感紙效果。 */
-export function floydSteinberg(imageData) {
+export function floydSteinberg(imageData, level = 128) {
     const { width, height, data } = imageData;
     const gray = new Float32Array(width * height);
     for (let i = 0, p = 0; i < data.length; i += 4, p += 1) {
@@ -33,7 +33,7 @@ export function floydSteinberg(imageData) {
         for (let x = 0; x < width; x++) {
             const idx = y * width + x;
             const old = gray[idx];
-            const nv = old < 128 ? 0 : 255;
+            const nv = old < level ? 0 : 255;
             const err = old - nv;
             gray[idx] = nv;
 
@@ -47,10 +47,39 @@ export function floydSteinberg(imageData) {
     }
 
     for (let p = 0, i = 0; p < gray.length; p += 1, i += 4) {
-        const v = gray[p] < 128 ? 0 : 255;
+        const v = gray[p] < level ? 0 : 255;
         data[i] = data[i + 1] = data[i + 2] = v;
     }
     return imageData;
+}
+
+const BAYER_4X4 = [
+    [0, 8, 2, 10],
+    [12, 4, 14, 6],
+    [3, 11, 1, 9],
+    [15, 7, 13, 5],
+];
+
+/** 4x4 Bayer matrix 排序抖色，呈現規則網點（印刷網屏）效果，跟誤差擴散比起來邊緣較銳利、噪點較規律。 */
+export function orderedDither(imageData, level = 128) {
+    const { width, height, data } = imageData;
+    const bias = level - 128;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            const mapValue = ((BAYER_4X4[y % 4][x % 4] + 0.5) / 16) * 255;
+            const v = data[i] - bias < mapValue ? 0 : 255;
+            data[i] = data[i + 1] = data[i + 2] = v;
+        }
+    }
+    return imageData;
+}
+
+/** 依「取樣方式」名稱分派抖色演算法，圖片元素的網點設定統一從這裡進入。 */
+export function applyDither(imageData, mode = "floyd-steinberg", level = 128) {
+    if (mode === "ordered") return orderedDither(imageData, level);
+    if (mode === "threshold") return threshold(imageData, level);
+    return floydSteinberg(imageData, level);
 }
 
 /**
@@ -63,7 +92,7 @@ export function applyThermalSimulation(ctx, width, height, mode = "floyd-steinbe
     if (mode === "threshold") {
         threshold(imageData, thresholdLevel);
     } else {
-        floydSteinberg(imageData);
+        floydSteinberg(imageData, thresholdLevel);
     }
     ctx.putImageData(imageData, 0, 0);
     return ctx;

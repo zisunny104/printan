@@ -42,6 +42,12 @@ body {
     outline-offset: -1px;
 }
 
+.field-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
 .pane-card-header {
     display: flex;
     align-items: center;
