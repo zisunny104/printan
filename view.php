@@ -55,7 +55,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-settings"
                     data-tooltip="印表機設定（型號／USB 連線／走紙／切紙）" aria-label="印表機設定">
                     <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
-                    <span id="printer-profile-label">印表機</span>
+                    印表機設定
                 </button>
                 <div class="ts-selection is-small" id="paper-width-tabs" role="radiogroup" aria-label="紙寬"></div>
                 <div class="ts-divider is-vertical" style="height:1.4em"></div>
@@ -166,6 +166,27 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                             <input type="checkbox" id="pref-cut-paper">
                             <div class="text">列印後自動切紙</div>
                         </label>
+                    </div>
+                    <div class="ts-divider"></div>
+                    <!-- 測試列印：套用目前走紙／切紙偏好印一小段測試圖樣，不用印整張收據就能校正
+                         走紙行數／切紙位置；查詢狀態：即時查詢連線／紙張感應器（DLE EOT），兩者都
+                         需要 USB 或序列埠其中一個已連接，走系統列印對話框時無法使用。 -->
+                    <div class="ts-content">
+                        <div class="ts-text is-label">測試與診斷</div>
+                        <div class="ts-text is-description has-top-spaced-small">
+                            需要先用上面的 USB 或序列埠連接印表機才能使用。
+                        </div>
+                        <div class="ts-space is-small"></div>
+                        <div class="ts-wrap">
+                            <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-test-print">
+                                <span class="ts-icon is-ruler-icon" aria-hidden="true"></span> 測試列印
+                            </button>
+                            <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-query-status">
+                                <span class="ts-icon is-circle-info-icon" aria-hidden="true"></span> 查詢印表機狀態
+                            </button>
+                        </div>
+                        <!-- 內容由 queryPrinterStatus() 動態填入，見 editor.js -->
+                        <div class="ts-text is-description is-small has-top-spaced-small" id="printer-status-result"></div>
                     </div>
                     <div class="ts-divider"></div>
                     <div class="ts-content">

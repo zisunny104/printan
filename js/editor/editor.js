@@ -18,7 +18,10 @@ import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js"
 import { convertHeicIfNeeded } from "../core/heic.js";
 import { exportToPdf } from "../core/pdf-export.js";
 import { saveDraft, loadDraft, deleteDraft, listRecent } from "../core/storage.js";
-import { SystemDialogAdapter, WebUsbEscposAdapter, WebSerialEscposAdapter, detectBrowserCapabilities } from "../core/printer-adapter.js";
+import {
+    SystemDialogAdapter, WebUsbEscposAdapter, WebSerialEscposAdapter, detectBrowserCapabilities,
+    interpretRealtimeStatus,
+} from "../core/printer-adapter.js";
 import { wireResizableColumns } from "./resizable-columns.js";
 
 const LAST_DRAFT_KEY = "printan:lastDraftId";
@@ -71,7 +74,7 @@ async function init() {
 
 function cacheDom() {
     [
-        "save-status", "printer-profile-label", "printer-profile-list", "paper-width-tabs",
+        "save-status", "printer-profile-list", "paper-width-tabs",
         "btn-add-text", "btn-add-image", "btn-add-spacer", "btn-add-divider", "btn-add-barcode",
         "btn-toggle-thermal", "btn-toggle-preview-mode",
         "btn-new-ptan", "btn-open-ptan", "open-project-from-file", "recent-drafts-list",
@@ -86,6 +89,7 @@ function cacheDom() {
         "printer-webserial-unsupported", "printer-serial-connection-status",
         "btn-printer-serial-connect", "btn-printer-serial-disconnect", "pref-serial-baud-rate",
         "pref-feed-lines", "pref-feed-lines-hint", "pref-cut-paper", "btn-printer-settings-close",
+        "btn-printer-test-print", "btn-printer-query-status", "printer-status-result",
     ].forEach((id) => (els[id] = document.getElementById(id)));
 }
 
@@ -147,8 +151,6 @@ function populatePrinterProfileSelect() {
         list.appendChild(item);
     }
 
-    const current = getPrinterProfile(currentId);
-    els["printer-profile-label"].textContent = `${current.brand} ${current.model}`;
     updateFeedLinesHint();
 }
 
@@ -1743,6 +1745,93 @@ function updatePrinterConnectionUi() {
         : "印表機設定（USB／序列埠連線、走紙、切紙）";
 }
 
+// 測試列印用的 canvas 是普通 HTMLCanvasElement，跟 renderTemplate() 產出的 thermal canvas
+// 走同一個 adapter.print()（buildEscposJob／canvasToEscposRaster），不另外寫 ESC/POS 組包邏輯。
+// 最下面畫一段黑條代表「內容結尾」：切紙位置（走紙行數）設得不夠時，切刀會切在這段黑條上
+// 而不是它下面的空白，肉眼就能直接判斷 pref-feed-lines 夠不夠，不用拿正式收據內容去試。
+function buildTestPrintCanvas() {
+    const profile = getPrinterProfile(state.project.printerProfile.id);
+    const paper = getPaperWidth(profile, state.project.paper.widthId);
+    const widthDots = paper.printableWidthDots;
+    const heightDots = 260;
+    const endBarHeight = 24;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = widthDots;
+    canvas.height = heightDots;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, widthDots, heightDots);
+
+    ctx.fillStyle = "#000";
+    ctx.font = "16px sans-serif";
+    ctx.textBaseline = "top";
+    ctx.fillText(`${profile.brand} ${profile.model} 測試列印`, 8, 8);
+    ctx.font = "13px sans-serif";
+    ctx.fillText(`紙寬 ${paper.label}／走紙 ${state.printPrefs.feedLines} 行／切紙 ${state.printPrefs.cutPaper ? "開" : "關"}`, 8, 30);
+    ctx.fillText(new Date().toLocaleString(), 8, 48);
+
+    // 每 8 點一小格、每 80 點一大格的刻度尺，方便對照走紙距離
+    const rulerBaseline = heightDots - endBarHeight;
+    for (let x = 0; x < widthDots; x += 8) {
+        const tall = x % 80 === 0;
+        ctx.fillRect(x, rulerBaseline - (tall ? 14 : 6), 1, tall ? 14 : 6);
+    }
+
+    ctx.fillRect(0, rulerBaseline, widthDots, endBarHeight);
+    ctx.fillStyle = "#fff";
+    ctx.font = "13px sans-serif";
+    ctx.fillText("內容結尾 — 切紙應在此線之後", 8, rulerBaseline + 5);
+
+    return canvas;
+}
+
+async function testPrintCurrentPrinter() {
+    if (!state.usbConnected && !state.serialConnected) {
+        alert("請先連接 USB 或序列埠印表機才能測試列印");
+        return;
+    }
+    const renderResult = { canvas: buildTestPrintCanvas() };
+    try {
+        if (state.usbConnected) {
+            await usbAdapter.print(renderResult, state.printPrefs);
+        } else {
+            await serialAdapter.print(renderResult, state.printPrefs);
+        }
+    } catch (err) {
+        alert(`測試列印失敗：${err.message}`);
+    }
+}
+
+// 依序查詢（不用 Promise.all 平行送出）：USB／序列埠的 queryStatus 都是「送出 DLE EOT
+// 指令 → 等一個回應」，兩個查詢平行送會讓兩組請求／回應交錯，讀出來對不到是哪一個。
+async function queryPrinterStatus() {
+    const adapter = state.usbConnected ? usbAdapter : state.serialConnected ? serialAdapter : null;
+    if (!adapter) {
+        alert("請先連接 USB 或序列埠印表機才能查詢狀態");
+        return;
+    }
+    els["printer-status-result"].textContent = "查詢中…";
+    try {
+        const statusByte = await adapter.queryStatus(1);
+        const paperByte = await adapter.queryStatus(4);
+        const parts = [];
+        if (statusByte.length > 0) {
+            const { online } = interpretRealtimeStatus(1, statusByte[0]);
+            parts.push(`連線狀態：${online ? "online" : "offline"}`);
+        }
+        if (paperByte.length > 0) {
+            const { paper } = interpretRealtimeStatus(4, paperByte[0]);
+            parts.push(`紙張感應器：${paper === "out" ? "缺紙" : paper === "near-end" ? "紙快用完" : "正常"}`);
+        }
+        els["printer-status-result"].textContent = parts.length > 0
+            ? parts.join("；")
+            : "印表機沒有回應（可能不支援即時狀態查詢，或這個連線沒有讀取通道）";
+    } catch (err) {
+        els["printer-status-result"].textContent = `查詢失敗：${err.message}`;
+    }
+}
+
 function bindPrinterSettings() {
     els["pref-feed-lines"].value = state.printPrefs.feedLines;
     els["pref-cut-paper"].checked = state.printPrefs.cutPaper;
@@ -1800,6 +1889,14 @@ function bindPrinterSettings() {
     els["pref-cut-paper"].addEventListener("change", () => {
         state.printPrefs.cutPaper = els["pref-cut-paper"].checked;
         savePrintPrefs();
+    });
+
+    els["btn-printer-test-print"].addEventListener("click", () => {
+        testPrintCurrentPrinter();
+    });
+
+    els["btn-printer-query-status"].addEventListener("click", () => {
+        queryPrinterStatus();
     });
 
     els["pref-serial-baud-rate"].addEventListener("change", () => {

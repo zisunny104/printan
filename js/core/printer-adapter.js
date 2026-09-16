@@ -126,6 +126,27 @@ function buildEscposJob(renderResult, { feedLines = 0, cutPaper = false } = {}) 
     return concatUint8Arrays(parts);
 }
 
+// 即時狀態查詢（DLE EOT n）回應位元組解讀，2026-09 查證：
+// - n=1（印表機狀態）bit3＝離線狀態（0=online／1=offline）：這個位元在各家 ESC/POS
+//   相容機型的實作幾乎一致（python-escpos RT_MASK_ONLINE=8 對應同一個 bit，該專案的
+//   DLE EOT 查詢功能實際在 Epson TM-T20II 上測過，跟 TM-T82II 同屬 Epson TM 系列）：
+//   https://github.com/python-escpos/python-escpos/pull/242
+// - n=4（紙張感應器）bit5+6 同時為 1＝缺紙、bit2+3 同時為 1＝紙快用完，這組是 TM-T82
+//   系列專門記錄的結果：
+//   https://www.matthewswong.com/en/blog/epson-tm-t82-cash-drawer-cutter-status/
+// - n=2（離線原因）／n=3（錯誤原因）目前沒有查到可信、可交叉比對的位元定義來源，
+//   Epson 官方文件（download4.epson.biz）擋自動化擷取讀不到，這裡刻意不猜、不解讀，
+//   避免像 bladeOffsetMm 那次一樣把沒把握的猜測講得太肯定；只回報 n=1／n=4。
+export function interpretRealtimeStatus(n, byte) {
+    if (n === 1) return { online: (byte & 0x08) === 0 };
+    if (n === 4) {
+        if ((byte & 0x60) === 0x60) return { paper: "out" };
+        if ((byte & 0x0c) === 0x0c) return { paper: "near-end" };
+        return { paper: "ok" };
+    }
+    return {};
+}
+
 /**
  * WebUSB 直送 ESC/POS 指令，不透過系統列印對話框／驅動程式。
  * 只認得 profile 有宣告 webUsb.vendorId 的印表機（見 printer-profiles.js），
@@ -135,6 +156,7 @@ export class WebUsbEscposAdapter {
     constructor() {
         this.device = null;
         this.endpointNumber = null;
+        this.inEndpointNumber = null;
     }
 
     isSupported() {
@@ -178,8 +200,11 @@ export class WebUsbEscposAdapter {
         let claimed = null;
         for (const iface of device.configuration.interfaces) {
             const out = iface.alternates[0].endpoints.find((e) => e.direction === "out" && e.type === "bulk");
+            // IN 端點只用來讀「即時狀態查詢」的回應（見 queryStatus），沒有也不影響一般列印，
+            // 所以找不到就留 null，不當成連線失敗。
+            const inEp = iface.alternates[0].endpoints.find((e) => e.direction === "in" && e.type === "bulk");
             if (out) {
-                claimed = { interfaceNumber: iface.interfaceNumber, endpointNumber: out.endpointNumber };
+                claimed = { interfaceNumber: iface.interfaceNumber, endpointNumber: out.endpointNumber, inEndpointNumber: inEp?.endpointNumber ?? null };
                 break;
             }
         }
@@ -190,6 +215,7 @@ export class WebUsbEscposAdapter {
         await device.claimInterface(claimed.interfaceNumber);
         this.device = device;
         this.endpointNumber = claimed.endpointNumber;
+        this.inEndpointNumber = claimed.inEndpointNumber;
     }
 
     /** 目前連接裝置的顯示名稱，尚未連接時回傳空字串。 */
@@ -212,6 +238,27 @@ export class WebUsbEscposAdapter {
         }
     }
 
+    /**
+     * 即時狀態查詢（DLE EOT n）：印表機規格上叫「即時」是因為韌體會馬上回應，
+     * 不用等前面排隊的列印工作跑完，所以就算沒有真的接印表機的當下也能拿來確認連線。
+     * 不是每個裝置都有 Bulk IN 端點、也不是每次都會回應，讀不到就當作「這個環境查不到」，
+     * 回傳空陣列讓呼叫端自己決定要顯示什麼，不當成致命錯誤。
+     * @param {1 | 2 | 3 | 4} n
+     * @returns {Promise<Uint8Array>}
+     */
+    async queryStatus(n) {
+        if (!this.device) throw new Error("尚未連接印表機");
+        await this.device.transferOut(this.endpointNumber, new Uint8Array([0x10, 0x04, n]));
+        if (this.inEndpointNumber == null) return new Uint8Array();
+        const transferPromise = this.device.transferIn(this.inEndpointNumber, 64).catch(() => null);
+        const result = await Promise.race([
+            transferPromise,
+            new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+        ]);
+        if (!result || !result.data) return new Uint8Array();
+        return new Uint8Array(result.data.buffer, result.data.byteOffset, result.data.byteLength);
+    }
+
     async disconnect() {
         if (!this.device) return;
         try {
@@ -219,6 +266,7 @@ export class WebUsbEscposAdapter {
         } finally {
             this.device = null;
             this.endpointNumber = null;
+            this.inEndpointNumber = null;
         }
     }
 }
@@ -297,6 +345,27 @@ export class WebSerialEscposAdapter {
         for (let offset = 0; offset < bytes.length; offset += ESCPOS_CHUNK_SIZE) {
             await this.writer.write(bytes.subarray(offset, offset + ESCPOS_CHUNK_SIZE));
         }
+    }
+
+    /**
+     * 即時狀態查詢（DLE EOT n），見 WebUsbEscposAdapter.queryStatus 的說明。
+     * 序列埠沒有另外的「讀取端點」，讀寫共用同一個 port，所以每次查詢都要重新
+     * getReader()／releaseLock()，不能長期佔用，否則會擋到之後 print() 之類的操作。
+     * @param {1 | 2 | 3 | 4} n
+     * @returns {Promise<Uint8Array>}
+     */
+    async queryStatus(n) {
+        if (!this.writer || !this.port) throw new Error("尚未連接印表機");
+        await this.writer.write(new Uint8Array([0x10, 0x04, n]));
+        const reader = this.port.readable.getReader();
+        const readPromise = reader.read().catch(() => null);
+        const result = await Promise.race([
+            readPromise,
+            new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+        ]);
+        reader.releaseLock();
+        if (!result || result.done || !result.value) return new Uint8Array();
+        return result.value;
     }
 
     async disconnect() {
