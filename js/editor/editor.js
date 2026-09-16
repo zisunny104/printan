@@ -1315,6 +1315,9 @@ function updatePaperFrame() {
     els["paper-shadow"].style.setProperty("--paper-margin", `${marginMm * PX_PER_MM}px`);
     els["paper-shadow"].style.setProperty("--paper-safe-bottom", `${bladeOffsetMm * PX_PER_MM}px`);
     els["canvas-host"].style.width = `${paper.printableWidthMm * PX_PER_MM}px`;
+    // 版面完全沒有元素時，安全區虛線框只是誤導（看起來像渲染壞掉），故不顯示
+    const isEmpty = state.project.template.elements.length === 0;
+    els["paper-viewport"].classList.toggle("is-empty", isEmpty);
 }
 
 async function updatePreview() {

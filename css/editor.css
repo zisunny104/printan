@@ -406,7 +406,9 @@ body {
 
 .paper-shadow {
     position: relative;
-    background: #fff;
+    /* 紙捲兩側是印表機印不到的實體邊距（rollWidthMm 跟 printableWidthMm 的差），
+       用淺灰底跟中間可列印的畫布區分開來；畫布本身另外鋪白底（見 .canvas-host）。 */
+    background: var(--ts-gray-100, #f2f2f2);
     box-shadow: 0 1px 3px rgba(0, 0, 0, .15), 0 0 0 1px var(--ts-gray-200);
     padding: 0 var(--paper-margin, 12px);
     border-radius: 2px;
@@ -423,12 +425,13 @@ body {
     bottom: calc(var(--paper-safe-bottom, 0px) + 6px);
     left: calc(var(--paper-margin, 12px) + 6px);
     right: calc(var(--paper-margin, 12px) + 6px);
-    border: 1px dashed var(--ts-gray-300, #ccc);
+    border: 1px dashed var(--ts-gray-200, #e5e5e5);
     pointer-events: none;
 }
 
 .canvas-host {
     position: relative;
+    background: #fff;
 }
 
 .canvas-host canvas {
@@ -438,7 +441,8 @@ body {
     image-rendering: pixelated;
 }
 
-.paper-viewport.is-preview-mode .safe-area-guide {
+.paper-viewport.is-preview-mode .safe-area-guide,
+.paper-viewport.is-empty .safe-area-guide {
     display: none;
 }
 
