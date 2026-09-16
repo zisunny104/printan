@@ -158,7 +158,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         <div class="ts-space is-small"></div>
                         <label class="ts-text is-label" for="pref-feed-lines">切紙前走紙行數</label>
                         <div class="ts-input is-small is-fluid has-top-spaced-small">
-                            <input type="number" id="pref-feed-lines" min="0" max="20" value="0">
+                            <input type="number" id="pref-feed-lines" min="0" max="20" value="4">
                         </div>
                         <!-- 內容由 updateFeedLinesHint() 依目前印表機規格動態填入，見 editor.js -->
                         <div class="ts-text is-description is-small has-top-spaced-small" id="pref-feed-lines-hint"></div>

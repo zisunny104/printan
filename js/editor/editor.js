@@ -35,10 +35,11 @@ const state = {
     batchPreview: { active: false, records: [], index: 0 }, // 逐筆預覽批次資料時取代 previewData
     usbConnected: false, // WebUSB 印表機是否已連接；true 時「列印」按鈕直接送 ESC/POS，不走系統對話框
     serialConnected: false, // WebSerial 印表機是否已連接；跟 usbConnected 是兩條獨立連線，printCurrent 會優先用 USB
-    printPrefs: { feedLines: 0, cutPaper: true, serialBaudRate: 9600 }, // 走紙／切紙／序列傳輸速率偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）。
-    // feedLines 預設 0：印表機規格檔的 autocutter.bladeOffsetMm（切刀到列印位置的實體距離）
-    // 是自動切紙機構本身在切紙時就會走的距離，不需要應用程式在這裡重複多走一次；這裡只是
-    // 「切紙前」想額外多留白時才需要調整的行數，見 updateFeedLinesHint()。
+    printPrefs: { feedLines: 4, cutPaper: true, serialBaudRate: 9600 }, // 走紙／切紙／序列傳輸速率偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）。
+    // feedLines 預設 4（2026-09 實機驗證：0 會切到內容尾端、4 不會）：印表機規格檔的
+    // autocutter.bladeOffsetMm（切刀跟列印頭之間固定的實體距離）不是自動切紙機構自己會走的，
+    // 是「切紙前」需要應用程式自己走紙走過這段距離，走不夠切刀就會切在剛印完、還沒通過
+    // 切刀位置的內容上，見 updateFeedLinesHint()。
 };
 
 const usbAdapter = new WebUsbEscposAdapter(); // 整個編輯器共用同一個連線實例
@@ -151,16 +152,17 @@ function populatePrinterProfileSelect() {
     updateFeedLinesHint();
 }
 
-// 「切紙前走紙行數」容易被誤會成切紙必要的走紙量，實際上 autocutter.bladeOffsetMm
-// 那段距離是自動切紙機構自己會走的，這裡的數字是額外多走的份量（見 state.printPrefs
-// 那邊的說明）。提示文字依目前選的印表機規格動態產生，換機型或換專案都要能反映正確的
-// bladeOffsetMm，所以掛在 populatePrinterProfileSelect() 尾端統一更新。
+// 「切紙前走紙行數」走不夠，切刀會切在剛印完、還沒通過切刀位置的內容上：
+// bladeOffsetMm 是切刀跟列印頭之間固定的實體距離，需要應用程式自己走紙走過這段距離，
+// 印表機不會自動幫忙走（見 state.printPrefs 那邊的說明，2026-09 已用實機驗證）。
+// 提示文字依目前選的印表機規格動態產生，換機型或換專案都要能反映正確的 bladeOffsetMm，
+// 所以掛在 populatePrinterProfileSelect() 尾端統一更新。
 function updateFeedLinesHint() {
     const profile = getPrinterProfile(state.project.printerProfile.id);
     const bladeOffsetMm = profile.autocutter?.bladeOffsetMm;
     els["pref-feed-lines-hint"].textContent = bladeOffsetMm
-        ? `${profile.brand} ${profile.model} 有自動切紙裝置，切紙時印表機本身就會走紙到正確的切割位置（約 ${bladeOffsetMm}mm），這裡通常維持 0 即可；只有想在收據之間多留一點空白才需要調高。`
-        : "這是切紙（或列印結束）前額外走紙的行數，用來在多筆之間留白，或方便沒有自動切紙裝置時手動撕取；不確定的話維持 0 即可。";
+        ? `${profile.brand} ${profile.model} 的切刀跟列印頭之間有約 ${bladeOffsetMm}mm 的固定距離，走紙行數太少切刀會切到剛印完的內容尾端；預設 4 行通常足夠，如果切紙時還是會切到內容，請調高這個數字。`
+        : "這是切紙（或列印結束）前走紙的行數，走太少切刀可能會切到剛印完的內容尾端；如果切紙時切到內容，請調高這個數字。";
 }
 
 function populatePaperWidthTabs() {
