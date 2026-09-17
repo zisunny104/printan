@@ -27,13 +27,13 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
     <link rel="stylesheet" href="<?= $appBasePath ?>/css/editor.css">
 </head>
 
-<body>
+<body class="is-rounded">
     <div class="main-content">
-        <div class="ts-container" style="max-width:1400px">
+        <div class="ts-container has-vertically-padded" style="max-width:1400px">
 
             <div class="ts-grid is-middle-aligned">
                 <div class="column is-fluid">
-                    <div class="ts-header is-big is-heavy is-start-icon">
+                    <div class="ts-header is-heavy is-large is-start-icon">
                         <span class="ts-icon is-receipt-icon" aria-hidden="true"></span>
                         Printan 單仔
                         <span style="font-size:0.875rem;color:var(--ts-gray-500);font-weight:normal;margin-left:0.5rem;">v<?= htmlspecialchars($appVersion) ?></span>
@@ -373,7 +373,6 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
     <!-- 開利手底部 -->
     <div id="app-footer" class="ts-content is-secondary is-vertically-padded">
         <div class="ts-container" style="max-width:1400px">
-            <div class="ts-divider is-section"></div>
             <div class="ts-grid">
                 <div class="column is-fluid">
                     <div class="ts-text is-description">
