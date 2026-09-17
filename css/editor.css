@@ -488,6 +488,35 @@ body {
     flex-shrink: 0;
 }
 
+/* 「更多工具」收合選單，比照 koilisu/apps/pitrace 的 .pane-menu-wrap / .pane-dropdown-menu
+   （JS 見 editor.js wireToolbarOverflow／wireDropdownToggle）。選單用 {portal:true} 搬到
+   document.body 定位，跳脫 .canvas-floating-toolbar 的 overflow-x:auto（單獨設 overflow-x
+   時瀏覽器會把 overflow-y 一併提升成 auto，選單留在原地會被工具列自己的框裁掉）。
+   本檔開頭已把 [hidden] 提升成 !important，這裡不用再另外補 [hidden] 規則。 */
+.pane-menu-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.pane-dropdown-menu {
+    position: absolute;
+    top: calc(100% + .4rem);
+    right: 0;
+    z-index: 20;
+    min-width: 14rem;
+    max-width: 16rem;
+    background: var(--ts-gray-50, #fff);
+    border: 1px solid var(--ts-gray-300, #ddd);
+    border-radius: var(--ts-border-radius-container, 8px);
+    box-shadow: var(--ts-elevated-shadow, 0 8px 24px rgba(0, 0, 0, .2));
+    padding: .25rem;
+}
+
+.pane-dropdown-menu .item {
+    white-space: nowrap;
+    cursor: pointer;
+}
+
 /* ---- 編輯模式畫布疊層：每個元素的虛線外框、拖曳排序、拖曳縮放把手 ---- */
 
 .edit-overlay {
