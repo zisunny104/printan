@@ -4,7 +4,7 @@
 
 import { createEmptyProject, loadProject } from "../core/schema.js";
 import {
-    getPrinterProfile, listPrinterProfiles, getPaperWidth, getDefaultPrinterProfileId,
+    getPrinterProfile, listPrinterProfiles, getPaperWidth, getDefaultPrinterProfileId, getPrintHeadWidthDots,
 } from "../core/printer-profiles.js";
 import {
     createTextElement, createImageElement, createSpacerElement, createDividerElement,
@@ -1649,6 +1649,14 @@ function bindBatchPanel() {
     els["btn-batch-end-preview"].addEventListener("click", endBatchPreview);
 }
 
+// ESC/POS 直連列印（WebUSB／WebSerial）用的列印選項：在使用者的走紙／切紙偏好之外，
+// 額外帶入目前印表機 profile 的列印頭最大寬度，讓 buildEscposJob 統一置中輸出
+// （見 printer-adapter.js centerCanvasOnWidth），避免紙寬較窄時印出來的內容偏移。
+function getEscposPrintOptions() {
+    const profile = getPrinterProfile(state.project.printerProfile.id);
+    return { ...state.printPrefs, targetWidthDots: getPrintHeadWidthDots(profile) };
+}
+
 async function printCurrent() {
     if (state.printerBusy) {
         alert("印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次");
@@ -1660,7 +1668,7 @@ async function printCurrent() {
 
         if (state.usbConnected) {
             try {
-                await usbAdapter.print(result, state.printPrefs);
+                await usbAdapter.print(result, getEscposPrintOptions());
                 return;
             } catch (err) {
                 state.usbConnected = false;
@@ -1669,7 +1677,7 @@ async function printCurrent() {
             }
         } else if (state.serialConnected) {
             try {
-                await serialAdapter.print(result, state.printPrefs);
+                await serialAdapter.print(result, getEscposPrintOptions());
                 return;
             } catch (err) {
                 state.serialConnected = false;
@@ -1818,9 +1826,9 @@ async function testPrintCurrentPrinter() {
     try {
         const renderResult = { canvas: buildTestPrintCanvas() };
         if (state.usbConnected) {
-            await usbAdapter.print(renderResult, state.printPrefs);
+            await usbAdapter.print(renderResult, getEscposPrintOptions());
         } else {
-            await serialAdapter.print(renderResult, state.printPrefs);
+            await serialAdapter.print(renderResult, getEscposPrintOptions());
         }
     } catch (err) {
         alert(`測試列印失敗：${err.message}`);

@@ -98,12 +98,34 @@ function canvasToEscposRaster(canvas) {
 }
 
 /**
+ * 把來源 canvas 貼到一張指定寬度、白底的新 canvas 正中央（只水平置中，高度不變）。
+ * 目的：紙寬設定比印表機列印頭最大寬度窄時，直接送「目前紙寬」大小的 raster，
+ * 印表機韌體預設的起印水平位置不一定跟紙張實際擺放位置對齊，可能造成印出來的內容
+ * 偏移；統一都送「列印頭最大寬度」的 raster、把實際內容置中，不管韌體從哪裡起印，
+ * 內容相對紙張的位置都一致。來源本來就等於或超過目標寬度時直接回傳原 canvas。
+ */
+function centerCanvasOnWidth(canvas, targetWidthDots) {
+    if (!targetWidthDots || canvas.width >= targetWidthDots) return canvas;
+    const padded = document.createElement("canvas");
+    padded.width = targetWidthDots;
+    padded.height = canvas.height;
+    const ctx = padded.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, padded.width, padded.height);
+    ctx.drawImage(canvas, Math.floor((targetWidthDots - canvas.width) / 2), 0);
+    return padded;
+}
+
+/**
  * 組出完整一次列印工作的 ESC/POS 指令位元組：初始化 → raster 點陣圖 → 走紙 → 切紙。
  * @param {{canvas: HTMLCanvasElement}} renderResult
- * @param {{feedLines?: number, cutPaper?: boolean}} options
+ * @param {{feedLines?: number, cutPaper?: boolean, targetWidthDots?: number|null}} options
+ *   targetWidthDots：印表機列印頭最大寬度（見 printer-profiles.js getPrintHeadWidthDots），
+ *   有值時會把 canvas 置中貼到這個寬度再組 raster，見 centerCanvasOnWidth。
  */
-function buildEscposJob(renderResult, { feedLines = 0, cutPaper = false } = {}) {
-    const { bytesPerLine, height, raster } = canvasToEscposRaster(renderResult.canvas);
+function buildEscposJob(renderResult, { feedLines = 0, cutPaper = false, targetWidthDots = null } = {}) {
+    const canvas = centerCanvasOnWidth(renderResult.canvas, targetWidthDots);
+    const { bytesPerLine, height, raster } = canvasToEscposRaster(canvas);
     if (bytesPerLine > 0xffff || height > 0xffff) {
         throw new Error("圖片尺寸超過 ESC/POS raster 指令支援的範圍");
     }

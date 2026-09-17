@@ -86,3 +86,14 @@ export function getPaperWidth(profile, widthId) {
 export function getDefaultPrinterProfileId() {
     return "epson-tm-t82ii";
 }
+
+/**
+ * 印表機列印頭的最大點陣寬度，用該 profile 所有紙寬選項裡最寬的 printableWidthDots 推得
+ * （同一顆列印頭通常固定寬度，紙寬只是切換用哪一段列印頭在打點）。
+ * 給 printer-adapter.js 的 buildEscposJob 統一送「列印頭最大寬度」的 raster、
+ * 把實際內容置中用，避免紙寬設定較窄時印表機韌體預設起印位置跟紙張實際位置沒對齊、
+ * 印出來的內容偏移。此為工程假設，尚待實機驗證（見 README 已知限制）。
+ */
+export function getPrintHeadWidthDots(profile) {
+    return Math.max(...profile.paperWidths.map((p) => p.printableWidthDots));
+}
