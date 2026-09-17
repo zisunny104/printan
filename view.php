@@ -48,18 +48,9 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
             <div class="ts-divider has-vertically-spaced"></div>
 
             <div id="toolbar" class="pane-toolbar" role="toolbar" aria-label="編輯工具">
-                <!-- 印表機型號／USB 連線／走紙／切紙全部歸在同一顆「印表機設定」按鈕底下同一個
-                     modal 裡：型號雖然會影響版面（紙寬／點陣寬度），但實際操作上就是「這台印表機
-                     的設定」，跟連線、走紙、切紙分開放反而要找兩個地方。紙寬（80/58mm）編輯時常常
-                     切換，維持獨立的快速開關，不塞進 modal。 -->
-                <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-settings"
-                    data-tooltip="印表機設定（型號／USB 連線／走紙／切紙）" aria-label="印表機設定">
-                    <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
-                    印表機設定
-                </button>
-                <div class="ts-selection is-small" id="paper-width-tabs" role="radiogroup" aria-label="紙寬"></div>
-                <div class="ts-divider is-vertical" style="height:1.4em"></div>
-                <span class="toolbar-spacer"></span>
+                <!-- 左：檔案／版型操作（新增、開啟、匯出）；右：紙張與印表機輸出操作（紙寬、
+                     印表機設定、列印）。兩組用途不同（前者管版型檔案，後者管實體輸出），分兩側
+                     排列比全部擠在一起好找。 -->
                 <div class="ts-buttons">
                     <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-new-ptan"
                         data-tooltip="新增空白版型（目前版型會留在「最近編輯」清單，不會遺失）">
@@ -69,13 +60,23 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         data-dropdown="open-project-dropdown" aria-haspopup="true">
                         <span class="ts-icon is-folder-open-icon" aria-hidden="true"></span> 開啟
                     </button>
-                    <button class="ts-button is-small is-outlined is-start-icon" id="btn-save-ptan">
-                        <span class="ts-icon is-download-icon" aria-hidden="true"></span> 匯出 .ptan
-                    </button>
-                    <button class="ts-button is-small is-outlined is-start-icon" id="btn-export-pdf">
-                        <span class="ts-icon is-file-pdf-icon" aria-hidden="true"></span> 匯出 PDF
+                    <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-export-menu"
+                        data-dropdown="export-dropdown" aria-haspopup="true">
+                        <span class="ts-icon is-download-icon" aria-hidden="true"></span> 匯出
                     </button>
                 </div>
+                <span class="toolbar-spacer"></span>
+                <!-- 印表機型號／USB 連線／走紙／切紙全部歸在同一顆「印表機設定」按鈕底下同一個
+                     modal 裡：型號雖然會影響版面（紙寬／點陣寬度），但實際操作上就是「這台印表機
+                     的設定」，跟連線、走紙、切紙分開放反而要找兩個地方。紙寬（80/58mm）編輯時常常
+                     切換，維持獨立的快速開關，不塞進 modal。 -->
+                <div class="ts-selection is-small" id="paper-width-tabs" role="radiogroup" aria-label="紙寬"></div>
+                <div class="ts-divider is-vertical" style="height:1.4em"></div>
+                <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-settings"
+                    data-tooltip="印表機設定（型號／USB 連線／走紙／切紙）" aria-label="印表機設定">
+                    <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
+                    印表機設定
+                </button>
                 <button class="ts-button is-small is-primary is-start-icon" id="btn-print">
                     <span class="ts-icon is-print-icon" aria-hidden="true"></span> 列印
                 </button>
@@ -99,6 +100,15 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <div class="divider"></div>
                 <div class="header">最近編輯</div>
                 <div id="recent-drafts-list"></div>
+            </div>
+
+            <div class="ts-dropdown" id="export-dropdown">
+                <a class="item" id="btn-save-ptan">
+                    <span class="ts-icon is-download-icon" aria-hidden="true"></span> 匯出 .ptan
+                </a>
+                <a class="item" id="btn-export-pdf">
+                    <span class="ts-icon is-file-pdf-icon" aria-hidden="true"></span> 匯出 PDF
+                </a>
             </div>
 
             <!-- 印表機設定：型號 + WebUSB／WebSerial 直連 + 走紙／切紙偏好，同一台印表機的設定全部放一起 -->
