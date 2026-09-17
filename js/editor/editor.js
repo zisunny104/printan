@@ -1756,6 +1756,12 @@ function updatePrinterConnectionUi() {
     els["btn-printer-settings"].dataset.tooltip = connected
         ? `印表機設定（已連接：${connectedLabel}）`
         : "印表機設定（USB／序列埠連線、走紙、切紙）";
+
+    // 跟連接／中斷按鈕一樣用狀態控制可用性，不要讓沒接印表機時還能按「測試列印」／
+    // 「查詢印表機狀態」再跳 alert 說明——那樣使用者得先點一次才知道不能用，體驗上
+    // 比按鈕本身直接變成無法點擊差一截。
+    els["btn-printer-test-print"].disabled = !connected;
+    els["btn-printer-query-status"].disabled = !connected;
 }
 
 // 測試列印用的 canvas 是普通 HTMLCanvasElement，跟 renderTemplate() 產出的 thermal canvas
