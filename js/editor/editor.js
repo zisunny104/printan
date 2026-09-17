@@ -19,8 +19,7 @@ import { convertHeicIfNeeded } from "../core/heic.js";
 import { exportToPdf } from "../core/pdf-export.js";
 import { saveDraft, loadDraft, deleteDraft, listRecent } from "../core/storage.js";
 import {
-    SystemDialogAdapter, WebUsbEscposAdapter, WebSerialEscposAdapter, detectBrowserCapabilities,
-    interpretRealtimeStatus,
+    SystemDialogAdapter, WebUsbEscposAdapter, WebSerialEscposAdapter, interpretRealtimeStatus,
 } from "../core/printer-adapter.js";
 import { wireResizableColumns } from "./resizable-columns.js";
 
@@ -38,6 +37,11 @@ const state = {
     batchPreview: { active: false, records: [], index: 0 }, // 逐筆預覽批次資料時取代 previewData
     usbConnected: false, // WebUSB 印表機是否已連接；true 時「列印」按鈕直接送 ESC/POS，不走系統對話框
     serialConnected: false, // WebSerial 印表機是否已連接；跟 usbConnected 是兩條獨立連線，printCurrent 會優先用 USB
+    // 列印／測試列印／查詢狀態三個操作共用同一個 usbAdapter／serialAdapter（同一個 USB 裝置或
+    // 序列埠），沒有各自獨立的通道；同時觸發兩個會讓 transferOut／write 的位元組流疊在一起，
+    // 印表機收到的可能是兩份 ESC/POS 指令交錯後的亂碼，或狀態查詢讀到不相干的回應。
+    // 用一個共用旗標序列化這三個操作，見 printCurrent／testPrintCurrentPrinter／queryPrinterStatus。
+    printerBusy: false,
     printPrefs: { feedLines: 4, cutPaper: true, serialBaudRate: 9600 }, // 走紙／切紙／序列傳輸速率偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）。
     // feedLines 預設 4（2026-09 實機驗證：0 會切到內容尾端、4 不會）：印表機規格檔的
     // autocutter.bladeOffsetMm（切刀跟列印頭之間固定的實體距離）不是自動切紙機構自己會走的，
@@ -1646,31 +1650,40 @@ function bindBatchPanel() {
 }
 
 async function printCurrent() {
-    const result = await renderTemplate(state.project, state.previewData, { mode: "thermal" });
-
-    if (state.usbConnected) {
-        try {
-            await usbAdapter.print(result, state.printPrefs);
-            return;
-        } catch (err) {
-            state.usbConnected = false;
-            updatePrinterConnectionUi();
-            alert(`印表機列印失敗，已改用系統列印對話框：${err.message}`);
-        }
-    } else if (state.serialConnected) {
-        try {
-            await serialAdapter.print(result, state.printPrefs);
-            return;
-        } catch (err) {
-            state.serialConnected = false;
-            updatePrinterConnectionUi();
-            alert(`印表機列印失敗，已改用系統列印對話框：${err.message}`);
-        }
+    if (state.printerBusy) {
+        alert("印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次");
+        return;
     }
+    state.printerBusy = true;
+    try {
+        const result = await renderTemplate(state.project, state.previewData, { mode: "thermal" });
 
-    const adapter = new SystemDialogAdapter();
-    await adapter.connect();
-    await adapter.print(result);
+        if (state.usbConnected) {
+            try {
+                await usbAdapter.print(result, state.printPrefs);
+                return;
+            } catch (err) {
+                state.usbConnected = false;
+                updatePrinterConnectionUi();
+                alert(`印表機列印失敗，已改用系統列印對話框：${err.message}`);
+            }
+        } else if (state.serialConnected) {
+            try {
+                await serialAdapter.print(result, state.printPrefs);
+                return;
+            } catch (err) {
+                state.serialConnected = false;
+                updatePrinterConnectionUi();
+                alert(`印表機列印失敗，已改用系統列印對話框：${err.message}`);
+            }
+        }
+
+        const adapter = new SystemDialogAdapter();
+        await adapter.connect();
+        await adapter.print(result);
+    } finally {
+        state.printerBusy = false;
+    }
 }
 
 // ---- 印表機設定（WebUSB／WebSerial 直連 + 走紙／切紙偏好） ----
@@ -1791,8 +1804,13 @@ async function testPrintCurrentPrinter() {
         alert("請先連接 USB 或序列埠印表機才能測試列印");
         return;
     }
-    const renderResult = { canvas: buildTestPrintCanvas() };
+    if (state.printerBusy) {
+        alert("印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次");
+        return;
+    }
+    state.printerBusy = true;
     try {
+        const renderResult = { canvas: buildTestPrintCanvas() };
         if (state.usbConnected) {
             await usbAdapter.print(renderResult, state.printPrefs);
         } else {
@@ -1800,6 +1818,8 @@ async function testPrintCurrentPrinter() {
         }
     } catch (err) {
         alert(`測試列印失敗：${err.message}`);
+    } finally {
+        state.printerBusy = false;
     }
 }
 
@@ -1811,6 +1831,11 @@ async function queryPrinterStatus() {
         alert("請先連接 USB 或序列埠印表機才能查詢狀態");
         return;
     }
+    if (state.printerBusy) {
+        alert("印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次");
+        return;
+    }
+    state.printerBusy = true;
     els["printer-status-result"].textContent = "查詢中…";
     try {
         const statusByte = await adapter.queryStatus(1);
@@ -1829,6 +1854,8 @@ async function queryPrinterStatus() {
             : "印表機沒有回應（可能不支援即時狀態查詢，或這個連線沒有讀取通道）";
     } catch (err) {
         els["printer-status-result"].textContent = `查詢失敗：${err.message}`;
+    } finally {
+        state.printerBusy = false;
     }
 }
 
