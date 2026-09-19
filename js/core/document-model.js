@@ -34,6 +34,7 @@ export function createTextElement(overrides = {}) {
         lineHeight: 1.3,
         letterSpacing: 0, // dots
         bold: false, // run 沒指定粗體時的預設值
+        inverse: false, // 整行反白：每一行從左到右鋪滿黑底、文字改白字（舊檔沒有此欄位＝false）
         align: "left", // left | center | right
         wrap: true,
         maxLines: 0, // 0 = 不限制；>0 時超出以「…」截斷

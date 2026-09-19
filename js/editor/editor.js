@@ -1165,6 +1165,7 @@ function buildTextInspector(panel, el) {
         ["最多行數（0＝不限制）", textInput(el.maxLines, (v) => { el.maxLines = v; onModelChange({ skipInspector: true }); }, "number")],
     ]));
     panel.appendChild(field(null, checkboxInput(el.bold, (v) => { el.bold = v; onModelChange({ skipInspector: true }); }, "預設粗體")));
+    panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange({ skipInspector: true }); }, "整行反白（黑底白字）")));
     panel.appendChild(field(null, checkboxInput(el.wrap, (v) => { el.wrap = v; onModelChange({ skipInspector: true }); }, "自動換行")));
 }
 

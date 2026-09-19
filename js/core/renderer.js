@@ -337,12 +337,17 @@ function paint(items, ctx, xBase, yBase, fontFamily, mode) {
 
 function paintText(ctx, item, x, y) {
     const { el, lines, widthDots } = item;
+    const inkColor = el.inverse ? "#fff" : "#000";
     ctx.save();
     ctx.fillStyle = "#000";
     ctx.textBaseline = "top";
     if ("letterSpacing" in ctx) ctx.letterSpacing = `${el.letterSpacing || 0}px`;
     let lineY = y;
     for (const line of lines) {
+        if (el.inverse) {
+            ctx.fillStyle = "#000";
+            ctx.fillRect(x, lineY, widthDots, line.lineHeightDots);
+        }
         let cursorX = x;
         if (el.align === "center" || el.align === "right") {
             cursorX = el.align === "center" ? x + (widthDots - line.width) / 2 : x + (widthDots - line.width);
@@ -350,11 +355,11 @@ function paintText(ctx, item, x, y) {
         for (const seg of line.segments) {
             ctx.font = fontString(seg.style);
             const segWidth = ctx.measureText(seg.text).width;
-            ctx.fillStyle = "#000";
+            ctx.fillStyle = inkColor;
             ctx.fillText(seg.text, cursorX, lineY);
             if (seg.style.underline || seg.style.strikethrough) {
                 ctx.save();
-                ctx.strokeStyle = "#000";
+                ctx.strokeStyle = inkColor;
                 ctx.lineWidth = Math.max(1, Math.round(seg.style.fontSize / 16));
                 ctx.beginPath();
                 if (seg.style.underline) {
