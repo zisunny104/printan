@@ -73,10 +73,6 @@ export function getPrinterProfile(id) {
     return profile;
 }
 
-export function listPrinterProfiles() {
-    return Object.values(PRINTER_PROFILES);
-}
-
 export function getPaperWidth(profile, widthId) {
     const paper = profile.paperWidths.find((p) => p.id === widthId);
     if (!paper) throw new Error(`Printer Profile ${profile.id} 不支援紙寬 ${widthId}`);

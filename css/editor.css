@@ -100,43 +100,30 @@ body {
     color: #fff;
 }
 
-/* 印表機設定 modal 裡的型號清單：直向排列的 .ts-button，選中項目比照顯示模式
-   切換鈕同一套填色風格（見上面 .is-active 規則），這裡另外處理 is-outlined
-   的邊框顏色，選中時邊框要跟著填色一起變，不然會出現藍底黑框的怪異組合。 */
-.printer-profile-list {
-    display: flex;
-    flex-direction: column;
-    gap: .35rem;
-}
-
-.printer-profile-list .ts-button.is-active {
-    background: var(--ts-primary-700, #0050b3);
-    border-color: var(--ts-primary-700, #0050b3);
-    color: #fff;
-}
-
-.printer-profile-list .ts-button.is-active:hover {
-    background: var(--ts-primary-800, #003a8c);
-    border-color: var(--ts-primary-800, #003a8c);
-    color: #fff;
-}
-
-/* 印表機設定鈕的連線狀態：不開 modal 也要看得出來有沒有連接。用角落實心圓點，
-   跟 .is-active 那種整顆填色的「目前開啟」語意分開，避免兩種狀態混淆。 */
-#btn-printer-settings.is-connected {
-    position: relative;
-}
-
-#btn-printer-settings.is-connected::after {
-    content: "";
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 7px;
-    height: 7px;
+/* 印表機連線狀態燈：modal 標題旁的 badge 跟工具列「印表機設定」鈕內的小圓點共用同一個
+   元件。都是排在文字流裡的一般行內元素，不用絕對定位貼角——貼角圓點會被按鈕邊框吃掉一半，
+   看起來像「有問題」的角標。亮起（.is-on）用綠色加一圈光暈，熄滅是灰色。 */
+.printer-conn-dot {
+    display: inline-block;
+    width: .5rem;
+    height: .5rem;
+    margin-right: .35rem;
     border-radius: 50%;
-    background: var(--ts-positive-600, #16a34a);
-    border: 1.5px solid var(--ts-white, #fff);
+    vertical-align: middle;
+    background: var(--ts-gray-400, #bfbfbf);
+}
+
+.printer-conn-dot[hidden] {
+    display: none;
+}
+
+.printer-conn-dot.is-on {
+    background: var(--ts-positive-500, #52c41a);
+    box-shadow: 0 0 0 2px light-dark(rgba(82, 196, 26, .28), rgba(115, 209, 61, .35)), 0 0 6px var(--ts-positive-500, #52c41a);
+}
+
+#btn-printer-settings .printer-conn-dot {
+    margin: 0 0 0 .4rem;
 }
 
 .pane-collapse-toggle .ts-icon {
@@ -407,9 +394,11 @@ body {
 .paper-shadow {
     position: relative;
     /* 紙捲兩側是印表機印不到的實體邊距（rollWidthMm 跟 printableWidthMm 的差），
-       用淺灰底跟中間可列印的畫布區分開來；畫布本身另外鋪白底（見 .canvas-host）。 */
-    background: var(--ts-gray-100, #f2f2f2);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, .15), 0 0 0 1px var(--ts-gray-200);
+       跟中間可列印的畫布區分開來；畫布本身另外鋪白底（見 .canvas-host）。
+       用半透明疊加、不寫死一個灰色：亮色主題疊半透明黑、暗色主題疊半透明白，
+       不管背景卡片是什麼顏色，邊距都會比背景稍暗／稍亮，紙張範圍才分得出來。 */
+    background: light-dark(rgba(0, 0, 0, .09), rgba(255, 255, 255, .16));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .15), 0 0 0 1px light-dark(rgba(0, 0, 0, .14), rgba(255, 255, 255, .28));
     padding: 0 var(--paper-margin, 12px);
     border-radius: 2px;
     /* 版面還沒加任何元素時，畫布實際內容高度只有幾個 px，紙張看起來像一條裂縫、
