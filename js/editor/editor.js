@@ -1088,6 +1088,7 @@ function buildTextInspector(panel, el) {
         toolbar.appendChild(rangeToggleButton("italic", "斜體", style.italic, hasRange, (v) => applyRangeStyle("italic", v)));
         toolbar.appendChild(rangeToggleButton("underline", "底線", style.underline, hasRange, (v) => applyRangeStyle("underline", v)));
         toolbar.appendChild(rangeToggleButton("strikethrough", "刪除線", style.strikethrough, hasRange, (v) => applyRangeStyle("strikethrough", v)));
+        toolbar.appendChild(rangeToggleButton("circle-half-stroke", "反白（黑底白字）", style.inverse, hasRange, (v) => applyRangeStyle("inverse", v)));
 
         styleRow.innerHTML = "";
         styleRow.appendChild(fieldRow([

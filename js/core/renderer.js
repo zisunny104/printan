@@ -194,6 +194,7 @@ function resolveRunStyle(el, run, fallbackFontFamily) {
         strikethrough: run.strikethrough ?? false,
     };
 }
+        inverse: run.inverse ?? false,
 
 function fontString(style) {
     return `${style.italic ? "italic " : ""}${style.bold ? "bold " : ""}${style.fontSize}px ${style.fontFamily}`;
@@ -201,7 +202,8 @@ function fontString(style) {
 
 function stylesEqual(a, b) {
     return a.fontFamily === b.fontFamily && a.fontSize === b.fontSize && a.bold === b.bold
-        && a.italic === b.italic && a.underline === b.underline && a.strikethrough === b.strikethrough;
+        && a.italic === b.italic && a.underline === b.underline && a.strikethrough === b.strikethrough
+        && a.inverse === b.inverse;
 }
 
 /** 把 el.runs 展開成 [[{ch, style}, ...], ...] 段落陣列（在 "\n" 處切段落，run 邊界不影響斷段）。 */
@@ -337,7 +339,6 @@ function paint(items, ctx, xBase, yBase, fontFamily, mode) {
 
 function paintText(ctx, item, x, y) {
     const { el, lines, widthDots } = item;
-    const inkColor = el.inverse ? "#fff" : "#000";
     ctx.save();
     ctx.fillStyle = "#000";
     ctx.textBaseline = "top";
@@ -357,6 +358,13 @@ function paintText(ctx, item, x, y) {
             const segWidth = ctx.measureText(seg.text).width;
             ctx.fillStyle = inkColor;
             ctx.fillText(seg.text, cursorX, lineY);
+            // 局部反白與整行反白相抵：整行黑底上的反白段變回白底黑字
+            const segInverse = !!el.inverse !== seg.style.inverse;
+            const inkColor = segInverse ? "#fff" : "#000";
+            if (seg.style.inverse) {
+                ctx.fillStyle = segInverse ? "#000" : "#fff";
+                ctx.fillRect(cursorX, lineY, segWidth, line.lineHeightDots);
+            }
             if (seg.style.underline || seg.style.strikethrough) {
                 ctx.save();
                 ctx.strokeStyle = inkColor;

@@ -110,6 +110,10 @@ export function createInlineTextEditor({ getHost, getElement, getBlockNode, getS
             span.style.fontWeight = (run.bold ?? el.bold) ? "700" : "400";
             span.style.fontStyle = run.italic ? "italic" : "normal";
             span.style.textDecoration = [run.underline && "underline", run.strikethrough && "line-through"].filter(Boolean).join(" ") || "none";
+            if (run.inverse) {
+                span.style.background = el.inverse ? "#fff" : "#000";
+                span.style.color = el.inverse ? "#000" : "#fff";
+            }
             frag.appendChild(span);
         }
         if (getTextContent(el).endsWith("\n")) frag.appendChild(document.createTextNode("\n"));

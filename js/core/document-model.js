@@ -12,9 +12,9 @@ export const ELEMENT_TYPES = ["text", "image", "spacer", "divider", "row", "barc
 
 /**
  * 一個文字元素的內容由多個 run 組成（比照 Figma：同一段文字裡不同片段可以各自
- * 覆寫字體／字級／粗體／斜體／底線／刪除線）。run 沒指定的樣式欄位會繼承所屬
- * 文字元素的預設值（fontFamily/fontSize/bold），斜體／底線／刪除線沒有元素層級
- * 預設值，未指定一律視為 false。align／wrap／maxLines／lineHeight／letterSpacing
+ * 覆寫字體／字級／粗體／斜體／底線／刪除線／反白）。run 沒指定的樣式欄位會繼承所屬
+ * 文字元素的預設值（fontFamily/fontSize/bold），斜體／底線／刪除線／反白沒有元素層級
+ * 預設值（元素的 inverse 是整行反白，另一回事），未指定一律視為 false。align／wrap／maxLines／lineHeight／letterSpacing
  * 是「段落」層級設定，仍然掛在元素上，不隨 run 變化。
  */
 export function createTextRun(overrides = {}) {
@@ -58,14 +58,15 @@ export function normalizeTextElement(el) {
 // ---- Run 編輯（比照 Figma：單一文字框 + 選取範圍套用樣式） ----
 // 以下函式把「字元偏移範圍」對應到 runs 陣列的切分/合併，供 editor.js 的富文字編輯器使用。
 
-export const RUN_STYLE_FIELDS = ["fontFamily", "fontSize", "bold", "italic", "underline", "strikethrough"];
+// inverse＝局部反白（黑底白字）；元素本身也是整行反白時，兩者相抵＝該段變回白底黑字。
+export const RUN_STYLE_FIELDS = ["fontFamily", "fontSize", "bold", "italic", "underline", "strikethrough", "inverse"];
 
 /** 選取範圍內各 run 的某欄位值不一致時的標記值（不會被序列化保存，僅供 UI 顯示「混合」）。 */
 export const MIXED = Symbol("mixed");
 
 function runFieldValue(el, run, field) {
     if (field === "bold") return run.bold ?? el.bold ?? false;
-    if (field === "italic" || field === "underline" || field === "strikethrough") return !!run[field];
+    if (field === "italic" || field === "underline" || field === "strikethrough" || field === "inverse") return !!run[field];
     return run[field] ?? null; // fontFamily / fontSize：null 表示跟隨段落預設
 }
 
