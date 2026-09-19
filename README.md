@@ -65,6 +65,8 @@ cd printan
 - Shape／Table／Icon 元素
 - 新增其他印表機規格檔（Printer Profile 架構已預留擴充空間）
 
+**待實機驗證：** ESC/POS 直連列印內容偏左的修正（統一送列印頭最大寬度的 raster 並置中補白，以及 ESC @ 之後明確送 GS L 0 0 左邊界歸零、ESC a 0 靠左對齊）都是依規格與工程假設做的防禦性處理，開發環境沒有實體印表機，尚未在實機上確認能消除偏移；若實機仍偏左，需要再確認印表機的列印區域寬度（GS W）與紙寬記憶開關設定。
+
 ## 使用的開源函式庫
 
 - [Tocas UI](https://tocas-ui.com/) - MIT License

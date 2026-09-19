@@ -130,8 +130,13 @@ function buildEscposJob(renderResult, { feedLines = 0, cutPaper = false, targetW
         throw new Error("圖片尺寸超過 ESC/POS raster 指令支援的範圍");
     }
 
+    // ESC @ 之後再明確送一次左邊界歸零與靠左對齊：規格上 ESC @ 就會把這兩項重設為預設值，
+    // 這裡是保險用的重複設定，避免印表機韌體殘留左邊界／對齊設定造成 raster 起印位置偏左偏右。
+    // 尚待實機驗證（開發環境沒有實體印表機），確認有效前不要當成已解決偏移問題的結論。
     const parts = [
         new Uint8Array([0x1b, 0x40]), // ESC @：初始化印表機
+        new Uint8Array([0x1d, 0x4c, 0x00, 0x00]), // GS L nL nH：左邊界 = 0
+        new Uint8Array([0x1b, 0x61, 0x00]), // ESC a 0：靠左對齊
         new Uint8Array([
             0x1d, 0x76, 0x30, 0x00, // GS v 0 m：raster bit image，m=0 一般模式
             bytesPerLine & 0xff, (bytesPerLine >> 8) & 0xff,
