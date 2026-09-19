@@ -16,6 +16,10 @@ import {
 import { renderTemplate, renderBatch } from "../core/renderer.js";
 import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
 import { splitDotsByRatio } from "../core/units.js";
+import {
+    isLocalFontAccessSupported, getLocalFontFamilies, loadLocalFonts, restoreLocalFontsIfGranted,
+    localFontStack, primaryFamilyName, isFontInstalled,
+} from "../core/fonts.js";
 import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js";
 import { convertHeicIfNeeded } from "../core/heic.js";
 import { exportToPdf } from "../core/pdf-export.js";
@@ -80,6 +84,7 @@ async function init() {
     wireFloatingToolbarFooterAvoidance();
     wireToolbarOverflow();
     onModelChange({ skipInspector: false });
+    restoreLocalFontsIfGranted().then((restored) => { if (restored) renderInspector(); });
     await attemptSilentPrinterReconnect();
 }
 
@@ -1013,8 +1018,76 @@ const FONT_CHOICES = [
     ["ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", "等寬（數字／條碼文字）"],
 ];
 
+/**
+ * 字體下拉選單（段落預設字體與選取範圍字體共用）：leading 是最前面的固定選項，接著內建清單，
+ * 授權過本機字體就再接一組「本機字體」；目前值不在清單裡（例如 .ptan 來自別台電腦的本機字體）就補一項並標明這台電腦有沒有。
+ */
+function buildFontSelect({ value, leading, disabled = false, onChange }) {
+    const wrap = document.createElement("div");
+    wrap.className = "ts-select is-small is-fluid";
+    const select = document.createElement("select");
+    select.disabled = disabled;
+    const addOption = (parent, v, label) => {
+        const opt = document.createElement("option");
+        opt.value = v;
+        opt.textContent = label;
+        parent.appendChild(opt);
+    };
+    for (const [v, label] of leading) addOption(select, v, label);
+    for (const [v, label] of FONT_CHOICES) addOption(select, v, label);
+
+    const localFonts = getLocalFontFamilies();
+    if (localFonts.length) {
+        const group = document.createElement("optgroup");
+        group.label = "本機字體";
+        for (const family of localFonts) addOption(group, localFontStack(family), family);
+        select.appendChild(group);
+    }
+
+    if (value && value !== MIXED && ![...select.options].some((o) => o.value === value)) {
+        const name = primaryFamilyName(value);
+        addOption(select, value, isFontInstalled(name) ? `${name}（本機字體）` : `${name}（此電腦沒有，改用預設字體）`);
+    }
+    select.value = value === MIXED ? "__mixed__" : (value || "");
+    select.addEventListener("change", () => onChange(select.value || null));
+    wrap.appendChild(select);
+    return wrap;
+}
+
 function fontFamilySelect(value, onChange, inheritLabel) {
-    return selectInput([["", inheritLabel], ...FONT_CHOICES], value || "", (v) => onChange(v || null));
+    return buildFontSelect({ value, leading: [["", inheritLabel]], onChange });
+}
+
+/** 「使用本機字體」入口：授權後把這台電腦的字體併入所有字體下拉選單；瀏覽器不支援 Local Font Access 時整個不顯示。 */
+function localFontEntry() {
+    if (!isLocalFontAccessSupported()) return null;
+    const wrap = document.createElement("div");
+    wrap.className = "has-top-spaced-small";
+    const note = document.createElement("div");
+    note.className = "ts-text is-small is-description has-top-spaced-small";
+    const count = getLocalFontFamilies().length;
+    const explain = "字體檔不會存進 .ptan，只記字體名稱；沒有該字體的電腦會改用預設字體。";
+    if (count) {
+        note.textContent = `已加入 ${count} 款本機字體。${explain}`;
+        wrap.appendChild(note);
+        return wrap;
+    }
+    note.textContent = `允許後可選用這台電腦安裝的字體。${explain}`;
+    const button = mkButton("使用本機字體", "font", async () => {
+        button.disabled = true;
+        try {
+            await loadLocalFonts();
+            renderInspector();
+        } catch (err) {
+            button.disabled = false;
+            note.className = "ts-text is-small is-negative has-top-spaced-small";
+            note.textContent = err.name === "NotAllowedError" || err.name === "SecurityError"
+                ? "沒有取得本機字體的存取權限，請在瀏覽器詢問時選擇「允許」。"
+                : `無法讀取本機字體：${err.message}`;
+        }
+    });
+    wrap.append(button, note);
+    return wrap;
 }
 
 /** 選取範圍樣式工具列上的單一切換按鈕；value 為 MIXED 時顯示「混合」視覺狀態，沒有選取範圍時停用。 */
@@ -1039,22 +1112,9 @@ function rangeToggleButton(icon, label, value, hasRange, onToggle) {
 }
 
 function rangeFontFamilySelect(value, hasRange, onChange) {
-    const wrap = document.createElement("div");
-    wrap.className = "ts-select is-small is-fluid";
-    const select = document.createElement("select");
-    select.disabled = !hasRange;
-    const options = [["", "跟隨段落預設"], ...FONT_CHOICES];
-    if (value === MIXED) options.unshift(["__mixed__", "混合"]);
-    for (const [v, label] of options) {
-        const opt = document.createElement("option");
-        opt.value = v;
-        opt.textContent = label;
-        opt.selected = value === MIXED ? v === "__mixed__" : v === (value || "");
-        select.appendChild(opt);
-    }
-    select.addEventListener("change", () => onChange(select.value || null));
-    wrap.appendChild(select);
-    return wrap;
+    const leading = [["", "跟隨段落預設"]];
+    if (value === MIXED) leading.unshift(["__mixed__", "混合"]);
+    return buildFontSelect({ value, leading, disabled: !hasRange, onChange });
 }
 
 function rangeFontSizeInput(value, hasRange, onChange) {
@@ -1111,6 +1171,8 @@ function buildTextInspector(panel, el) {
             ["字體", rangeFontFamilySelect(style.fontFamily, hasRange, (v) => applyRangeStyle("fontFamily", v))],
             ["字級 (dot)", rangeFontSizeInput(style.fontSize, hasRange, (v) => applyRangeStyle("fontSize", v))],
         ]));
+        const localEntry = localFontEntry();
+        if (localEntry) styleRow.appendChild(localEntry);
     }
 
     function applyRangeStyle(field, value) {
