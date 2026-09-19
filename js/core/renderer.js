@@ -192,9 +192,9 @@ function resolveRunStyle(el, run, fallbackFontFamily) {
         italic: run.italic ?? false,
         underline: run.underline ?? false,
         strikethrough: run.strikethrough ?? false,
+        inverse: run.inverse ?? false,
     };
 }
-        inverse: run.inverse ?? false,
 
 function fontString(style) {
     return `${style.italic ? "italic " : ""}${style.bold ? "bold " : ""}${style.fontSize}px ${style.fontFamily}`;
@@ -356,8 +356,6 @@ function paintText(ctx, item, x, y) {
         for (const seg of line.segments) {
             ctx.font = fontString(seg.style);
             const segWidth = ctx.measureText(seg.text).width;
-            ctx.fillStyle = inkColor;
-            ctx.fillText(seg.text, cursorX, lineY);
             // 局部反白與整行反白相抵：整行黑底上的反白段變回白底黑字
             const segInverse = !!el.inverse !== seg.style.inverse;
             const inkColor = segInverse ? "#fff" : "#000";
@@ -365,6 +363,8 @@ function paintText(ctx, item, x, y) {
                 ctx.fillStyle = segInverse ? "#000" : "#fff";
                 ctx.fillRect(cursorX, lineY, segWidth, line.lineHeightDots);
             }
+            ctx.fillStyle = inkColor;
+            ctx.fillText(seg.text, cursorX, lineY);
             if (seg.style.underline || seg.style.strikethrough) {
                 ctx.save();
                 ctx.strokeStyle = inkColor;
