@@ -12,7 +12,7 @@ import {
     getRangeStyle, applyStyleToRange, replaceFullText, MIXED,
 } from "../core/document-model.js";
 import { renderTemplate, renderBatch } from "../core/renderer.js";
-import { BARCODE_FORMATS } from "../core/barcode.js";
+import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
 import { splitDotsByRatio } from "../core/units.js";
 import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js";
 import { convertHeicIfNeeded } from "../core/heic.js";
@@ -1368,16 +1368,41 @@ function buildRowInspector(panel, el) {
     panel.appendChild(wrap);
 }
 
+function barcodeNote(text, isError) {
+    const note = document.createElement("div");
+    setBarcodeNote(note, text, isError);
+    return note;
+}
+
+function setBarcodeNote(note, text, isError) {
+    note.className = `ts-text is-small has-top-spaced-small ${isError ? "is-negative" : "is-description"}`;
+    note.textContent = text;
+    note.hidden = !text;
+}
+
 function buildBarcodeInspector(panel, el) {
     panel.appendChild(sectionHeader("qrcode", "條碼／QR Code"));
     panel.appendChild(field("類型", selectInput(BARCODE_FORMATS, el.format, (v) => {
         el.format = v;
         onModelChange();
     })));
+    panel.appendChild(barcodeNote(BARCODE_FORMAT_INFO[el.format] || "", false));
+
+    const valueHint = barcodeNote("", false);
+    const refreshValueHint = () => {
+        const value = el.value || "";
+        if (!value || el.format === "qrcode") return setBarcodeNote(valueHint, "", false);
+        if (value.includes("{{")) return setBarcodeNote(valueHint, "內容含變數，套用資料後才會檢查格式", false);
+        const checked = validateBarcodeValue(el.format, value);
+        setBarcodeNote(valueHint, checked.ok ? checked.note : checked.message, !checked.ok);
+    };
     panel.appendChild(field("內容（可用 {{變數}}）", textInput(el.value || "", (v) => {
         el.value = v;
+        refreshValueHint();
         onModelChange({ skipInspector: true });
     })));
+    panel.appendChild(valueHint);
+    refreshValueHint();
     if (el.format !== "qrcode") {
         panel.appendChild(field(null, checkboxInput(el.showText !== false, (v) => {
             el.showText = v;

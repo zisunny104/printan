@@ -15,7 +15,7 @@ import { getPrinterProfile, getPaperWidth } from "./printer-profiles.js";
 import { applyDataToElements } from "./merge.js";
 import { dotsToMm, splitDotsByRatio } from "./units.js";
 import { applyThermalSimulation, toGrayscale, applyDither } from "./dithering.js";
-import { renderBarcodeCanvas } from "./barcode.js";
+import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
 
 export const DEFAULT_FONT_FAMILY = '"Noto Sans TC", "Microsoft JhengHei", sans-serif';
 
@@ -70,7 +70,7 @@ export async function renderElements(elements, {
     measureCanvas.height = 10;
     const measureCtx = measureCanvas.getContext("2d");
 
-    const { items, height } = await layoutColumn(elements, widthDots, measureCtx, fontFamily, assetMap);
+    const { items, height } = await layoutColumn(elements, widthDots, measureCtx, fontFamily, assetMap, mode === "screen");
 
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(widthDots, 1);
@@ -129,7 +129,7 @@ function measureImageContent(el, img) {
 
 // ---- 排版（measure pass）----
 
-async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap) {
+async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap, showBarcodeErrors) {
     const items = [];
     let y = 0;
     for (const el of elements) {
@@ -156,10 +156,12 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap) {
             items.push({ el, y, height: drawHeight, widthDots, img, drawWidth, drawHeight });
             y += drawHeight;
         } else if (el.type === "barcode") {
-            const barcodeCanvas = renderBarcodeCanvas(el, widthDots);
+            const result = renderBarcodeResult(el, widthDots);
+            // 產生不出來（內容空白／不合格式／紙寬放不下）時，只有 screen 預覽畫佔位框；thermal（列印、PDF 都是這個模式）維持不佔高度
+            const barcodeCanvas = result.canvas || (result.error && showBarcodeErrors ? renderBarcodeErrorCanvas(result.error, widthDots) : null);
             const drawWidth = barcodeCanvas ? barcodeCanvas.width : 0;
             const drawHeight = barcodeCanvas ? barcodeCanvas.height : 0;
-            items.push({ el, y, height: drawHeight, widthDots, barcodeCanvas, drawWidth, drawHeight });
+            items.push({ el, y, height: drawHeight, widthDots, barcodeCanvas, barcodeError: result.error, drawWidth, drawHeight });
             y += drawHeight;
         } else if (el.type === "row") {
             const colWidths = splitDotsByRatio(widthDots, el.ratio);
@@ -167,7 +169,7 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap) {
             let rowHeight = 0;
             let xOffset = 0;
             for (let i = 0; i < el.columns.length; i++) {
-                const sub = await layoutColumn(el.columns[i], colWidths[i], ctx, fontFamily, assetMap);
+                const sub = await layoutColumn(el.columns[i], colWidths[i], ctx, fontFamily, assetMap, showBarcodeErrors);
                 columns.push({ x: xOffset, width: colWidths[i], items: sub.items });
                 rowHeight = Math.max(rowHeight, sub.height);
                 xOffset += colWidths[i];
@@ -469,7 +471,7 @@ function paintBarcode(ctx, item, x, y) {
     if (!item.barcodeCanvas) return;
     const { el, widthDots, drawWidth, drawHeight } = item;
     let drawX = x;
-    if (el.align === "center") drawX = x + (widthDots - drawWidth) / 2;
+    if (el.align === "center") drawX = x + Math.round((widthDots - drawWidth) / 2); // 整數 dot 對齊，條碼線寬才不會被抗鋸齒吃掉
     else if (el.align === "right") drawX = x + (widthDots - drawWidth);
     ctx.drawImage(item.barcodeCanvas, drawX, y, drawWidth, drawHeight);
 }

@@ -249,8 +249,8 @@ export function createRowElement(ratio = [1], overrides = {}) {
 }
 
 /**
- * 條碼／QR Code 元素。format: "qrcode" | "code128" | "ean13"。
- * showText（明碼：條碼下方的人類可讀數字）只對一維條碼（code128／ean13）有意義，QR 無此欄位可調。
+ * 條碼／QR Code 元素。format: "qrcode" | "code128" | "ean13" | "ean8" | "upca" | "code39" | "itf"（見 barcode.js BARCODE_FORMATS）。
+ * showText（明碼：條碼下方的人類可讀數字）只對一維條碼有意義，QR 無此欄位可調。
  */
 export function createBarcodeElement(overrides = {}) {
     return {
