@@ -126,6 +126,66 @@ body {
     margin: 0 0 0 .4rem;
 }
 
+/* 未連接時 badge 是紅底（is-negative），燈用白色才看得到；已連接是綠燈外框（is-outlined）。 */
+.ts-badge.is-negative .printer-conn-dot {
+    background: rgba(255, 255, 255, .9);
+}
+
+#printer-conn-badge {
+    font-size: 1.05rem;
+    padding-inline: .9rem;
+}
+
+#printer-conn-badge.is-outlined {
+    --accent-color: light-dark(var(--ts-positive-700, #237804), var(--ts-positive-400, #95de64));
+}
+
+/* 列印設定 modal 的「值的來源」badge（editor.js sourceBadge）：機器提供＝綠、已覆寫＝藍、
+   預設＝中性灰。外框跟文字同色（Tocas outlined 預設是灰框），三種都是整圈外框，不用色條。 */
+.src-badge {
+    margin-left: .5rem;
+    vertical-align: middle;
+    border-color: currentColor;
+}
+
+.src-badge.src-machine {
+    --accent-color: light-dark(var(--ts-positive-700, #237804), var(--ts-positive-400, #95de64));
+}
+
+.src-badge.src-override {
+    --accent-color: light-dark(var(--ts-primary-700, #0050b3), var(--ts-primary-300, #91caff));
+}
+
+.src-badge.src-default {
+    --accent-color: light-dark(var(--ts-gray-600, #595959), var(--ts-gray-400, #bfbfbf));
+}
+
+/* 印表機資訊表：窄 modal 裡標題欄會被壓成兩行（「連接的／印表機」），不換行、讓值欄吃剩下的寬度 */
+#printer-info-table td:first-child {
+    white-space: nowrap;
+}
+
+/* 可列印點數：每個紙寬一列（標籤／輸入框／換算 mm／來源 badge） */
+.printer-dots-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .5rem;
+}
+
+.printer-dots-label {
+    min-width: 3.5rem;
+}
+
+.printer-dots-input {
+    width: 6.5rem;
+}
+
+.printer-dots-row .src-badge {
+    margin-left: 0;
+}
+
 .pane-collapse-toggle .ts-icon {
     transition: transform .15s ease;
 }

@@ -5,6 +5,8 @@
 import { createEmptyProject, loadProject } from "../core/schema.js";
 import {
     getPrinterProfile, getPaperWidth, getDefaultPrinterProfileId, getPrintHeadWidthDots,
+    withPrintableDotsOverrides, sanitizePrintableDotsOverrides, matchPrinterProfile,
+    PRINTABLE_DOTS_MIN, PRINTABLE_DOTS_MAX,
 } from "../core/printer-profiles.js";
 import {
     createTextElement, createImageElement, createSpacerElement, createDividerElement,
@@ -43,7 +45,10 @@ const state = {
     // 印表機收到的可能是兩份 ESC/POS 指令交錯後的亂碼，或狀態查詢讀到不相干的回應。
     // 用一個共用旗標序列化這三個操作，見 printCurrent／testPrintCurrentPrinter／queryPrinterStatus。
     printerBusy: false,
-    printPrefs: { feedLines: 4, cutPaper: true, serialBaudRate: 9600, connectMethod: "usb" }, // 走紙／切紙／序列傳輸速率／上次選的連接方式偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）。
+    // 連線後讀到的印表機識別資料（WebUSB 裝置名稱 + GS I 回傳的廠牌／型號／韌體）與比對到的 profile，
+    // 未連接時為 null；見 identifyConnectedPrinter()。
+    printerIdentity: null,
+    printPrefs: { feedLines: 4, cutPaper: true, serialBaudRate: 9600, connectMethod: "usb", printableDots: {} }, // 走紙／切紙／序列傳輸速率／上次選的連接方式／各紙寬「可列印點數」覆寫（{ 紙寬id: 點數 }，空物件＝全用內建規格值）偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）。
     // feedLines 預設 4（2026-09 實機驗證：0 會切到內容尾端、4 不會）：印表機規格檔的
     // autocutter.bladeOffsetMm（切刀跟列印頭之間固定的實體距離）不是自動切紙機構自己會走的，
     // 是「切紙前」需要應用程式自己走紙走過這段距離，走不夠切刀就會切在剛印完、還沒通過
@@ -96,6 +101,9 @@ function cacheDom() {
         "btn-printer-connect", "btn-printer-disconnect", "pref-serial-baud-rate",
         "pref-feed-lines", "pref-feed-lines-hint", "pref-cut-paper", "btn-printer-settings-close",
         "btn-printer-test-print", "btn-printer-query-status", "printer-status-result",
+        "btn-printer-forget", "printer-dots-list", "btn-printer-dots-reset",
+        "printer-info-device", "printer-info-firmware", "printer-info-spec", "printer-info-dpi",
+        "printer-info-paper", "printer-info-printable", "printer-info-blade",
     ].forEach((id) => (els[id] = document.getElementById(id)));
 }
 
@@ -121,6 +129,13 @@ async function restoreOrCreateProject() {
 }
 
 // ---- 頂部工具列 ----
+
+// 目前實際採用的印表機規格：註冊表裡專案指定的 profile，再套上使用者手動覆寫的「可列印點數」。
+// 渲染（renderTemplate 的 options.profile）、預覽紙張框、列印頭寬度、測試列印都要吃這一份，
+// 不然畫面預覽跟實際送出的 raster 寬度會不一致。
+function getEffectiveProfile() {
+    return withPrintableDotsOverrides(getPrinterProfile(state.project.printerProfile.id), state.printPrefs.printableDots);
+}
 
 // 「切紙前走紙行數」走不夠，切刀會切在剛印完、還沒通過切刀位置的內容上：
 // bladeOffsetMm 是切刀跟列印頭之間固定的實體距離，需要應用程式自己走紙走過這段距離，
@@ -453,6 +468,7 @@ function loadProjectIntoEditor(project) {
     state.previewData = {};
     endBatchPreview();
     updateFeedLinesHint();
+    renderPrintableDotsRows();
     populatePaperWidthTabs();
     populateRecentDrafts();
     onModelChange();
@@ -1465,7 +1481,7 @@ function renderVariables() {
 // ---- 紙張預覽 ----
 
 function updatePaperFrame() {
-    const profile = getPrinterProfile(state.project.printerProfile.id);
+    const profile = getEffectiveProfile();
     const paper = getPaperWidth(profile, state.project.paper.widthId);
     const marginMm = Math.max((paper.rollWidthMm - paper.printableWidthMm) / 2, 0);
     // 連續紙沒有實體「上邊界」，安全區上緣純粹是視覺留白；下緣則是切刀刀片跟列印頭的
@@ -1487,7 +1503,7 @@ async function updatePreview() {
         const data = state.batchPreview.active
             ? (state.batchPreview.records[state.batchPreview.index] ?? {})
             : state.previewData;
-        result = await renderTemplate(state.project, data, { mode: state.mode });
+        result = await renderTemplate(state.project, data, { mode: state.mode, profile: getEffectiveProfile() });
     } catch (err) {
         console.error(err);
         return;
@@ -1748,7 +1764,7 @@ function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHe
 // ---- 匯出 / 列印 ----
 
 async function exportSinglePdf() {
-    const result = await renderTemplate(state.project, state.previewData, { mode: "thermal" });
+    const result = await renderTemplate(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
     exportToPdf([result], { fileName: `${state.project.meta.name || "printan"}.pdf` });
 }
 
@@ -1767,7 +1783,7 @@ function parseBatchData() {
 async function exportBatchPdf() {
     const dataArray = parseBatchData();
     if (!dataArray) return;
-    const results = await renderBatch(state.project, dataArray, { mode: "thermal" });
+    const results = await renderBatch(state.project, dataArray, { mode: "thermal", profile: getEffectiveProfile() });
     exportToPdf(results, { fileName: `${state.project.meta.name || "printan"}-batch.pdf` });
 }
 
@@ -1830,8 +1846,7 @@ function bindBatchPanel() {
 // 額外帶入目前印表機 profile 的列印頭最大寬度，讓 buildEscposJob 統一置中輸出
 // （見 printer-adapter.js centerCanvasOnWidth），避免紙寬較窄時印出來的內容偏移。
 function getEscposPrintOptions() {
-    const profile = getPrinterProfile(state.project.printerProfile.id);
-    return { ...state.printPrefs, targetWidthDots: getPrintHeadWidthDots(profile) };
+    return { ...state.printPrefs, targetWidthDots: getPrintHeadWidthDots(getEffectiveProfile()) };
 }
 
 async function printCurrent() {
@@ -1841,7 +1856,7 @@ async function printCurrent() {
     }
     state.printerBusy = true;
     try {
-        const result = await renderTemplate(state.project, state.previewData, { mode: "thermal" });
+        const result = await renderTemplate(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
 
         if (state.usbConnected) {
             try {
@@ -1871,7 +1886,7 @@ async function printCurrent() {
     }
 }
 
-// ---- 印表機設定（WebUSB／WebSerial 直連 + 走紙／切紙偏好） ----
+// ---- 列印設定（WebUSB／WebSerial 直連、印表機識別、走紙／切紙／可列印點數偏好） ----
 // 連線狀態、走紙／切紙偏好都是「這台瀏覽器、這台印表機」的本機操作習慣，不寫進 .ptan，
 // 同一份版型換人、換印表機開啟時不應該被綁死。
 
@@ -1879,6 +1894,7 @@ function loadPrintPrefs() {
     try {
         const saved = JSON.parse(localStorage.getItem(PRINT_PREFS_KEY) || "{}");
         state.printPrefs = { ...state.printPrefs, ...saved };
+        state.printPrefs.printableDots = sanitizePrintableDotsOverrides(state.printPrefs.printableDots);
     } catch {
         // 格式壞掉就用預設值，不擋流程
     }
@@ -1908,6 +1924,7 @@ async function attemptSilentPrinterReconnect() {
         }
     }
     updatePrinterConnectionUi();
+    await identifyConnectedPrinter();
 }
 
 // 設定 modal 的連線區塊只有一組連接／中斷按鈕，「目前選哪種連接方式」跟「實際連上哪一種」
@@ -1943,16 +1960,25 @@ function updatePrinterConnectionUi() {
     els["btn-printer-connect"].disabled = !supported;
     els["btn-printer-disconnect"].hidden = !connected;
 
-    // 連線狀態燈：modal 標題旁的 badge 是主要指示，工具列「印表機設定」按鈕文字後面的小綠點
+    // 連線狀態燈：modal 標題旁的 badge 是主要指示，工具列「列印設定」按鈕文字後面的小綠點
     // 讓不開 modal 也看得出有沒有連接。都是 in-flow 元素，不用絕對定位貼在按鈕角落
     // （貼角的圓點會被邊框吃掉一半，看起來像「有問題」的角標，也不是 .is-active 那種
     // 整顆填色的「目前開啟」語意，見 editor.css .printer-conn-dot）。
+    // 未連接時 badge 用紅底（最搶眼，提醒要連線）；已連接改成綠燈外框。
+    els["printer-conn-badge"].classList.toggle("is-negative", !connected);
+    els["printer-conn-badge"].classList.toggle("is-outlined", connected);
     els["printer-conn-badge"].querySelector(".printer-conn-dot").classList.toggle("is-on", connected);
     els["printer-conn-badge-text"].textContent = connected ? "已連接" : "未連接";
     els["printer-toolbar-dot"].hidden = !connected;
     els["btn-printer-settings"].dataset.tooltip = connected
-        ? `印表機設定（已連接：${connectedLabel}）`
-        : "印表機設定（USB／序列埠連線、走紙、切紙）";
+        ? `列印設定（已連接：${connectedLabel}）`
+        : "列印設定（印表機連線、走紙／切紙、可列印點數、測試列印）";
+    els["btn-printer-settings"].setAttribute("aria-label", connected ? "列印設定（印表機已連接）" : "列印設定（印表機未連接）");
+
+    // 識別資料只在連線期間有意義，斷線（含裝置被拔掉）就清掉，見 identifyConnectedPrinter()。
+    if (!connected) state.printerIdentity = null;
+    updatePrinterInfo();
+    els["btn-printer-forget"].disabled = !(usbAdapter.canForget() || serialAdapter.canForget());
 
     // 跟連接／中斷按鈕一樣用狀態控制可用性，不要讓沒接印表機時還能按「測試列印」／
     // 「查詢印表機狀態」再跳 alert 說明——那樣使用者得先點一次才知道不能用，體驗上
@@ -1961,12 +1987,189 @@ function updatePrinterConnectionUi() {
     els["btn-printer-query-status"].disabled = !connected;
 }
 
+// 值的來源 badge：讓使用者分得出這個數字是印表機自己回報的（機器提供）、內建規格表的
+// 預設值（預設）、還是自己手動改過的（已覆寫）。樣式見 editor.css .src-badge。
+const SOURCE_BADGE_TEXT = { machine: "機器提供", default: "預設", override: "已覆寫" };
+
+function sourceBadge(kind) {
+    const badge = document.createElement("span");
+    badge.className = `ts-badge is-small is-outlined src-badge src-${kind}`;
+    badge.textContent = SOURCE_BADGE_TEXT[kind];
+    return badge;
+}
+
+function setInfoCell(id, text, kind = null) {
+    els[id].replaceChildren(text, ...(kind ? [sourceBadge(kind)] : []));
+}
+
+// 印表機資訊區（唯讀）。取值優先序：機器自己回報的（WebUSB 裝置名稱、GS I 廠牌／型號／韌體）
+// > 內建規格表的預設值；「可列印寬度」另外允許使用者手動覆寫（見 renderPrintableDotsRows）。
+// 只有型號比對得到內建規格才標成「機器提供」，比對不到就明講「未識別，使用預設值」。
+function updatePrinterInfo() {
+    const base = getPrinterProfile(state.project.printerProfile.id);
+    const profile = getEffectiveProfile();
+    const paper = getPaperWidth(profile, state.project.paper.widthId);
+    const basePaper = getPaperWidth(base, state.project.paper.widthId);
+    const identity = state.printerIdentity;
+
+    if (!identity) {
+        setInfoCell("printer-info-device", "未連接");
+        setInfoCell("printer-info-firmware", "—");
+        setInfoCell("printer-info-spec", `${base.brand} ${base.model}`, "default");
+    } else {
+        setInfoCell(
+            "printer-info-device",
+            identity.detail ? `${identity.name}（${identity.detail}）` : identity.name,
+            identity.nameFromMachine ? "machine" : null,
+        );
+        setInfoCell(
+            "printer-info-firmware",
+            identity.pending ? "讀取中…" : identity.firmware || "印表機未回報",
+            identity.firmware ? "machine" : null,
+        );
+        if (identity.pending) setInfoCell("printer-info-spec", "比對中…");
+        else if (identity.profileId) setInfoCell("printer-info-spec", `${base.brand} ${base.model}（型號與機器回報相符）`, "machine");
+        else setInfoCell("printer-info-spec", `未識別，使用預設值（${base.brand} ${base.model}）`, "default");
+    }
+    setInfoCell("printer-info-dpi", `${base.dpi.x} × ${base.dpi.y} dpi`, "default");
+    setInfoCell("printer-info-paper", `${paper.label}（捲紙寬 ${paper.rollWidthMm} mm，由工具列選擇，ESC/POS 讀不到）`);
+    const overridden = paper.printableWidthDots !== basePaper.printableWidthDots;
+    setInfoCell("printer-info-printable", `${paper.printableWidthDots} 點（約 ${paper.printableWidthMm.toFixed(1)} mm）`, overridden ? "override" : "default");
+    setInfoCell("printer-info-blade", base.autocutter?.bladeOffsetMm ? `約 ${base.autocutter.bladeOffsetMm} mm` : "—", base.autocutter ? "default" : null);
+}
+
+// 每個紙寬一列「可列印點數」輸入框：留空＝用內建規格的預設值，填了就是手動覆寫（存在本機偏好，
+// 不進 .ptan）。輸入時就地更新 badge／mm 換算，不重畫整列——輸入框 change 事件是在切到下一格
+// 之前觸發，重畫會讓焦點掉掉。
+function renderPrintableDotsRows() {
+    const base = getPrinterProfile(state.project.printerProfile.id);
+    const overrides = state.printPrefs.printableDots;
+    const syncResetButton = () => {
+        els["btn-printer-dots-reset"].disabled = Object.keys(overrides).length === 0;
+    };
+
+    els["printer-dots-list"].replaceChildren();
+    for (const paper of base.paperWidths) {
+        const row = document.createElement("div");
+        row.className = "printer-dots-row";
+
+        const label = document.createElement("label");
+        label.className = "ts-text is-label printer-dots-label";
+        label.textContent = paper.label;
+
+        const wrap = document.createElement("div");
+        wrap.className = "ts-input is-small printer-dots-input";
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = PRINTABLE_DOTS_MIN;
+        input.max = PRINTABLE_DOTS_MAX;
+        input.step = 1;
+        input.placeholder = paper.printableWidthDots;
+        input.value = overrides[paper.id] ?? "";
+        input.id = `pref-printable-dots-${paper.id}`;
+        input.setAttribute("aria-label", `${paper.label} 可列印點數（留空使用預設 ${paper.printableWidthDots}）`);
+        label.htmlFor = input.id;
+        wrap.appendChild(input);
+
+        const unit = document.createElement("span");
+        unit.className = "ts-text is-description is-small";
+        const badgeHolder = document.createElement("span");
+
+        const sync = () => {
+            const mm = paper.id in overrides ? (overrides[paper.id] / base.dpi.x) * 25.4 : paper.printableWidthMm;
+            unit.textContent = `點（約 ${mm.toFixed(1)} mm）`;
+            badgeHolder.replaceChildren(sourceBadge(paper.id in overrides ? "override" : "default"));
+        };
+
+        input.addEventListener("change", () => {
+            const raw = input.value.trim();
+            const n = Number(raw);
+            if (raw === "" || !Number.isFinite(n)) {
+                delete overrides[paper.id];
+            } else {
+                const dots = Math.min(Math.max(Math.round(n), PRINTABLE_DOTS_MIN), PRINTABLE_DOTS_MAX);
+                if (dots === paper.printableWidthDots) delete overrides[paper.id];
+                else overrides[paper.id] = dots;
+            }
+            input.value = overrides[paper.id] ?? "";
+            savePrintPrefs();
+            sync();
+            syncResetButton();
+            updatePrinterInfo();
+            schedulePreview();
+        });
+
+        sync();
+        row.append(label, wrap, unit, badgeHolder);
+        els["printer-dots-list"].appendChild(row);
+    }
+    syncResetButton();
+}
+
+// 連線後讀印表機自報的識別資料，再拿去比對內建規格表：
+// 1. WebUSB 有 manufacturerName／productName（裝置描述元，不用送指令）；序列埠讀不到裝置名稱。
+// 2. GS I n（n=66 廠牌、67 型號、65 韌體）是 ESC/POS 標準的「傳送印表機 ID」指令，但只有
+//    「有回應」才算數：第一個查詢沒回應就整個停下來（逾時的 USB 讀取取消不了，會卡住之後的回應），
+//    也不會影響連線、列印本身。此功能沒有實機驗證，見 README 已知限制。
+// 3. 用 GS I 型號＋裝置名稱去比對 printer-profiles.js 的 model；比對不到不報錯，
+//    UI 明確標成「未識別，使用預設值」，規格照舊用專案指定的預設 profile。
+async function identifyConnectedPrinter() {
+    const adapter = state.usbConnected ? usbAdapter : state.serialConnected ? serialAdapter : null;
+    if (!adapter) {
+        state.printerIdentity = null;
+        updatePrinterInfo();
+        return;
+    }
+    const identity = {
+        name: adapter.deviceLabel,
+        nameFromMachine: state.usbConnected && Boolean(usbAdapter.device.productName),
+        detail: adapter.deviceDetail,
+        maker: null,
+        model: null,
+        firmware: null,
+        profileId: null,
+        pending: true,
+    };
+    state.printerIdentity = identity;
+    updatePrinterInfo();
+
+    // 跟列印／測試列印／查詢狀態共用同一條連線，忙碌中就不插隊送指令，只用裝置名稱比對
+    const canQuery = !state.printerBusy;
+    if (canQuery) state.printerBusy = true;
+    try {
+        if (canQuery) {
+            try {
+                identity.maker = await adapter.queryPrinterId(66);
+                if (identity.maker !== null) {
+                    identity.model = await adapter.queryPrinterId(67);
+                    identity.firmware = await adapter.queryPrinterId(65);
+                }
+            } catch {
+                // 讀不到就當作這台機器不回報，不影響連線
+            }
+        }
+    } finally {
+        if (canQuery) state.printerBusy = false;
+    }
+
+    // 等待期間如果已經斷線或換了連線，這份結果就作廢
+    if (state.printerIdentity !== identity) return;
+    identity.pending = false;
+    const reported = [identity.maker, identity.model].filter(Boolean).join(" ");
+    if (reported) {
+        identity.name = reported;
+        identity.nameFromMachine = true;
+    }
+    identity.profileId = matchPrinterProfile([identity.model, adapter.deviceLabel]);
+    updatePrinterInfo();
+}
+
 // 測試列印用的 canvas 是普通 HTMLCanvasElement，跟 renderTemplate() 產出的 thermal canvas
 // 走同一個 adapter.print()（buildEscposJob／canvasToEscposRaster），不另外寫 ESC/POS 組包邏輯。
 // 最下面畫一段黑條代表「內容結尾」：切紙位置（走紙行數）設得不夠時，切刀會切在這段黑條上
 // 而不是它下面的空白，肉眼就能直接判斷 pref-feed-lines 夠不夠，不用拿正式收據內容去試。
 function buildTestPrintCanvas() {
-    const profile = getPrinterProfile(state.project.printerProfile.id);
+    const profile = getEffectiveProfile();
     const paper = getPaperWidth(profile, state.project.paper.widthId);
     const widthDots = paper.printableWidthDots;
     const heightDots = 260;
@@ -2066,6 +2269,7 @@ function bindPrinterSettings() {
     els["pref-feed-lines"].value = state.printPrefs.feedLines;
     els["pref-cut-paper"].checked = state.printPrefs.cutPaper;
     els["pref-serial-baud-rate"].value = state.printPrefs.serialBaudRate;
+    renderPrintableDotsRows();
     updatePrinterConnectionUi();
 
     els["btn-printer-settings"].addEventListener("click", () => {
@@ -2098,6 +2302,7 @@ function bindPrinterSettings() {
             alert(`連接印表機失敗：${err.message}`);
         }
         updatePrinterConnectionUi();
+        await identifyConnectedPrinter();
     });
 
     els["btn-printer-disconnect"].addEventListener("click", async () => {
@@ -2110,6 +2315,32 @@ function bindPrinterSettings() {
             state.serialConnected = false;
         }
         updatePrinterConnectionUi();
+    });
+
+    els["btn-printer-forget"].addEventListener("click", async () => {
+        if (state.printerBusy) {
+            alert("印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次");
+            return;
+        }
+        if (!confirm("忘記後，瀏覽器不再記得已授權的印表機，目前的連線也會中斷；下次要按「連接印表機」重新選擇裝置。確定要忘記嗎？")) return;
+        try {
+            const usbCount = await usbAdapter.forgetAuthorizedDevices();
+            const serialCount = await serialAdapter.forgetAuthorizedPorts();
+            els["printer-status-result"].textContent = `已忘記 ${(usbCount ?? 0) + (serialCount ?? 0)} 個已授權的裝置`;
+        } catch (err) {
+            els["printer-status-result"].textContent = `忘記裝置失敗：${err.message}`;
+        }
+        state.usbConnected = usbAdapter.device !== null;
+        state.serialConnected = serialAdapter.port !== null;
+        updatePrinterConnectionUi();
+    });
+
+    els["btn-printer-dots-reset"].addEventListener("click", () => {
+        state.printPrefs.printableDots = {};
+        savePrintPrefs();
+        renderPrintableDotsRows();
+        updatePrinterInfo();
+        schedulePreview();
     });
 
     els["pref-feed-lines"].addEventListener("change", () => {

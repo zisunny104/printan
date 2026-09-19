@@ -49,7 +49,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
 
             <div id="toolbar" class="pane-toolbar" role="toolbar" aria-label="編輯工具">
                 <!-- 左：檔案／版型操作（新增、開啟、匯出）；右：紙張與印表機輸出操作（紙寬、
-                     印表機設定、列印）。兩組用途不同（前者管版型檔案，後者管實體輸出），分兩側
+                     列印設定、列印）。兩組用途不同（前者管版型檔案，後者管實體輸出），分兩側
                      排列比全部擠在一起好找。 -->
                 <div class="ts-buttons">
                     <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-new-ptan"
@@ -66,15 +66,16 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                     </button>
                 </div>
                 <span class="toolbar-spacer"></span>
-                <!-- USB／序列埠連線、走紙、切紙都歸在同一顆「印表機設定」按鈕底下同一個 modal 裡。
-                     紙寬（80/58mm）編輯時常常切換，維持獨立的快速開關，不塞進 modal。
+                <!-- 印表機連線、走紙／切紙、可列印點數、測試列印都歸在同一顆「列印設定」按鈕底下同一個 modal 裡。
+                     紙寬（80/58mm）編輯時常常切換，維持獨立的快速開關，不塞進 modal
+                     （ESC/POS 也沒有標準指令能讀回印表機目前的紙寬，不做自動偵測）。
                      印表機型號不開放使用者選，內部固定用預設規格（見 printer-profiles.js）。 -->
                 <div class="ts-selection is-small" id="paper-width-tabs" role="radiogroup" aria-label="紙寬"></div>
                 <div class="ts-divider is-vertical" style="height:1.4em"></div>
                 <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-settings"
-                    data-tooltip="印表機設定（USB／序列埠連線、走紙、切紙）" aria-label="印表機設定">
+                    data-tooltip="列印設定（印表機連線、走紙／切紙、可列印點數、測試列印）" aria-label="列印設定">
                     <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
-                    印表機設定
+                    列印設定
                     <span class="printer-conn-dot is-on" id="printer-toolbar-dot" aria-hidden="true" hidden></span>
                 </button>
                 <button class="ts-button is-small is-primary is-start-icon" id="btn-print">
@@ -111,25 +112,28 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 </a>
             </div>
 
-            <!-- 印表機設定：WebUSB／WebSerial 直連 + 走紙／切紙偏好，同一台印表機的設定全部放一起 -->
+            <!-- 列印設定：一個 modal 由上到下四區——連線（最上面、最明顯）→ 列印設定（走紙／切紙／可列印點數）
+                 → 印表機資訊（唯讀）→ 測試與診斷。「機器讀到的」與「預設／手動覆寫」的值用來源 badge
+                 （.src-badge）區分，見 editor.js sourceBadge()。 -->
             <dialog id="printer-settings-dialog" class="ts-modal">
                 <div class="content">
                     <div class="ts-content">
                         <div class="ts-header is-start-icon">
                             <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
-                            印表機設定
-                            <!-- 唯一的連線狀態燈：已連接＝綠燈，未連接＝灰燈；裝置名稱寫在下方連線區塊，見 updatePrinterConnectionUi() -->
-                            <span class="ts-badge is-small is-outlined is-start-spaced" id="printer-conn-badge" role="status">
-                                <span class="printer-conn-dot" aria-hidden="true"></span><span id="printer-conn-badge-text">未連接</span>
-                            </span>
+                            列印設定
                         </div>
                     </div>
                     <div class="ts-divider"></div>
-                    <!-- USB／序列埠合併成同一個連線區塊：先選連接方式，再按同一顆「連接印表機」；
-                         已連接時方式選項鎖住、只剩「中斷連接」，同一時間只會有一條連線。 -->
+                    <!-- 連線區塊：連接印表機是這個 modal 的主要動作。總狀態 badge 放大，未連接時用紅底最醒目，
+                         已連接改綠燈；同一時間只會有一條連線（USB／序列埠二選一，已連接時方式選項鎖住）。 -->
                     <div class="ts-content">
-                        <div class="ts-text is-label">印表機連線</div>
-                        <div class="ts-space is-small"></div>
+                        <div class="ts-wrap is-middle-aligned is-relaxed">
+                            <div class="ts-text is-label">印表機連線</div>
+                            <span class="ts-badge is-large is-negative" id="printer-conn-badge" role="status">
+                                <span class="printer-conn-dot" aria-hidden="true"></span><span id="printer-conn-badge-text">未連接</span>
+                            </span>
+                        </div>
+                        <div class="has-top-spaced-small"></div>
                         <div class="ts-selection is-small" id="printer-connect-method" role="radiogroup" aria-label="連接方式">
                             <label class="item">
                                 <input type="radio" name="printer-connect-method" value="usb">
@@ -144,24 +148,27 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         <div class="ts-text is-description has-top-spaced-small" id="printer-connection-status">尚未連接</div>
                         <!-- 傳輸速率只有序列埠需要，選 USB 時不顯示 -->
                         <div id="printer-serial-options" hidden>
-                            <div class="ts-space is-small"></div>
+                            <div class="has-top-spaced-small"></div>
                             <label class="ts-text is-label" for="pref-serial-baud-rate">傳輸速率（baud rate）</label>
                             <div class="ts-input is-small is-fluid has-top-spaced-small">
                                 <input type="number" id="pref-serial-baud-rate" min="1200" max="115200" step="1" value="9600">
                             </div>
                         </div>
-                        <div class="ts-space is-small"></div>
-                        <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-connect">
+                        <div class="has-top-spaced-small"></div>
+                        <button type="button" class="ts-button is-primary is-start-icon" id="btn-printer-connect">
                             <span class="ts-icon is-plug-icon" aria-hidden="true"></span> 連接印表機
                         </button>
-                        <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-disconnect" hidden>
+                        <button type="button" class="ts-button is-outlined is-start-icon" id="btn-printer-disconnect" hidden>
                             <span class="ts-icon is-plug-circle-xmark-icon" aria-hidden="true"></span> 中斷連接
                         </button>
                     </div>
                     <div class="ts-divider"></div>
                     <div class="ts-content">
-                        <div class="ts-text is-label">列印行為</div>
-                        <div class="ts-space is-small"></div>
+                        <div class="ts-text is-label">列印設定</div>
+                        <div class="ts-text is-description is-small has-top-spaced-small">
+                            以下設定只在 USB／序列埠直連時套用，走系統列印對話框時不受影響。
+                        </div>
+                        <div class="has-top-spaced-small"></div>
                         <label class="ts-text is-label" for="pref-feed-lines">切紙前走紙行數</label>
                         <div class="ts-input is-small is-fluid has-top-spaced-small">
                             <input type="number" id="pref-feed-lines" min="0" max="20" value="4">
@@ -172,23 +179,60 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                             <input type="checkbox" id="pref-cut-paper">
                             <div class="text">列印後自動切紙</div>
                         </label>
+                        <div class="has-top-spaced"></div>
+                        <div class="ts-text is-label">可列印點數（依紙寬）</div>
+                        <div class="ts-text is-description is-small has-top-spaced-small">
+                            ESC/POS 讀不到印表機的可列印寬度，預設用內建規格的值；別牌印表機的點數可能不同
+                            （例如 58 mm 機常見 384 點），請依印表機規格書填寫（範圍 64–1024），留空＝使用預設。
+                            列印頭最大寬度取所有紙寬中最大的點數，列印內容會置中補白到這個寬度再送出。
+                        </div>
+                        <div class="has-top-spaced-small"></div>
+                        <!-- 每個紙寬一列輸入框，由 renderPrintableDotsRows() 產生，見 editor.js -->
+                        <div id="printer-dots-list"></div>
+                        <div class="has-top-spaced-small"></div>
+                        <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-dots-reset">
+                            <span class="ts-icon is-rotate-left-icon" aria-hidden="true"></span> 還原預設點數
+                        </button>
+                    </div>
+                    <div class="ts-divider"></div>
+                    <!-- 印表機資訊（唯讀）：連線後盡量用機器讀到的（WebUSB 裝置名稱、GS I 回傳的廠牌／型號／韌體）；
+                         規格資料（DPI、紙寬、切刀距離）來自內建規格，比對不到已知型號就標示「未識別，使用預設值」。
+                         各列內容由 updatePrinterInfo() 填入，見 editor.js。 -->
+                    <div class="ts-content">
+                        <div class="ts-text is-label">印表機資訊</div>
+                        <div class="has-top-spaced-small"></div>
+                        <table class="ts-table is-definition is-small" id="printer-info-table">
+                            <tbody>
+                                <tr><td>連接的印表機</td><td id="printer-info-device">—</td></tr>
+                                <tr><td>韌體版本</td><td id="printer-info-firmware">—</td></tr>
+                                <tr><td>規格資料</td><td id="printer-info-spec">—</td></tr>
+                                <tr><td>解析度</td><td id="printer-info-dpi">—</td></tr>
+                                <tr><td>目前紙寬</td><td id="printer-info-paper">—</td></tr>
+                                <tr><td>可列印寬度</td><td id="printer-info-printable">—</td></tr>
+                                <tr><td>切刀距離</td><td id="printer-info-blade">—</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                     <div class="ts-divider"></div>
                     <!-- 測試列印：套用目前走紙／切紙偏好印一小段測試圖樣，不用印整張收據就能校正
                          走紙行數／切紙位置；查詢狀態：即時查詢連線／紙張感應器（DLE EOT），兩者都
-                         需要 USB 或序列埠其中一個已連接，走系統列印對話框時無法使用。 -->
+                         需要 USB 或序列埠其中一個已連接，走系統列印對話框時無法使用。
+                         忘記已授權裝置：清掉瀏覽器記住的授權，換印表機或想重新選擇裝置時用。 -->
                     <div class="ts-content">
                         <div class="ts-text is-label">測試與診斷</div>
                         <div class="ts-text is-description has-top-spaced-small">
-                            需要先用上面的 USB 或序列埠連接印表機才能使用。
+                            測試列印與查詢狀態需要先連接印表機才能使用。
                         </div>
-                        <div class="ts-space is-small"></div>
+                        <div class="has-top-spaced-small"></div>
                         <div class="ts-wrap">
                             <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-test-print">
                                 <span class="ts-icon is-ruler-icon" aria-hidden="true"></span> 測試列印
                             </button>
                             <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-query-status">
                                 <span class="ts-icon is-circle-info-icon" aria-hidden="true"></span> 查詢印表機狀態
+                            </button>
+                            <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-forget">
+                                <span class="ts-icon is-eraser-icon" aria-hidden="true"></span> 忘記已授權裝置
                             </button>
                         </div>
                         <!-- 內容由 queryPrinterStatus() 動態填入，見 editor.js -->

@@ -83,6 +83,71 @@ export function getDefaultPrinterProfileId() {
     return "epson-tm-t82ii";
 }
 
+function normalizeIdText(text) {
+    return String(text ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * 用印表機自報的名稱（WebUSB productName、GS I 回傳的型號字串等）比對註冊表裡的 profile。
+ * 正規化成小寫英數後，只要候選字串的任一「詞」或相鄰兩詞相連（"TM-T82II" 拆成 "tm"、"t82ii"
+ * 也要能對回 "tmt82ii"）等於 profile.model 就算命中；不做模糊比對（例如 TM-T82III 不會誤判成 TM-T82II）。
+ * @param {Array<string|null|undefined>} candidates
+ * @returns {string|null} 命中的 profile id，比對不到回傳 null
+ */
+export function matchPrinterProfile(candidates) {
+    for (const text of candidates) {
+        const raw = String(text ?? "");
+        const whole = normalizeIdText(raw);
+        const words = raw.split(/[\s_]+/).map(normalizeIdText).filter(Boolean);
+        const grams = new Set([whole, ...words]);
+        for (let i = 0; i + 1 < words.length; i += 1) grams.add(words[i] + words[i + 1]);
+        for (const profile of Object.values(PRINTER_PROFILES)) {
+            const model = normalizeIdText(profile.model);
+            if (model && (grams.has(model) || whole === model)) return profile.id;
+        }
+    }
+    return null;
+}
+
+// 使用者可覆寫的「可列印點數」合理範圍：下限避免填錯變成幾乎印不出東西，
+// 上限 1024 涵蓋常見 4 吋（832 點）以下的熱感機。
+export const PRINTABLE_DOTS_MIN = 64;
+export const PRINTABLE_DOTS_MAX = 1024;
+
+/**
+ * 把使用者自訂的 { 紙寬id: 可列印點數 } 整理成乾淨的物件：只留下範圍內的整數，其他丟掉。
+ * 給讀 localStorage（可能被手動改壞）與輸入欄位共用，不認得的紙寬 id 留著也無害，
+ * withPrintableDotsOverrides 只會套用到 profile 實際有的紙寬。
+ */
+export function sanitizePrintableDotsOverrides(raw) {
+    const out = {};
+    if (!raw || typeof raw !== "object") return out;
+    for (const [paperId, value] of Object.entries(raw)) {
+        const dots = Math.round(Number(value));
+        if (Number.isFinite(dots) && dots >= PRINTABLE_DOTS_MIN && dots <= PRINTABLE_DOTS_MAX) out[paperId] = dots;
+    }
+    return out;
+}
+
+/**
+ * 回傳套用「可列印點數」覆寫後的 profile 副本（不動註冊表本身）。
+ * 內建規格的點數是 Epson TM-T82II 的，別牌印表機的同樣紙寬可能不同（例如 58mm 機常見 384 點），
+ * 讓使用者自行覆寫；可列印寬度（mm）跟著點數依 DPI 換算，預覽紙張框與版面才會一致。
+ * 渲染（renderTemplate 的 options.profile）、預覽紙張框、列印頭寬度都要吃同一份有效 profile。
+ */
+export function withPrintableDotsOverrides(profile, overrides) {
+    const clean = sanitizePrintableDotsOverrides(overrides);
+    if (Object.keys(clean).length === 0) return profile;
+    return {
+        ...profile,
+        paperWidths: profile.paperWidths.map((paper) => {
+            const dots = clean[paper.id];
+            if (!dots) return paper;
+            return { ...paper, printableWidthDots: dots, printableWidthMm: (dots / profile.dpi.x) * 25.4 };
+        }),
+    };
+}
+
 /**
  * 印表機列印頭的最大點陣寬度，用該 profile 所有紙寬選項裡最寬的 printableWidthDots 推得
  * （同一顆列印頭通常固定寬度，紙寬只是切換用哪一段列印頭在打點）。

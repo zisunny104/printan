@@ -21,7 +21,9 @@ export const DEFAULT_FONT_FAMILY = '"Noto Sans TC", "Microsoft JhengHei", sans-s
 
 /**
  * 對單一 template + 單筆資料做完整渲染，回傳 { canvas, widthDots, heightDots, widthMm, heightMm, dpi }。
- * options: { paperWidthId, mode: "screen"|"thermal", thresholdLevel, fontFamily, assets }
+ * options: { paperWidthId, profile, mode: "screen"|"thermal", thresholdLevel, fontFamily, assets }
+ * profile：選填，有值時用它取代依 project.printerProfile.id 查註冊表的結果，
+ * 給呼叫端套用「可列印點數」覆寫過的 profile（見 printer-profiles.js withPrintableDotsOverrides）。
  *
  * 熱感模式下的網點深淺處理是「按元素類型路由」而非整張畫布套用同一種抖色：相片（image）
  * 元素本身用 Floyd–Steinberg 誤差擴散（較接近真實灰階觀感），其餘一律是純黑向量或已經是
@@ -30,7 +32,7 @@ export const DEFAULT_FONT_FAMILY = '"Noto Sans TC", "Microsoft JhengHei", sans-s
  * 對它們是 no-op，不會被二次破壞。
  */
 export async function renderTemplate(project, data = {}, options = {}) {
-    const profile = getPrinterProfile(project.printerProfile.id);
+    const profile = options.profile || getPrinterProfile(project.printerProfile.id);
     const paper = getPaperWidth(profile, options.paperWidthId || project.paper.widthId);
     const mergedElements = applyDataToElements(project.template.elements, data);
     const assetMap = options.assets instanceof Map ? options.assets : buildAssetMap(project.assets);

@@ -175,9 +175,40 @@ export function interpretRealtimeStatus(n, byte) {
 }
 
 /**
+ * 解析 GS I n（傳送印表機 ID，1D 49 n）的字串型回應：n=65 韌體版本、66 廠牌、67 型號。
+ * 回應格式是標頭 0x5F、內容、結尾 NUL（0x00）；印表機沒有這項資料時只回 5F 00。
+ * 來源是第二手整理（引用 Epson TM-T20III 文件，Epson 官方 PDF 擋自動化擷取讀不到），
+ * 沒有實機驗證過，見 README 已知限制。
+ * @param {Uint8Array} bytes
+ * @returns {string|null} null＝沒有有效回應（沒回應、或不是 0x5F 開頭）；""＝印表機回報沒有這項資料
+ */
+export function parsePrinterIdResponse(bytes) {
+    if (!bytes || bytes.length === 0 || bytes[0] !== 0x5f) return null;
+    const end = bytes.indexOf(0x00, 1);
+    const body = end === -1 ? bytes.subarray(1) : bytes.subarray(1, end);
+    return new TextDecoder("ascii").decode(body).trim();
+}
+
+const USB_PRINTER_CLASS_CODE = 0x07; // USB-IF 定義的 Printer Class，標準印表機（不限廠牌）會用這個類別
+
+function formatUsbId(id) {
+    return id.toString(16).toUpperCase().padStart(4, "0");
+}
+
+function isPrinterClassInterface(iface) {
+    return iface.alternates.some((alt) => alt.interfaceClass === USB_PRINTER_CLASS_CODE);
+}
+
+/** 裝置本身或它任一組態的任一介面宣告為 Printer Class。 */
+function isUsbPrinterClassDevice(device) {
+    if (device.deviceClass === USB_PRINTER_CLASS_CODE) return true;
+    return (device.configurations || []).some((config) => config.interfaces.some(isPrinterClassInterface));
+}
+
+/**
  * WebUSB 直送 ESC/POS 指令，不透過系統列印對話框／驅動程式。
- * 只認得 profile 有宣告 webUsb.vendorId 的印表機（見 printer-profiles.js），
- * 避免對不明裝置亂猜相容性。
+ * 裝置篩選：profile 有宣告 webUsb.vendorId 的廠牌優先，其他廠牌只認宣告 USB Printer Class
+ * 的裝置（見 connect／reconnectIfAuthorized），不會列出鍵盤、隨身碟這類不相干的 USB 裝置。
  */
 export class WebUsbEscposAdapter {
     constructor() {
@@ -199,11 +230,13 @@ export class WebUsbEscposAdapter {
     /**
      * 嘗試沿用瀏覽器記住的裝置授權直接重新連線，不跳出選擇對話框。
      * 給頁面載入時用，不需要使用者手勢就能恢復「已連接」狀態。
+     * 已授權的裝置優先挑 vendorId 相符的（規格檔指定的廠牌），其次才是宣告 USB Printer Class 的其他廠牌。
      * @returns {Promise<boolean>} 是否成功恢復連線
      */
     async reconnectIfAuthorized(vendorId) {
         const devices = await this.listAuthorizedDevices();
-        const device = devices.find((d) => !vendorId || d.vendorId === vendorId);
+        const device = (vendorId && devices.find((d) => d.vendorId === vendorId))
+            || devices.find(isUsbPrinterClassDevice);
         if (!device) return false;
         await this._openAndClaim(device);
         return true;
@@ -211,21 +244,45 @@ export class WebUsbEscposAdapter {
 
     /**
      * 跳出瀏覽器裝置選擇對話框——必須在使用者手勢（例如按鈕 click handler）內呼叫，
-     * 否則瀏覽器會直接拒絕。
+     * 否則瀏覽器會直接拒絕。篩選條件是「規格檔指定廠牌 OR 任何 USB Printer Class 裝置」：
+     * 內建規格是 Epson，但只要是宣告標準印表機類別的裝置（別牌 ESC/POS 熱感機大多如此）也列出來。
+     * 無法實機驗證別牌機，見 README 已知限制。
      */
     async connect({ vendorId } = {}) {
         if (!this.isSupported()) throw new Error("此瀏覽器不支援 WebUSB，請改用 Chrome 或 Edge");
         if (await this.reconnectIfAuthorized(vendorId)) return;
-        if (!vendorId) throw new Error("此印表機規格未設定 WebUSB vendorId，無法搜尋裝置");
-        const device = await navigator.usb.requestDevice({ filters: [{ vendorId }] });
+        const filters = [{ classCode: USB_PRINTER_CLASS_CODE }];
+        if (vendorId) filters.unshift({ vendorId });
+        const device = await navigator.usb.requestDevice({ filters });
         await this._openAndClaim(device);
+    }
+
+    /**
+     * 忘記瀏覽器記住的所有已授權裝置（換印表機、或想重新出現選擇對話框時用）。
+     * device.forget() 只有較新的 Chromium 才有，不支援時回傳 null 讓呼叫端知道不能用。
+     * @returns {Promise<number|null>} 忘記的裝置數；不支援 forget 時為 null
+     */
+    async forgetAuthorizedDevices() {
+        if (!this.canForget()) return null;
+        await this.disconnect();
+        const devices = await this.listAuthorizedDevices();
+        for (const device of devices) await device.forget();
+        return devices.length;
+    }
+
+    canForget() {
+        return this.isSupported() && typeof USBDevice !== "undefined" && typeof USBDevice.prototype.forget === "function";
     }
 
     async _openAndClaim(device) {
         await device.open();
         if (!device.configuration) await device.selectConfiguration(1);
         let claimed = null;
-        for (const iface of device.configuration.interfaces) {
+        // 組合裝置（印表機＋其他功能）先挑 Printer Class 介面，沒有再退回第一個有 Bulk OUT 的介面
+        const interfaces = [...device.configuration.interfaces].sort(
+            (a, b) => Number(isPrinterClassInterface(b)) - Number(isPrinterClassInterface(a)),
+        );
+        for (const iface of interfaces) {
             const out = iface.alternates[0].endpoints.find((e) => e.direction === "out" && e.type === "bulk");
             // IN 端點只用來讀「即時狀態查詢」的回應（見 queryStatus），沒有也不影響一般列印，
             // 所以找不到就留 null，不當成連線失敗。
@@ -249,6 +306,12 @@ export class WebUsbEscposAdapter {
     get deviceLabel() {
         if (!this.device) return "";
         return [this.device.manufacturerName, this.device.productName].filter(Boolean).join(" ") || "USB 印表機";
+    }
+
+    /** 目前連接裝置的識別資訊（VID:PID），給印表機資訊顯示用，尚未連接時回傳空字串。 */
+    get deviceDetail() {
+        if (!this.device) return "";
+        return `USB ${formatUsbId(this.device.vendorId)}:${formatUsbId(this.device.productId)}`;
     }
 
     /**
@@ -284,6 +347,26 @@ export class WebUsbEscposAdapter {
         ]);
         if (!result || !result.data) return new Uint8Array();
         return new Uint8Array(result.data.buffer, result.data.byteOffset, result.data.byteLength);
+    }
+
+    /**
+     * 讀印表機自報的識別資料（GS I n），見 parsePrinterIdResponse。逾時或沒有讀取端點回傳 null。
+     * 逾時後那次 transferIn 沒辦法取消，還會掛在 USB 佇列上、之後可能吃掉下一個回應，
+     * 所以呼叫端第一次收到 null 就該停止連續查詢（見 editor.js identifyConnectedPrinter）。
+     * @param {65 | 66 | 67} n 65 韌體版本、66 廠牌、67 型號
+     * @returns {Promise<string|null>}
+     */
+    async queryPrinterId(n) {
+        if (!this.device) throw new Error("尚未連接印表機");
+        if (this.inEndpointNumber == null) return null;
+        await this.device.transferOut(this.endpointNumber, new Uint8Array([0x1d, 0x49, n]));
+        const transferPromise = this.device.transferIn(this.inEndpointNumber, 64).catch(() => null);
+        const result = await Promise.race([
+            transferPromise,
+            new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+        ]);
+        if (!result || !result.data) return null;
+        return parsePrinterIdResponse(new Uint8Array(result.data.buffer, result.data.byteOffset, result.data.byteLength));
     }
 
     async disconnect() {
@@ -329,9 +412,7 @@ export class WebSerialEscposAdapter {
      */
     async reconnectIfAuthorized(vendorId, baudRate = DEFAULT_SERIAL_BAUD_RATE) {
         const ports = await this.listAuthorizedPorts();
-        const port = vendorId
-            ? ports.find((p) => p.getInfo().usbVendorId === vendorId)
-            : ports[0];
+        const port = (vendorId && ports.find((p) => p.getInfo().usbVendorId === vendorId)) || ports[0];
         if (!port) return false;
         await this._openPort(port, baudRate);
         return true;
@@ -339,14 +420,32 @@ export class WebSerialEscposAdapter {
 
     /**
      * 跳出瀏覽器序列埠選擇對話框——必須在使用者手勢（例如按鈕 click handler）內呼叫，
-     * 否則瀏覽器會直接拒絕。vendorId 有值時只用來篩選裝置清單（USB-to-Serial 晶片才有
-     * usbVendorId），真正的 RS-232 序列埠沒有這個欄位，篩選不到就顯示全部序列埠讓使用者自己選。
+     * 否則瀏覽器會直接拒絕。序列埠不像 USB 有 Printer Class 可以篩選：真正的 RS-232 埠沒有
+     * usbVendorId、別牌的 USB-to-Serial 晶片（FTDI／CH340 等）的 VID 也不是印表機廠牌，
+     * 一旦帶 filters，Chrome 就只列出符合的埠（不會退回全部），所以這裡不帶篩選、
+     * 列出全部序列埠讓使用者自己選。vendorId 只用在 reconnectIfAuthorized 的優先順序。
      */
     async connect({ vendorId, baudRate = DEFAULT_SERIAL_BAUD_RATE } = {}) {
         if (!this.isSupported()) throw new Error("此瀏覽器不支援 Web Serial API，請改用 Chrome 或 Edge");
         if (await this.reconnectIfAuthorized(vendorId, baudRate)) return;
-        const port = await navigator.serial.requestPort(vendorId ? { filters: [{ usbVendorId: vendorId }] } : {});
+        const port = await navigator.serial.requestPort();
         await this._openPort(port, baudRate);
+    }
+
+    /**
+     * 忘記瀏覽器記住的所有已授權序列埠，見 WebUsbEscposAdapter.forgetAuthorizedDevices。
+     * @returns {Promise<number|null>} 忘記的序列埠數；不支援 forget 時為 null
+     */
+    async forgetAuthorizedPorts() {
+        if (!this.canForget()) return null;
+        await this.disconnect();
+        const ports = await this.listAuthorizedPorts();
+        for (const port of ports) await port.forget();
+        return ports.length;
+    }
+
+    canForget() {
+        return this.isSupported() && typeof SerialPort !== "undefined" && typeof SerialPort.prototype.forget === "function";
     }
 
     async _openPort(port, baudRate) {
@@ -360,6 +459,15 @@ export class WebSerialEscposAdapter {
         if (!this.port) return "";
         const info = this.port.getInfo();
         return info.usbVendorId ? `序列埠印表機（VID 0x${info.usbVendorId.toString(16)}）` : "序列埠印表機";
+    }
+
+    /** 目前連接序列埠的識別資訊，給印表機資訊顯示用；非 USB 轉接的 RS-232 埠沒有可讀的識別資料。 */
+    get deviceDetail() {
+        if (!this.port) return "";
+        const info = this.port.getInfo();
+        return info.usbVendorId
+            ? `USB 序列轉接 ${formatUsbId(info.usbVendorId)}:${formatUsbId(info.usbProductId ?? 0)}`
+            : "序列埠（無 USB 識別資訊）";
     }
 
     /**
@@ -393,6 +501,40 @@ export class WebSerialEscposAdapter {
         reader.releaseLock();
         if (!result || result.done || !result.value) return new Uint8Array();
         return result.value;
+    }
+
+    /**
+     * 讀印表機自報的識別資料（GS I n），見 WebUsbEscposAdapter.queryPrinterId。
+     * 序列埠是位元組串流，回應可能分成好幾段到達，所以讀到結尾的 NUL 或逾時才停。
+     * 逾時時 read() 還掛著，releaseLock() 在較舊的 Chrome 會丟例外，這裡吞掉；
+     * 呼叫端第一次收到 null 就該停止連續查詢。
+     * @param {65 | 66 | 67} n
+     * @returns {Promise<string|null>}
+     */
+    async queryPrinterId(n) {
+        if (!this.writer || !this.port) throw new Error("尚未連接印表機");
+        await this.writer.write(new Uint8Array([0x1d, 0x49, n]));
+        const reader = this.port.readable.getReader();
+        const chunks = [];
+        const deadline = Date.now() + 1500;
+        try {
+            while (Date.now() < deadline) {
+                const result = await Promise.race([
+                    reader.read().catch(() => null),
+                    new Promise((resolve) => setTimeout(() => resolve(null), Math.max(deadline - Date.now(), 1))),
+                ]);
+                if (!result || result.done || !result.value) break;
+                chunks.push(...result.value);
+                if (result.value.includes(0x00)) break;
+            }
+        } finally {
+            try {
+                reader.releaseLock();
+            } catch {
+                // read() 還沒結束時較舊的 Chrome 不允許釋放，讓它留著等連線關閉
+            }
+        }
+        return parsePrinterIdResponse(new Uint8Array(chunks));
     }
 
     async disconnect() {
