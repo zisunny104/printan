@@ -22,6 +22,7 @@ import {
     SystemDialogAdapter, WebUsbEscposAdapter, WebSerialEscposAdapter, interpretRealtimeStatus,
 } from "../core/printer-adapter.js";
 import { wireResizableColumns } from "./resizable-columns.js";
+import { createInlineTextEditor } from "./inline-text-editor.js";
 
 const LAST_DRAFT_KEY = "printan:lastDraftId";
 const PX_PER_MM = 3.2;
@@ -1060,9 +1061,13 @@ function rangeFontSizeInput(value, hasRange, onChange) {
 function buildTextInspector(panel, el) {
     panel.appendChild(sectionHeader("align-left", "內容（可用 {{變數}}）"));
 
-    const sel = { start: 0, end: 0 };
+    const sel = textSel;
+    const live = inlineEditor.isEditing(el.id) ? inlineEditor.getSelection() : null;
+    sel.start = live ? live.start : 0;
+    sel.end = live ? live.end : 0;
     const toolbar = document.createElement("div");
     toolbar.className = "pane-toolbar has-top-spaced-small";
+    toolbar.addEventListener("mousedown", (e) => e.preventDefault()); // 按工具列不搶走預覽區編輯框的焦點／選取
     panel.appendChild(toolbar);
     const styleRow = document.createElement("div");
     panel.appendChild(styleRow);
@@ -1094,6 +1099,7 @@ function buildTextInspector(panel, el) {
     function applyRangeStyle(field, value) {
         applyStyleToRange(el, sel.start, sel.end, field, value);
         onModelChange({ skipInspector: true });
+        inlineEditor.refresh();
         renderStyleControls();
     }
 
@@ -1109,6 +1115,7 @@ function buildTextInspector(panel, el) {
         trackSelection();
     });
 
+    sel.refresh = renderStyleControls;
     renderStyleControls();
 
     panel.appendChild(sectionDivider());
@@ -1471,6 +1478,23 @@ async function updatePreview() {
     renderEditOverlay();
 }
 
+// 預覽區行內文字編輯（見 inline-text-editor.js）。textSel 是面板工具列操作的選取範圍，
+// 來源可能是面板 textarea，也可能是預覽區的編輯框。
+const textSel = { start: 0, end: 0, refresh: null };
+const inlineEditor = createInlineTextEditor({
+    getHost: () => els["paper-shadow"],
+    getElement: (id) => findElementById(state.project.template.elements, id),
+    getBlockNode: (id) => els["edit-overlay"]?.querySelector(`.edit-block[data-id="${id}"]`),
+    getScale: () => (lastRenderResult ? lastRenderResult.canvas.clientWidth / lastRenderResult.widthDots : 1) || 1,
+    onInput: () => onModelChange(),
+    onSelection: (id, start, end) => {
+        if (id !== state.selectedId) return;
+        textSel.start = start;
+        textSel.end = end;
+        textSel.refresh?.();
+    },
+});
+
 // ---- 編輯模式畫布疊層：虛線外框、拖曳排序、拖曳縮放 ----
 // 疊層座標直接沿用 renderer.js 排版產出的 items 樹（跟畫面上的 canvas 完全同一份排版結果），
 // 只是額外換算成 CSS px 蓋在 canvas 上面；預覽模式只是把這層疊層清空隱藏，canvas 本身不受影響。
@@ -1479,7 +1503,10 @@ function renderEditOverlay() {
     const overlay = els["edit-overlay"];
     if (!overlay) return;
     overlay.innerHTML = "";
-    if (state.viewMode !== "edit" || !lastRenderResult) return;
+    if (state.viewMode !== "edit" || !lastRenderResult) {
+        inlineEditor.close();
+        return;
+    }
 
     const { items, widthDots, canvas } = lastRenderResult;
     const scale = canvas.clientWidth / widthDots || 1;
@@ -1503,6 +1530,7 @@ function renderEditOverlay() {
 
     // 把手一律留到最後才加進 DOM，確保疊在所有元素外框之上，滑鼠才抓得到
     handleBuilders.forEach((build) => overlay.appendChild(build()));
+    inlineEditor.reposition();
 }
 
 function walkItems(items, offsetX, offsetY, visit) {
@@ -1560,7 +1588,10 @@ function attachBlockInteractions(div, elId) {
             if (dragging && siblings) {
                 moveElementTo(elId, findDropTarget(siblings, ev.clientY).index);
             } else if (!dragging) {
+                // 已選取的文字元素再點一下＝在預覽區直接編輯，插入點落在點擊位置
+                const editText = state.selectedId === elId && findElementById(state.project.template.elements, elId)?.type === "text";
                 selectElementById(elId);
+                if (editText) inlineEditor.open(elId, { x: ev.clientX, y: ev.clientY });
             }
         }
         document.addEventListener("pointermove", onMove);

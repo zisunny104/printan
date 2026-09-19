@@ -537,6 +537,25 @@ body {
     z-index: 20;
 }
 
+/* 預覽區行內文字編輯（js/editor/inline-text-editor.js）：蓋在選取中的文字元素上，
+   字型／字級／對齊由 JS 依元素設定與畫布縮放比例寫入；用整圈外框標示編輯中，不用單邊色條 */
+.inline-text-editor {
+    position: absolute;
+    z-index: 30;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+    cursor: text;
+    outline: 2px solid var(--ts-primary-500, #3b82f6);
+    outline-offset: 0;
+}
+
+.inline-text-editor[hidden] {
+    display: none;
+}
+
 .edit-resize-handle {
     position: absolute;
     pointer-events: auto;
