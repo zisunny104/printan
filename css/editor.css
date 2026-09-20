@@ -549,6 +549,8 @@ body {
     min-height: 0;
     max-height: min(75vh, 44rem);
     overflow: auto;
+    /* 兩側都預留捲軸位置：長紙張出現垂直捲軸時不會縮窄可用寬度而擠出水平捲軸，紙張也維持置中 */
+    scrollbar-gutter: stable both-edges;
     padding: 1.5rem 1rem 4.5rem;
 }
 

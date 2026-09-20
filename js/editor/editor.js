@@ -861,6 +861,8 @@ function highlightSelectedBlock() {
 
 function renderOutline() {
     const root = els["outline-list"];
+    // 列被重建時觸發 tooltip 的按鈕會直接消失、收不到 mouseleave，Tocas 掛在 body 的 tooltip 會殘留在左上角
+    document.querySelectorAll("body > .ts-tooltip").forEach((tip) => tip.remove());
     root.innerHTML = "";
     root.appendChild(buildTargetHeader("最上層", null, 0));
     root.appendChild(buildElementList(state.project.template.elements, 0, "root"));
