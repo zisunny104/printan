@@ -9,20 +9,21 @@ const RETRY_AFTER_MS = 15000;
 const SARASA_DIR = new URL("../../fonts/sarasa-mono-tc/", import.meta.url).href;
 const JETBRAINS_CDN = "https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.3.0/";
 
-// stack 是寫進文件的 font-family 值：網頁字體在前，載入失敗時 Latin 落到系統等寬字體、漢字落到預設中文字體
+// stack 是寫進文件的 font-family 值：網頁字體在前，字型裡沒有的字（罕用字）與載入失敗時都落到系統的台灣黑體。
+// 中間不放 monospace：它會被系統換成細明體或大陸字型，缺字就出現襯線或簡體字形。
 export const WEB_FONTS = [
     {
         id: "sarasa-mono-tc",
         family: "Sarasa Mono TC",
         label: "等寬（黑體，中英同格）",
-        stack: '"Sarasa Mono TC", monospace, "Noto Sans TC", "Microsoft JhengHei", sans-serif',
+        stack: '"Sarasa Mono TC", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif',
         sheets: { 400: `${SARASA_DIR}sarasa-mono-tc-400.css`, 700: `${SARASA_DIR}sarasa-mono-tc-700.css` },
     },
     {
         id: "jetbrains-mono",
         family: "JetBrains Mono",
         label: "等寬（JetBrains Mono，僅英數）",
-        stack: '"JetBrains Mono", monospace, "Noto Sans TC", "Microsoft JhengHei", sans-serif',
+        stack: '"JetBrains Mono", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif',
         sheets: { 400: `${JETBRAINS_CDN}latin-400.css`, 700: `${JETBRAINS_CDN}latin-700.css` },
     },
 ];
