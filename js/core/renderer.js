@@ -13,6 +13,7 @@
 
 import { getPrinterProfile, getPaperWidth } from "./printer-profiles.js";
 import { applyDataToElements } from "./merge.js";
+import { FLOAT_GAP_DOTS } from "./document-model.js";
 import { dotsToMm, splitDotsByRatio } from "./units.js";
 import { applyThermalSimulation, toGrayscale, applyDither } from "./dithering.js";
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
@@ -142,6 +143,10 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap, show
             const { lines, totalHeight, vertical } = layoutText(el, widthDots, ctx, fontFamily);
             items.push({ el, y, height: totalHeight, widthDots, lines, vertical });
             y += totalHeight;
+        } else if (el.type === "float-block") {
+            const item = await layoutFloatBlock(el, widthDots, ctx, fontFamily, assetMap);
+            items.push({ el, y, widthDots, ...item });
+            y += item.height;
         } else if (el.type === "spacer") {
             items.push({ el, y, height: el.heightDots, widthDots });
             y += el.heightDots;
@@ -315,6 +320,78 @@ function layoutText(el, widthDots, ctx, fallbackFontFamily) {
     return { lines, totalHeight };
 }
 
+// ---- 圖文段落：圖片靠左／右浮動，文字逐行依「該行頂端是否還在圖片高度內」決定可用寬度 ----
+
+/**
+ * 圖文段落在垂直位置 y 的一行可用範圍（相對元素左緣）。
+ * 行頂端在圖片高度內就扣掉「圖寬＋間距」（圖在左邊時行首右移），過了圖片高度回到整欄寬。
+ */
+export function floatLineBox({ side, y, imageWidth, imageHeight, columnWidth, gap = FLOAT_GAP_DOTS }) {
+    if (imageHeight > 0 && y < imageHeight) {
+        const shift = imageWidth + gap;
+        return { x: side === "right" ? 0 : shift, width: Math.max(0, columnWidth - shift) };
+    }
+    return { x: 0, width: columnWidth };
+}
+
+async function layoutFloatBlock(el, columnWidth, ctx, fontFamily, assetMap) {
+    if ("letterSpacing" in ctx) ctx.letterSpacing = `${el.letterSpacing || 0}px`;
+    const img = await resolveImage(el, assetMap);
+    const { contentWidth, contentHeight } = measureImageContent(el, img);
+    const drawWidth = Math.round((columnWidth * clampNumber(el.widthPercent ?? 40, 1, 100)) / 100);
+    const drawHeight = contentWidth > 0 ? Math.round((drawWidth * contentHeight) / contentWidth) : 0;
+    const side = el.imageSide === "right" ? "right" : "left";
+    const boxAt = (y) => {
+        const box = floatLineBox({ side, y, imageWidth: drawWidth, imageHeight: drawHeight, columnWidth });
+        // 圖片幾乎佔滿整欄，旁邊放不下一個字：這一行改排到圖片下方
+        if (box.width < el.fontSize && y < drawHeight) return { x: 0, width: columnWidth, skip: drawHeight - y };
+        return { ...box, skip: 0 };
+    };
+
+    const paragraphs = buildParagraphs(el, fontFamily);
+    let y = 0;
+    let lines = [];
+    const flush = (glyphs, box) => {
+        const segments = coalesceSegments(glyphs);
+        let width = 0;
+        let maxFontSize = el.fontSize;
+        for (const g of glyphs) maxFontSize = Math.max(maxFontSize, g.style.fontSize);
+        for (const seg of segments) {
+            ctx.font = fontString(seg.style);
+            width += ctx.measureText(seg.text).width;
+        }
+        const lineHeightDots = Math.round(maxFontSize * (el.lineHeight || 1.3));
+        lines.push({ segments, width, lineHeightDots, offsetX: box.x, availWidth: box.width, skipBefore: box.skip, glyphs });
+        y += box.skip + lineHeightDots;
+    };
+    for (const para of paragraphs) {
+        let box = boxAt(y);
+        let current = [];
+        for (const g of para) {
+            if (el.wrap && current.length > 0 && measureGlyphs(current.concat([g]), ctx) > box.width) {
+                flush(current, box);
+                box = boxAt(y);
+                current = [g];
+            } else {
+                current.push(g);
+            }
+        }
+        flush(current, box);
+    }
+
+    if (el.maxLines > 0 && lines.length > el.maxLines) {
+        lines = lines.slice(0, el.maxLines);
+        const last = lines[lines.length - 1];
+        const fallbackStyle = resolveRunStyle(el, {}, fontFamily);
+        const cut = truncateGlyphLine(last.glyphs, last.availWidth, ctx, fallbackStyle);
+        const segments = coalesceSegments(cut);
+        last.segments = segments;
+        last.width = measureGlyphs(cut, ctx);
+    }
+    const textHeight = lines.reduce((sum, line) => sum + line.skipBefore + line.lineHeightDots, 0);
+    return { lines, img, drawWidth, drawHeight, side, height: Math.max(textHeight, drawHeight) };
+}
+
 // ---- 直書：字元由上而下、行由右而左 ----
 // 每個段落（換行字元分隔）就是一直行，不自動換行（沒有高度上限可以換）。
 // 西文／數字：連續 3 個以上的 ASCII 當一整塊順時針轉 90°（單字、網址、金額都維持可讀且不佔太多行高），
@@ -460,12 +537,20 @@ function paint(items, ctx, xBase, yBase, fontFamily, mode) {
         const { el } = item;
         if (el.type === "text") paintText(ctx, item, xBase, absY);
         else if (el.type === "divider") paintDivider(ctx, item, xBase, absY);
+        else if (el.type === "float-block") paintFloatBlock(ctx, item, xBase, absY, mode);
         else if (el.type === "image") paintImage(ctx, item, xBase, absY, mode);
         else if (el.type === "barcode") paintBarcode(ctx, item, xBase, absY);
         else if (el.type === "row") {
             for (const col of item.columns) paint(col.items, ctx, xBase + col.x, absY, fontFamily, mode);
         } else if (el.type === "group") paint(item.children, ctx, xBase, absY, fontFamily, mode);
     }
+}
+
+function paintFloatBlock(ctx, item, x, y, mode) {
+    const { el, widthDots, drawWidth } = item;
+    const imageX = item.side === "right" ? x + widthDots - drawWidth : x;
+    paintImage(ctx, { ...item, el: { ...el, align: "left" } }, imageX, y, mode);
+    paintText(ctx, item, x, y);
 }
 
 function paintText(ctx, item, x, y) {
@@ -477,13 +562,17 @@ function paintText(ctx, item, x, y) {
     if ("letterSpacing" in ctx) ctx.letterSpacing = `${el.letterSpacing || 0}px`;
     let lineY = y;
     for (const line of lines) {
+        // 圖文段落的行帶有 offsetX／availWidth／skipBefore，純文字沒有這些欄位、行為不變
+        lineY += line.skipBefore || 0;
+        const lineX = x + (line.offsetX || 0);
+        const lineW = line.availWidth ?? widthDots;
         if (el.inverse) {
             ctx.fillStyle = "#000";
-            ctx.fillRect(x, lineY, widthDots, line.lineHeightDots);
+            ctx.fillRect(lineX, lineY, lineW, line.lineHeightDots);
         }
-        let cursorX = x;
+        let cursorX = lineX;
         if (el.align === "center" || el.align === "right") {
-            cursorX = el.align === "center" ? x + (widthDots - line.width) / 2 : x + (widthDots - line.width);
+            cursorX = el.align === "center" ? lineX + (lineW - line.width) / 2 : lineX + (lineW - line.width);
         }
         for (const seg of line.segments) {
             ctx.font = fontString(seg.style);
