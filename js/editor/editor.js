@@ -30,6 +30,7 @@ import {
     SystemDialogAdapter, WebUsbEscposAdapter, WebSerialEscposAdapter, interpretRealtimeStatus,
 } from "../core/printer-adapter.js";
 import { wireResizableColumns } from "./resizable-columns.js";
+import { renderTestPrint, renderCalibrationSheet } from "./test-print-project.js";
 import { createInlineTextEditor } from "./inline-text-editor.js";
 import { createWorkspaceView } from "./workspace-view.js";
 import { wireHelpDialog } from "./ui-helpers.js";
@@ -110,7 +111,7 @@ function cacheDom() {
         "btn-printer-connect", "btn-printer-disconnect", "pref-serial-baud-rate",
         "pref-feed-lines", "pref-feed-lines-hint", "pref-cut-paper", "btn-printer-settings-close",
         "btn-printer-test-print", "btn-printer-query-status", "printer-status-result",
-        "btn-printer-forget", "printer-dots-list", "btn-printer-dots-reset", "printer-margin-list", "btn-printer-margin-reset",
+        "btn-printer-forget", "printer-dots-list", "btn-printer-dots-reset", "printer-margin-list", "btn-printer-margin-reset", "btn-printer-margin-sheet",
         "printer-info-device", "printer-info-firmware", "printer-info-spec", "printer-info-dpi",
         "printer-info-paper", "printer-info-printable", "printer-info-blade",
     ].forEach((id) => (els[id] = document.getElementById(id)));
@@ -2086,6 +2087,7 @@ function updatePrinterConnectionUi() {
     // 「查詢印表機狀態」再跳 alert 說明——那樣使用者得先點一次才知道不能用，體驗上
     // 比按鈕本身直接變成無法點擊差一截。
     els["btn-printer-test-print"].disabled = !connected;
+    els["btn-printer-margin-sheet"].disabled = !connected;
     els["btn-printer-query-status"].disabled = !connected;
 }
 
@@ -2322,50 +2324,10 @@ async function identifyConnectedPrinter() {
     updatePrinterInfo();
 }
 
-// 測試列印用的 canvas 是普通 HTMLCanvasElement，跟 renderTemplate() 產出的 thermal canvas
-// 走同一個 adapter.print()（buildEscposJob／canvasToEscposRaster），不另外寫 ESC/POS 組包邏輯。
-// 最下面畫一段黑條代表「內容結尾」：切紙位置（走紙行數）設得不夠時，切刀會切在這段黑條上
-// 而不是它下面的空白，肉眼就能直接判斷 pref-feed-lines 夠不夠，不用拿正式收據內容去試。
-function buildTestPrintCanvas() {
-    const profile = getEffectiveProfile();
-    const paper = getPaperWidth(profile, state.project.paper.widthId);
-    const widthDots = paper.printableWidthDots;
-    const heightDots = 260;
-    const endBarHeight = 24;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = widthDots;
-    canvas.height = heightDots;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, widthDots, heightDots);
-
-    ctx.fillStyle = "#000";
-    ctx.font = "16px sans-serif";
-    ctx.textBaseline = "top";
-    ctx.fillText(`${profile.brand} ${profile.model} 測試列印`, 8, 8);
-    ctx.font = "13px sans-serif";
-    ctx.fillText(`紙寬 ${paper.label}／走紙 ${state.printPrefs.feedLines} 行／切紙 ${state.printPrefs.cutPaper ? "開" : "關"}`, 8, 30);
-    ctx.fillText(new Date().toLocaleString(), 8, 48);
-
-    // 每 8 點一小格、每 80 點一大格的刻度尺，方便對照走紙距離
-    const rulerBaseline = heightDots - endBarHeight;
-    for (let x = 0; x < widthDots; x += 8) {
-        const tall = x % 80 === 0;
-        ctx.fillRect(x, rulerBaseline - (tall ? 14 : 6), 1, tall ? 14 : 6);
-    }
-
-    ctx.fillRect(0, rulerBaseline, widthDots, endBarHeight);
-    ctx.fillStyle = "#fff";
-    ctx.font = "13px sans-serif";
-    ctx.fillText("內容結尾 — 切紙應在此線之後", 8, rulerBaseline + 5);
-
-    return canvas;
-}
-
-async function testPrintCurrentPrinter() {
+// 測試列印／校正紙：canvas 由 test-print-project.js 產生，跟一般列印共用 adapter.print() 與 printerBusy 序列化
+async function printTestSheet(label, build) {
     if (!state.usbConnected && !state.serialConnected) {
-        alert("請先連接 USB 或序列埠印表機才能測試列印");
+        alert(`請先連接 USB 或序列埠印表機才能${label}`);
         return;
     }
     if (state.printerBusy) {
@@ -2374,14 +2336,24 @@ async function testPrintCurrentPrinter() {
     }
     state.printerBusy = true;
     try {
-        const renderResult = { canvas: buildTestPrintCanvas() };
-        if (state.usbConnected) {
-            await usbAdapter.print(renderResult, getEscposPrintOptions());
-        } else {
-            await serialAdapter.print(renderResult, getEscposPrintOptions());
-        }
+        const widthId = state.project.paper.widthId;
+        const profile = getEffectiveProfile();
+        const ctx = {
+            baseProfile: getBaseProfile(),
+            profile,
+            widthId,
+            headWidthDots: getPrintHeadWidthDots(getBaseProfile()),
+            pad: getMarginPad(profile, widthId),
+            prefs: state.printPrefs,
+            connection: state.usbConnected ? "USB" : "序列埠",
+            firmware: state.printerIdentity?.firmware || "",
+        };
+        const renderResult = await build(ctx);
+        if (!confirmFontFallbacks(renderResult)) return;
+        const adapter = state.usbConnected ? usbAdapter : serialAdapter;
+        await adapter.print(renderResult, getEscposPrintOptions());
     } catch (err) {
-        alert(`測試列印失敗：${err.message}`);
+        alert(`${label}失敗：${err.message}`);
     } finally {
         state.printerBusy = false;
     }
@@ -2522,7 +2494,11 @@ function bindPrinterSettings() {
     });
 
     els["btn-printer-test-print"].addEventListener("click", () => {
-        testPrintCurrentPrinter();
+        printTestSheet("測試列印", renderTestPrint);
+    });
+
+    els["btn-printer-margin-sheet"].addEventListener("click", () => {
+        printTestSheet("列印校正紙", renderCalibrationSheet);
     });
 
     els["btn-printer-query-status"].addEventListener("click", () => {

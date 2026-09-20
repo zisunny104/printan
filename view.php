@@ -205,9 +205,14 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         <!-- 每個紙寬一列（左／右留白 mm），由 renderMarginRows() 產生，見 editor.js -->
                         <div id="printer-margin-list"></div>
                         <div class="has-top-spaced-small"></div>
-                        <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-margin-reset">
-                            <span class="ts-icon is-rotate-left-icon" aria-hidden="true"></span> 重設
-                        </button>
+                        <div class="ts-wrap">
+                            <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-margin-reset">
+                                <span class="ts-icon is-rotate-left-icon" aria-hidden="true"></span> 重設
+                            </button>
+                            <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-margin-sheet">
+                                <span class="ts-icon is-ruler-icon" aria-hidden="true"></span> 校正紙
+                            </button>
+                        </div>
                     </div>
                     <div class="ts-divider"></div>
                     <!-- 印表機資訊（唯讀）：連線後盡量用機器讀到的（WebUSB 裝置名稱、GS I 回傳的廠牌／型號／韌體）；
