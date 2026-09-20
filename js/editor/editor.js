@@ -1850,8 +1850,14 @@ function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHe
 
 // ---- 匯出 / 列印 ----
 
+// 有網頁字體沒載入成功時輸出會改用系統字體，版面跟預覽不同，輸出前讓使用者決定
+function confirmFontFallbacks(results) {
+    return ![].concat(results).some((r) => r.fontFallbacks?.length) || confirm("字體未載入，仍要列印？");
+}
+
 async function exportSinglePdf() {
     const result = await renderTemplate(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
+    if (!confirmFontFallbacks(result)) return;
     exportToPdf([result], { fileName: `${state.project.meta.name || "printan"}.pdf` });
 }
 
@@ -1871,6 +1877,7 @@ async function exportBatchPdf() {
     const dataArray = parseBatchData();
     if (!dataArray) return;
     const results = await renderBatch(state.project, dataArray, { mode: "thermal", profile: getEffectiveProfile() });
+    if (!confirmFontFallbacks(results)) return;
     exportToPdf(results, { fileName: `${state.project.meta.name || "printan"}-batch.pdf` });
 }
 
@@ -1944,6 +1951,7 @@ async function printCurrent() {
     state.printerBusy = true;
     try {
         const result = await renderTemplate(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
+        if (!confirmFontFallbacks(result)) return;
 
         if (state.usbConnected) {
             try {
