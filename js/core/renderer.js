@@ -181,6 +181,10 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap, show
             }
             items.push({ el, y, height: rowHeight, widthDots, columns });
             y += rowHeight;
+        } else if (el.type === "group") {
+            const sub = await layoutColumn(el.children, widthDots, ctx, fontFamily, assetMap, showBarcodeErrors);
+            items.push({ el, y, height: sub.height, widthDots, children: sub.items });
+            y += sub.height;
         }
     }
     return { items, height: y };
@@ -340,7 +344,7 @@ function paint(items, ctx, xBase, yBase, fontFamily, mode) {
         else if (el.type === "barcode") paintBarcode(ctx, item, xBase, absY);
         else if (el.type === "row") {
             for (const col of item.columns) paint(col.items, ctx, xBase + col.x, absY, fontFamily, mode);
-        }
+        } else if (el.type === "group") paint(item.children, ctx, xBase, absY, fontFamily, mode);
     }
 }
 

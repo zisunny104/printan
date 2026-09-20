@@ -8,7 +8,7 @@ function nextId(prefix) {
     return `${prefix}_${Date.now().toString(36)}${idCounter.toString(36)}`;
 }
 
-export const ELEMENT_TYPES = ["text", "image", "spacer", "divider", "row", "barcode"];
+export const ELEMENT_TYPES = ["text", "image", "spacer", "divider", "row", "barcode", "group"];
 
 /**
  * 一個文字元素的內容由多個 run 組成（比照 Figma：同一段文字裡不同片段可以各自
@@ -248,6 +248,11 @@ export function createRowElement(ratio = [1], overrides = {}) {
     };
 }
 
+/** 群組：把多個元素當成一個單位（直向流動，寬度同所在欄）。 */
+export function createGroupElement(children = [], overrides = {}) {
+    return { id: nextId("group"), type: "group", children, ...overrides };
+}
+
 /**
  * 條碼／QR Code 元素。format: "qrcode" | "code128" | "ean13" | "ean8" | "upca" | "code39" | "itf"（見 barcode.js BARCODE_FORMATS）。
  * showText（明碼：條碼下方的人類可讀數字）只對一維條碼有意義，QR 無此欄位可調。
@@ -273,6 +278,7 @@ export function createElement(type, ...args) {
         case "divider": return createDividerElement(...args);
         case "row": return createRowElement(...args);
         case "barcode": return createBarcodeElement(...args);
+        case "group": return createGroupElement(...args);
         default: throw new Error(`未知的元素類型: ${type}`);
     }
 }
@@ -290,6 +296,9 @@ function reassignIds(element) {
         for (const col of element.columns) {
             for (const child of col) reassignIds(child);
         }
+    }
+    if (element.type === "group" && Array.isArray(element.children)) {
+        for (const child of element.children) reassignIds(child);
     }
 }
 
@@ -328,5 +337,6 @@ export function walkElements(elements, visitor) {
         if (el.type === "row") {
             for (const col of el.columns) walkElements(col, visitor);
         }
+        if (el.type === "group") walkElements(el.children, visitor);
     }
 }

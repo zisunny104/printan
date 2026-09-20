@@ -599,6 +599,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         <li><kbd>Ctrl</kbd>+<kbd>D</kbd>：複製一份到下方；<kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd>：複製、貼上。</li>
                         <li><kbd>↑</kbd> <kbd>↓</kbd>：選取上一個／下一個元素；加 <kbd>Alt</kbd> 或 <kbd>Ctrl</kbd> 則移動它的順序。</li>
                         <li><kbd>Shift</kbd> 點選（同一層內）或在空白處拖曳框選：多選，右側可一起改共同欄位，Delete、Ctrl+D、方向鍵、復原都套用到全部。</li>
+                        <li><kbd>Ctrl</kbd>+<kbd>G</kbd>：把選取的元素組成群組，可整體選取與拖曳；<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd>：解散群組。</li>
                         <li><kbd>Esc</kbd>：取消選取、關閉選單或結束紙上的文字編輯。</li>
                         <li>欄寬拉桿：方向鍵微調，雙擊重設。</li>
                     </ul>

@@ -11,7 +11,7 @@ import {
 } from "../core/printer-profiles.js";
 import {
     createTextElement, createImageElement, createSpacerElement, createDividerElement,
-    createRowElement, createBarcodeElement, cloneElementWithNewIds, extractPlaceholders, getTextContent,
+    createRowElement, createBarcodeElement, createGroupElement, cloneElementWithNewIds, extractPlaceholders, getTextContent,
     getRangeStyle, applyStyleToRange, replaceFullText, MIXED,
 } from "../core/document-model.js";
 import { renderTemplate, renderBatch } from "../core/renderer.js";
@@ -629,18 +629,23 @@ function wireAddMenu() {
 function resolveTargetArray(rootElements, target) {
     if (!target) return rootElements;
     const row = findElementById(rootElements, target.rowId);
-    if (!row || row.type !== "row") return rootElements;
-    return row.columns[target.colIndex] || rootElements;
+    if (!row) return rootElements;
+    return childArrays(row)[target.colIndex] || rootElements;
+}
+
+// 有子元素的容器：多欄的每一欄、群組的 children（容器目標 { rowId, colIndex } 對群組固定 colIndex 0）
+function childArrays(el) {
+    if (el.type === "row") return el.columns;
+    if (el.type === "group") return [el.children];
+    return [];
 }
 
 function findElementById(elements, id) {
     for (const el of elements) {
         if (el.id === id) return el;
-        if (el.type === "row") {
-            for (const col of el.columns) {
-                const found = findElementById(col, id);
-                if (found) return found;
-            }
+        for (const col of childArrays(el)) {
+            const found = findElementById(col, id);
+            if (found) return found;
         }
     }
     return null;
@@ -649,11 +654,9 @@ function findElementById(elements, id) {
 function findContainerOf(elements, id) {
     for (let i = 0; i < elements.length; i++) {
         if (elements[i].id === id) return { array: elements, index: i };
-        if (elements[i].type === "row") {
-            for (const col of elements[i].columns) {
-                const found = findContainerOf(col, id);
-                if (found) return found;
-            }
+        for (const col of childArrays(elements[i])) {
+            const found = findContainerOf(col, id);
+            if (found) return found;
         }
     }
     return null;
@@ -687,6 +690,36 @@ function deleteElements(ids) {
         if (state.insertionTarget && state.insertionTarget.rowId === id) state.insertionTarget = null;
     }
     pruneSelection();
+    onModelChange();
+}
+
+// 建立群組：把同一層的選取元素收進一個新群組（放在最前面那個的位置）；解散則把子元素放回原位
+function groupElements(ids) {
+    const root = state.project.template.elements;
+    const found = ids.map((id) => findContainerOf(root, id)).filter(Boolean);
+    if (!found.length || found.some((f) => f.array !== found[0].array)) return;
+    const array = found[0].array;
+    const members = found.sort((a, b) => a.index - b.index).map((f) => f.array[f.index]);
+    const at = found[0].index;
+    const group = createGroupElement(members);
+    for (const m of members) array.splice(array.indexOf(m), 1);
+    array.splice(at, 0, group);
+    setSelection([group.id]);
+    onModelChange();
+}
+
+function ungroupElements(ids) {
+    const root = state.project.template.elements;
+    const freed = [];
+    for (const id of ids) {
+        const found = findContainerOf(root, id);
+        const group = found?.array[found.index];
+        if (!group || group.type !== "group") continue;
+        found.array.splice(found.index, 1, ...group.children);
+        freed.push(...group.children.map((c) => c.id));
+    }
+    if (!freed.length) return;
+    setSelection(freed);
     onModelChange();
 }
 
@@ -777,7 +810,7 @@ function moveElementToContainer(id, targetArray, index) {
     if (!found) return;
     if (found.array === targetArray) return moveElementTo(id, index);
     const item = found.array[found.index];
-    if (item.type === "row" && item.columns.some((col) => col === targetArray || containsArray(col, targetArray))) return;
+    if (childArrays(item).some((col) => col === targetArray || containsArray(col, targetArray))) return;
     found.array.splice(found.index, 1);
     targetArray.splice(Math.max(0, Math.min(index, targetArray.length)), 0, item);
     state.insertionTarget = containerToTarget(targetArray);
@@ -785,7 +818,7 @@ function moveElementToContainer(id, targetArray, index) {
 }
 
 function containsArray(elements, array) {
-    return elements.some((el) => el.type === "row" && el.columns.some((col) => col === array || containsArray(col, array)));
+    return elements.some((el) => childArrays(el).some((col) => col === array || containsArray(col, array)));
 }
 
 /** 選取元素：outline 清單點擊、畫布疊層點擊共用同一套邏輯。 */
@@ -804,7 +837,7 @@ function selectElementById(id, { toggle = false } = {}) {
     }
     setSelection([id]);
     const el = findElementById(state.project.template.elements, id);
-    if (el && el.type !== "row") {
+    if (el && el.type !== "row" && el.type !== "group") {
         const found = findContainerOf(state.project.template.elements, id);
         state.insertionTarget = containerToTarget(found?.array);
     }
@@ -845,10 +878,10 @@ function buildElementList(elements, depth, parentKey) {
     const frag = document.createDocumentFragment();
     elements.forEach((el) => {
         frag.appendChild(buildElementRow(el, depth, parentKey));
-        if (el.type === "row") {
-            el.columns.forEach((col, colIndex) => {
+        if (el.type === "row" || el.type === "group") {
+            childArrays(el).forEach((col, colIndex) => {
                 const target = { rowId: el.id, colIndex };
-                frag.appendChild(buildTargetHeader(`第 ${colIndex + 1} 欄`, target, depth + 1));
+                frag.appendChild(buildTargetHeader(el.type === "group" ? "群組內" : `第 ${colIndex + 1} 欄`, target, depth + 1));
                 frag.appendChild(buildElementList(col, depth + 2, `${el.id}:${colIndex}`));
             });
         }
@@ -946,7 +979,7 @@ function buildTargetHeader(label, target, depth) {
     return row;
 }
 
-const TYPE_ICON = { text: "font", image: "image", spacer: "arrows-up-down", divider: "minus", row: "table-columns", barcode: "qrcode" };
+const TYPE_ICON = { text: "font", image: "image", spacer: "arrows-up-down", divider: "minus", row: "table-columns", barcode: "qrcode", group: "object-group" };
 
 const BARCODE_FORMAT_LABEL = Object.fromEntries(BARCODE_FORMATS);
 
@@ -958,6 +991,7 @@ function elementLabel(el) {
         case "divider": return "分隔線";
         case "row": return `多欄（${el.ratio.join(" : ")}）`;
         case "barcode": return BARCODE_FORMAT_LABEL[el.format] || "條碼";
+        case "group": return `群組（${el.children.length}）`;
         default: return el.type;
     }
 }
@@ -998,12 +1032,10 @@ function containerToTarget(array) {
     let result = null;
     (function walk(elements) {
         for (const el of elements) {
-            if (el.type === "row") {
-                el.columns.forEach((col, i) => {
-                    if (col === array) result = { rowId: el.id, colIndex: i };
-                    walk(col);
-                });
-            }
+            childArrays(el).forEach((col, i) => {
+                if (col === array) result = { rowId: el.id, colIndex: i };
+                walk(col);
+            });
         }
     })(state.project.template.elements);
     return result;
@@ -1038,7 +1070,7 @@ function renderInspector() {
         return;
     }
 
-    const builders = { text: buildTextInspector, image: buildImageInspector, spacer: buildSpacerInspector, divider: buildDividerInspector, row: buildRowInspector, barcode: buildBarcodeInspector };
+    const builders = { text: buildTextInspector, image: buildImageInspector, spacer: buildSpacerInspector, divider: buildDividerInspector, row: buildRowInspector, group: buildGroupInspector, barcode: buildBarcodeInspector };
     (builders[el.type] || (() => {}))(panel, el);
 
     panel.appendChild(sectionDivider());
@@ -1686,6 +1718,14 @@ function buildDividerInspector(panel, el) {
     ]));
 }
 
+function buildGroupInspector(panel, el) {
+    panel.appendChild(sectionHeader("object-group", "群組"));
+    const wrap = document.createElement("div");
+    wrap.className = "ts-wrap is-compact has-top-spaced-small";
+    wrap.appendChild(mkButton("解散群組", "object-ungroup", () => ungroupElements([el.id]), { outlined: true }));
+    panel.appendChild(wrap);
+}
+
 function buildRowInspector(panel, el) {
     panel.appendChild(sectionHeader("table-columns", "多欄"));
     const label = document.createElement("label");
@@ -1933,6 +1973,8 @@ function walkItems(items, offsetX, offsetY, visit) {
             for (const col of item.columns) {
                 walkItems(col.items, offsetX + col.x, offsetY + item.y, visit);
             }
+        } else if (item.el.type === "group") {
+            walkItems(item.children, offsetX, offsetY + item.y, visit);
         }
     }
 }
@@ -1951,9 +1993,28 @@ function buildEditBlock(box, scale) {
 }
 
 /** 點擊選取＋拖曳排序（在同一個容器內，跟大綱面板的上移／下移操作同一個 array）。 */
-function attachBlockInteractions(div, elId) {
+// 畫布上點到群組裡的元素：先選整個群組（可整體拖曳），群組已選取時再點才選到裡面的元素
+function outermostGroupId(id) {
+    const root = state.project.template.elements;
+    let top = null;
+    (function walk(elements, chain) {
+        for (const el of elements) {
+            if (el.id === id) { top = chain[0] ?? null; return true; }
+            for (const col of childArrays(el)) {
+                if (walk(col, el.type === "group" ? [...chain, el.id] : chain)) return true;
+            }
+        }
+        return false;
+    })(root, []);
+    return top;
+}
+
+function attachBlockInteractions(div, origId) {
     div.addEventListener("pointerdown", (e) => {
         if (e.target !== div || e.button !== 0) return;
+        const groupId = outermostGroupId(origId);
+        const inside = groupId && getSelectedIds().some((sid) => sid !== groupId && findElementById([findElementById(state.project.template.elements, groupId)], sid));
+        const elId = groupId && !inside ? groupId : origId;
         const startX = e.clientX;
         const startY = e.clientY;
         const scroller = els["paper-scroll"];
@@ -2016,7 +2077,8 @@ function attachBlockInteractions(div, elId) {
                 // 已選取的文字元素再點一下＝在預覽區直接編輯，插入點落在點擊位置
                 const toggle = ev.shiftKey || ev.ctrlKey || ev.metaKey;
                 const editText = !toggle && state.selectedId === elId && !state.multi.length && findElementById(state.project.template.elements, elId)?.type === "text";
-                selectElementById(elId, { toggle });
+                const enter = elId !== origId && !toggle && getSelectedIds().includes(elId);
+                selectElementById(enter ? origId : elId, { toggle });
                 if (editText) inlineEditor.open(elId, { x: ev.clientX, y: ev.clientY });
             }
         }
@@ -2910,7 +2972,7 @@ let clipboardElements = [];
 function flattenElements(elements, out = []) {
     for (const el of elements) {
         out.push(el);
-        if (el.type === "row") el.columns.forEach((col) => flattenElements(col, out));
+        childArrays(el).forEach((col) => flattenElements(col, out));
     }
     return out;
 }
@@ -2947,6 +3009,9 @@ function handleEditorShortcut(e) {
         stepHistory(e.shiftKey ? 1 : -1);
     } else if (mod && key === "y") {
         stepHistory(1);
+    } else if (mod && key === "g" && ids.length) {
+        if (e.shiftKey) ungroupElements(ids);
+        else groupElements(ids);
     } else if (mod && key === "d" && ids.length) {
         duplicateElements(ids);
     } else if (mod && key === "c" && ids.length && !window.getSelection().toString()) {

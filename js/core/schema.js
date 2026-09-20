@@ -1,10 +1,10 @@
 // Printan .ptan 專案檔格式定義與驗證。
 // 這個檔案是 core 的一部分：不得依賴 DOM／window／editor 狀態。
 
-import { normalizeTextElement } from "./document-model.js";
+import { normalizeTextElement, walkElements } from "./document-model.js";
 
 export const PTAN_FORMAT = "ptan";
-export const PTAN_VERSION = 1;
+export const PTAN_VERSION = 2;
 
 /**
  * .ptan 檔案結構（version 1）：
@@ -21,10 +21,11 @@ export const PTAN_VERSION = 1;
  *
  * Element（document-model.js 產生）:
  * {
- *   id, type: "text"|"image"|"spacer"|"divider"|"row"|"barcode",
+ *   id, type: "text"|"image"|"spacer"|"divider"|"row"|"barcode"|"group",
  *   ...type 專屬欄位,
  *   columns?: Element[][]   // 僅 row 使用：每欄是一個子 element 陣列
  *   ratio?: number[]        // 僅 row 使用：各欄相對比例，例如 [1,1] 或 [2,1]
+ *   children?: Element[]    // 僅 group 使用（version 2）
  * }
  */
 
@@ -77,7 +78,7 @@ function migrate(project) {
     if (p.version > PTAN_VERSION) {
         return { ok: false, error: `此檔案版本 (${p.version}) 比目前工具支援的版本 (${PTAN_VERSION}) 新，請更新 Printan` };
     }
-    // 目前只有 version 1，未來版本升級時在此逐步 if (p.version === 1) { ...升到 2... }
+    // v1 → v2 只新增 group 元素，資料結構無需轉換
     p = {
         ...p,
         variables: Array.isArray(p.variables) ? p.variables : [],
@@ -98,10 +99,14 @@ function migrateElements(elements) {
         if (el.type === "row" && Array.isArray(el.columns)) {
             return { ...el, columns: el.columns.map(migrateElements) };
         }
+        if (el.type === "group") return { ...el, children: migrateElements(Array.isArray(el.children) ? el.children : []) };
         return el;
     });
 }
 
 export function serializeProject(project) {
-    return JSON.stringify({ ...project, version: PTAN_VERSION, format: PTAN_FORMAT }, null, 2);
+    // 沒用到群組就仍寫 v1，舊版 Printan 也能開；有群組才寫 v2
+    let usesGroup = false;
+    walkElements(project.template?.elements || [], (el) => { if (el.type === "group") usesGroup = true; });
+    return JSON.stringify({ ...project, version: usesGroup ? PTAN_VERSION : 1, format: PTAN_FORMAT }, null, 2);
 }
