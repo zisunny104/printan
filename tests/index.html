@@ -22,6 +22,8 @@ import {
 } from "../js/core/document-model.js";
 import * as tree from "../js/core/element-tree.js";
 import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
+import { renderElements, floatLineBox } from "../js/core/renderer.js";
+import { createFloatBlockElement, FLOAT_GAP_DOTS } from "../js/core/document-model.js";
 import { readPtanFile } from "../js/core/ptan-file.js";
 
 const cases = [];
@@ -326,6 +328,66 @@ test("normalizeTextElement 對已有 runs 的元素原樣回傳", () => {
 });
 
 // ---- 執行 ----
+// ---- 圖文段落 ----
+function pngDataUrl(w, h) {
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const x = c.getContext("2d");
+    x.fillStyle = "#000"; x.fillRect(0, 0, w, h);
+    return c.toDataURL("image/png");
+}
+const floatRender = (el, w = 384) => renderElements([el], { widthDots: w, assets: { pic: pngDataUrl(100, 50) } });
+const longText = "圖文段落測試".repeat(30);
+
+test("floatLineBox：圖在左，行首右移並縮窄；過了圖高回到整欄", () => {
+    const o = { side: "left", imageWidth: 100, imageHeight: 50, columnWidth: 384 };
+    eq(floatLineBox({ ...o, y: 0 }), { x: 100 + FLOAT_GAP_DOTS, width: 384 - 100 - FLOAT_GAP_DOTS });
+    eq(floatLineBox({ ...o, y: 49 }), { x: 108, width: 276 });
+    eq(floatLineBox({ ...o, y: 50 }), { x: 0, width: 384 });
+});
+test("floatLineBox：圖在右，行首不動只縮窄", () => {
+    eq(floatLineBox({ side: "right", y: 10, imageWidth: 100, imageHeight: 50, columnWidth: 384 }), { x: 0, width: 276 });
+});
+test("floatLineBox：圖寬 100% 時旁邊沒有空間（寬度 0），沒有圖片高度時不縮窄", () => {
+    eq(floatLineBox({ side: "left", y: 0, imageWidth: 384, imageHeight: 50, columnWidth: 384 }).width, 0);
+    eq(floatLineBox({ side: "left", y: 0, imageWidth: 100, imageHeight: 0, columnWidth: 384 }), { x: 0, width: 384 });
+});
+test("圖文段落：左圖，前幾行縮窄右移、之後整欄寬；高度取文字與圖片較大者", async () => {
+    const el = createFloatBlockElement({ assetId: "pic", widthPercent: 40, runs: [{ text: longText }], fontSize: 20 });
+    const { items } = await floatRender(el);
+    const it = items[0];
+    assert(it.drawWidth === 154 && it.drawHeight === 77, `圖尺寸 ${it.drawWidth}x${it.drawHeight}`);
+    eq([it.lines[0].offsetX, it.lines[0].availWidth], [162, 222]);
+    const last = it.lines[it.lines.length - 1];
+    eq([last.offsetX, last.availWidth], [0, 384]);
+    assert(it.height === it.lines.reduce((s, l) => s + l.skipBefore + l.lineHeightDots, 0) && it.height > it.drawHeight);
+});
+test("圖文段落：圖比文字高時元素高度等於圖高", async () => {
+    const el = createFloatBlockElement({ assetId: "pic", widthPercent: 50, runs: [{ text: "短" }], imageSide: "right" });
+    const { items } = await floatRender(el);
+    assert(items[0].height === items[0].drawHeight && items[0].drawHeight === 96, `高 ${items[0].height}`);
+    eq(items[0].lines[0].offsetX, 0);
+});
+test("圖文段落：圖寬 100% 時文字整段排到圖片下方", async () => {
+    const el = createFloatBlockElement({ assetId: "pic", widthPercent: 100, runs: [{ text: "下方文字" }] });
+    const { items } = await floatRender(el);
+    const it = items[0];
+    eq([it.lines[0].skipBefore, it.lines[0].availWidth], [it.drawHeight, 384]);
+    assert(it.height === it.drawHeight + it.lines[0].lineHeightDots);
+});
+test("圖文段落：沒有圖片時與純文字元素渲染結果逐點相同", async () => {
+    const runs = [{ text: longText }];
+    const a = await renderElements([createTextElement({ runs, align: "center" })], { widthDots: 384 });
+    const b = await renderElements([createFloatBlockElement({ runs, align: "center" })], { widthDots: 384 });
+    assert(a.heightDots === b.heightDots, "高度不同");
+    assert(a.canvas.toDataURL() === b.canvas.toDataURL(), "像素不同");
+});
+test("圖文段落：存檔一律 v2，讀回仍是 float-block", () => {
+    const p = sampleProject([createFloatBlockElement({ assetId: "pic" })]);
+    const out = loadProject(serializeProject(p));
+    assert(out.ok && out.project.version === PTAN_VERSION && out.project.template.elements[0].type === "float-block");
+});
+
 const list = document.getElementById("list");
 let failed = 0;
 for (const c of cases) {
