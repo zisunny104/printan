@@ -286,6 +286,7 @@ function buildTextInspector(panel, el) {
     ["select", "keyup", "mouseup", "click", "focus"].forEach((evt) => textarea.addEventListener(evt, trackSelection));
     textarea.addEventListener("input", () => {
         replaceFullText(el, textarea.value);
+        inlineEditor.refresh(); // 行內編輯框開著時內容要同步，否則會以舊內容蓋住畫布
         onModelChange({ skipInspector: true });
         trackSelection();
     });

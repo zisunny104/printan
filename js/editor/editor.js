@@ -1173,7 +1173,7 @@ function renderEditOverlay() {
                 const boundaryXDots = box.x + cumulative;
                 handleBuilders.push(() => buildColumnResizeHandle(box.el, i, boundaryXDots, box.y, box.height, box.width, scale));
             });
-            if (item.columns.length < MAX_ROW_COLUMNS) {
+            if (item.columns.length < MAX_ROW_COLUMNS && getSelectedIds().includes(box.el.id)) { // 只在選取該多欄時顯示，避免每個多欄都冒出＋
                 item.columns.forEach((col, i) => {
                     handleBuilders.push(() => buildColumnSplitButton(box.el.id, i, box.x + col.x + col.width / 2, box.y, scale));
                 });
