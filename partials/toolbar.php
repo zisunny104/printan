@@ -4,17 +4,17 @@
                      列印設定、列印）。兩組用途不同（前者管版型檔案，後者管實體輸出），分兩側
                      排列比全部擠在一起好找。 -->
                 <div class="ts-buttons">
-                    <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-new-ptan"
-                        data-tooltip="新增空白版型（目前版型會留在「最近編輯」清單，不會遺失）">
-                        <span class="ts-icon is-file-circle-plus-icon" aria-hidden="true"></span> 新增
+                    <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-new-ptan"
+                        data-tooltip="新增空白版型（目前版型會留在「最近編輯」清單，不會遺失）" aria-label="新增">
+                        <span class="ts-icon is-file-circle-plus-icon" aria-hidden="true"></span>
                     </button>
-                    <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-open-ptan"
-                        data-dropdown="open-project-dropdown" aria-haspopup="true">
-                        <span class="ts-icon is-folder-open-icon" aria-hidden="true"></span> 開啟
+                    <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-open-ptan"
+                        data-dropdown="open-project-dropdown" aria-haspopup="true" data-tooltip="開啟" aria-label="開啟">
+                        <span class="ts-icon is-folder-open-icon" aria-hidden="true"></span>
                     </button>
-                    <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-export-menu"
-                        data-dropdown="export-dropdown" aria-haspopup="true">
-                        <span class="ts-icon is-download-icon" aria-hidden="true"></span> 匯出
+                    <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-export-menu"
+                        data-dropdown="export-dropdown" aria-haspopup="true" data-tooltip="匯出" aria-label="匯出">
+                        <span class="ts-icon is-download-icon" aria-hidden="true"></span>
                     </button>
                 </div>
                 <span class="toolbar-spacer"></span>
@@ -24,10 +24,9 @@
                      印表機型號不開放使用者選，內部固定用預設規格（見 printer-profiles.js）。 -->
                 <div class="ts-selection is-small" id="paper-width-tabs" role="radiogroup" aria-label="紙寬"></div>
                 <div class="ts-divider is-vertical toolbar-divider"></div>
-                <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-settings"
+                <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-printer-settings"
                     data-tooltip="列印設定（印表機連線、走紙／切紙、可列印點數、測試列印）" aria-label="列印設定">
                     <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
-                    列印設定
                     <span class="printer-conn-dot is-on" id="printer-toolbar-dot" aria-hidden="true" hidden></span>
                 </button>
                 <button class="ts-button is-small is-primary is-start-icon" id="btn-print">

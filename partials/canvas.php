@@ -17,7 +17,10 @@
                                     data-tooltip="放大" aria-label="放大">
                                     <span class="ts-icon is-plus-icon" aria-hidden="true"></span>
                                 </button>
-                                <button class="ts-button is-small is-ghost" id="btn-zoom-fit">符合寬度</button>
+                                <button class="ts-button is-icon is-ghost" id="btn-zoom-fit"
+                                    data-tooltip="符合寬度" aria-label="符合寬度">
+                                    <span class="ts-icon is-arrows-left-right-icon" aria-hidden="true"></span>
+                                </button>
                                 <button class="ts-button is-small is-ghost" id="btn-zoom-actual"
                                     data-tooltip="實際大小">1:1</button>
                             </div>
@@ -42,7 +45,9 @@
                             <div class="paper-ruler is-vertical" id="ruler-v" aria-hidden="true"><canvas></canvas></div>
                             <div class="paper-viewport-body" id="paper-scroll">
                                 <div class="paper-shadow" id="paper-shadow">
-                                    <div class="safe-area-guide" id="safe-area-guide"></div>
+                                    <div class="safe-area-guide" id="safe-area-guide">
+                                        <span class="ts-icon is-circle-info-icon" data-tooltip="切刀安全線：低於此線的內容，切紙時可能被切到" aria-hidden="true"></span>
+                                    </div>
                                     <div id="canvas-host" class="canvas-host"></div>
                                 </div>
                             </div>

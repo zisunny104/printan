@@ -589,47 +589,51 @@ body {
     flex: none;
     margin: 0 auto;
     position: relative;
-    /* 紙捲兩側是印表機印不到的實體邊距（rollWidthMm 跟 printableWidthMm 的差）；
-       不再鋪灰色遮罩，紙張範圍靠細框與可列印範圍的虛線表示，畫布本身鋪白底（見 .canvas-host）。 */
-    background: transparent;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, .15), 0 0 0 1px light-dark(rgba(0, 0, 0, .14), rgba(255, 255, 255, .28));
-    padding: 0 var(--paper-margin, 12px);
-    border-radius: 2px;
-    /* 版面還沒加任何元素時，畫布實際內容高度只有幾個 px，紙張看起來像一條裂縫。
-       最小高度＝列印頭到切刀的距離（updatePaperFrame 依縮放寫入），即最短可切下的一張紙。 */
-    min-height: var(--paper-min-height, 160px);
+    /* 畫面上只有一個範圍：白底可列印區（寬度＝printableWidthMm × 縮放，見 updatePaperFrame），
+       不畫整卷紙寬的外框、也不留左右邊距；尺規 0 就對齊它的左緣。 */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
 }
 
-/* 可列印範圍的四條 2px 虛線，畫在真正的邊界上（不再內縮成一個框）：左右＝可列印寬度的兩緣
-   （--paper-margin 是左右實體邊距）、上＝內容起點、下＝切刀安全線（--paper-safe-bottom
-   ＝切刀刀片到列印頭的距離，超過這條線的內容切紙時有被裁到的風險）。兩個變數都由
-   updatePaperFrame() 依縮放算好寫進來。用背景漸層畫虛線，只有一個節點；疊在畫布上面（z-index），
-   半透明灰在白紙與紙邊的暗色底上都看得見又不搶眼。 */
+/* 唯一的輔助線：切刀安全線（底部，離下緣 --paper-safe-bottom ＝ 切刀到列印頭的距離，
+   由 updatePaperFrame() 依縮放寫入；低於這條線的內容切紙時有被裁到的風險）。
+   ⓘ 掛在紙張右緣外側，說明用 tooltip，不佔畫面也不蓋到內容。疊在畫布上面（z-index）。 */
 .safe-area-guide {
-    --guide-dash: repeating-linear-gradient(to bottom, var(--guide-color) 0 6px, transparent 6px 10px);
-    --guide-dash-h: repeating-linear-gradient(to right, var(--guide-color) 0 6px, transparent 6px 10px);
-    --guide-color: rgba(120, 120, 120, .55);
     position: absolute;
     inset: 0;
     z-index: 1;
     pointer-events: none;
-    background-repeat: no-repeat;
-    background-image: var(--guide-dash), var(--guide-dash), var(--guide-dash-h), var(--guide-dash-h);
-    background-position:
-        left var(--paper-margin, 12px) top 0,
-        right var(--paper-margin, 12px) top 0,
-        left var(--paper-margin, 12px) top 0,
-        left var(--paper-margin, 12px) bottom var(--paper-safe-bottom, 0px);
-    background-size:
-        2px 100%,
-        2px 100%,
-        calc(100% - 2 * var(--paper-margin, 12px)) 2px,
-        calc(100% - 2 * var(--paper-margin, 12px)) 2px;
+    /* 內容比切刀距離還短時，線會落在紙張外，垂直方向裁掉（水平方向留給右側的 ⓘ） */
+    overflow-y: clip;
+}
+
+.safe-area-guide::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: var(--paper-safe-bottom, 0px);
+    border-top: 2px dashed rgba(120, 120, 120, .55);
+}
+
+.safe-area-guide .ts-icon {
+    position: absolute;
+    left: 100%;
+    bottom: calc(var(--paper-safe-bottom, 0px) - .4rem);
+    margin-left: 2px;
+    font-size: .75rem;
+    color: var(--ts-gray-500, #888);
+    pointer-events: auto;
 }
 
 .canvas-host {
     position: relative;
     background: #fff;
+}
+
+/* 版面還沒有任何元素時，畫布內容高度只有幾個 px，白底看起來像一條裂縫；
+   只有空版面才撐一個最短高度（列印頭到切刀的距離），有內容時白底高度就是內容高度。 */
+.paper-viewport.is-empty .canvas-host {
+    min-height: var(--paper-min-height, 160px);
 }
 
 .canvas-host canvas {

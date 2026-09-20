@@ -1,8 +1,9 @@
 // 工作區檢視：縮放（−／＋／符合寬度／實際大小 1:1）與 mm 尺規。
 // 縮放只改「紙張在螢幕上佔多少 CSS px」（pxPerMm），排版跟渲染結果都不變；
 // zoom = 1 是實際大小：96 CSS px = 1 吋，所以 80mm 紙的 576 點（72mm）在螢幕上就是 72mm。
-// 尺規畫在 canvas 上：水平尺規以紙張左緣為 0（整捲紙寬，含左右不可印的邊距），
-// 垂直尺規以紙張上緣為 0；跟著縮放與工作區捲動重畫。
+// 畫面上的「紙」就是白底可列印區（printableWidthMm，對應實際 576 點），沒有紙捲邊距。
+// 尺規畫在 canvas 上：水平尺規以白底左緣為 0、右緣為終點，垂直尺規以白底上緣為 0；
+// 跟著縮放與工作區捲動重畫。
 
 const MM_PX = 96 / 25.4;
 const ZOOM_MIN = 0.25;
@@ -31,10 +32,10 @@ function saveRulersPref(value) {
 
 /**
  * @param {object} options
- * @param {() => number} options.getPaperRollMm 目前紙寬（整捲，含邊距）的 mm，「符合寬度」用
+ * @param {() => number} options.getPaperWidthMm 目前可列印寬度的 mm（白底範圍），「符合寬度」用
  * @param {() => void} options.onZoom 縮放比例變了：呼叫端負責更新紙張尺寸、重畫編輯疊層
  */
-export function createWorkspaceView({ getPaperRollMm, onZoom }) {
+export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
     let zoom = 1;
     let zoomEditing = false; // 百分比欄位正在輸入：先不要用縮放值蓋掉使用者打的字
     let fitLocked = false; // 「符合寬度」啟用中：視窗大小改變時要跟著重算
@@ -133,9 +134,9 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
     function fitZoom() {
         const style = getComputedStyle(dom.scroll);
         const inner = dom.scroll.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-        const rollMm = getPaperRollMm();
-        if (!(inner > 0) || !(rollMm > 0)) return 1;
-        return inner / (rollMm * MM_PX);
+        const widthMm = getPaperWidthMm();
+        if (!(inner > 0) || !(widthMm > 0)) return 1;
+        return inner / (widthMm * MM_PX);
     }
 
     function nextStep(direction) {
@@ -206,7 +207,7 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
         drawRuler(dom.rulerV, "v", sr.top - dom.rulerV.getBoundingClientRect().top, sr.height);
     }
 
-    // originPx：紙張 0mm 在尺規座標系裡的位置；extentPx：紙張在這個方向上的長度（只在紙上畫刻度）
+    // originPx：白底 0mm 在尺規座標系裡的位置；extentPx：白底在這個方向上的長度（只在白底上畫刻度）
     function drawRuler(box, orientation, originPx, extentPx) {
         const canvas = box.firstElementChild;
         const w = box.clientWidth;
@@ -231,8 +232,7 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
         const thickness = orientation === "h" ? h : w;
         const extentMm = extentPx / ppm;
         const firstIndex = Math.max(0, Math.floor((0 - originPx) / ppm / minorStep));
-        // 標稱 80mm 的紙實寬 79.5mm，容許超出半毫米才標得出 80
-        const lastIndex = Math.min(Math.floor((extentMm + 0.51) / minorStep), Math.ceil((length - originPx) / ppm / minorStep));
+        const lastIndex = Math.min(Math.floor((extentMm + 0.001) / minorStep), Math.ceil((length - originPx) / ppm / minorStep));
 
         ctx.strokeStyle = ctx.fillStyle = getComputedStyle(box).color;
         ctx.lineWidth = 1 / dpr;
@@ -255,6 +255,12 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
                 ctx.lineTo(thickness - tick, pos);
             }
             if (isLabel) labels.push({ mm, pos });
+        }
+        // 水平尺規終點對齊白底右緣：終點不是刻度間距的整數倍時（例如 72mm、間距 20mm）補一條終點刻度
+        if (orientation === "h" && extentMm % minorStep > 0.001 && originPx + extentPx <= length) {
+            const pos = (Math.round((originPx + extentPx) * dpr) + 0.5) / dpr;
+            ctx.moveTo(pos, thickness);
+            ctx.lineTo(pos, thickness - thickness * 0.4);
         }
         ctx.stroke();
 
