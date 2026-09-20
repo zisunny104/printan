@@ -447,8 +447,10 @@ body {
     height: 2.25rem;
 }
 
+/* 型別底色的 specificity 與 :hover 相同且寫在後面，改 background 會被蓋掉；用 inset
+   box-shadow 疊一層半透明色，任何底色上都看得出 hover。 */
 .outline-row:hover {
-    background: var(--ts-gray-100);
+    box-shadow: inset 0 0 0 999px light-dark(rgba(0, 0, 0, .06), rgba(255, 255, 255, .1));
 }
 
 /* 每種元素類型給一個柔和的整圈外框＋底色，一眼分辨類型（不用單邊色條，選取/目標狀態
@@ -491,10 +493,6 @@ body {
     border-color: var(--ts-positive-500, #2e7d32);
     outline: 1px solid var(--ts-positive-500, #2e7d32);
     outline-offset: -2px;
-}
-
-.outline-empty-add {
-    margin-top: .5rem;
 }
 
 .outline-target-row {
@@ -546,6 +544,16 @@ body {
         width: 2rem;
         height: 2rem;
     }
+
+    /* 沒有 hover，選取列固定顯示操作 */
+    .outline-row.is-selected .outline-actions {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+.add-menu-more {
+    margin-left: auto;
 }
 
 .outline-row:focus-visible,

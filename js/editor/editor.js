@@ -561,12 +561,34 @@ function revealPendingElement() {
 }
 
 // 「＋」新增選單：版面結構標題與每個容器列共用同一個浮出選單，開啟時記下要插入的容器。
-const addMenu = { el: null, target: null, anchor: null };
+// 多欄比例收在子選單裡（addMenu.sub），主選單保持短。
+const addMenu = { el: null, sub: null, subTrigger: null, target: null, anchor: null };
+
+function menuItems(menu) {
+    return Array.from(menu.querySelectorAll(':scope > [role="menuitem"]'));
+}
+
+function closeAddSubmenu() {
+    if (!addMenu.sub || addMenu.sub.hidden) return;
+    addMenu.sub.hidden = true;
+    addMenu.subTrigger.setAttribute("aria-expanded", "false");
+}
 
 function closeAddMenu() {
     if (!addMenu.el || addMenu.el.hidden) return;
+    closeAddSubmenu();
     addMenu.el.hidden = true;
     addMenu.anchor?.setAttribute("aria-expanded", "false");
+}
+
+/** 把固定定位的選單放到 (left, top) 附近，超出視窗就往內收。 */
+function placeMenu(menu, left, top, flipTop = top) {
+    menu.hidden = false;
+    menu.style.visibility = "hidden";
+    const fitsBelow = top + menu.offsetHeight <= window.innerHeight - 8;
+    menu.style.top = `${fitsBelow ? top : Math.max(8, flipTop - menu.offsetHeight)}px`;
+    menu.style.left = `${Math.max(8, Math.min(left, window.innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.visibility = "";
 }
 
 function openAddMenu(anchor, target) {
@@ -575,25 +597,39 @@ function openAddMenu(anchor, target) {
     addMenu.target = target;
     addMenu.anchor = anchor;
     anchor.setAttribute("aria-expanded", "true");
-    const menu = addMenu.el;
-    menu.hidden = false;
-    menu.style.visibility = "hidden";
     const rect = anchor.getBoundingClientRect();
-    const fitsBelow = rect.bottom + 6 + menu.offsetHeight <= window.innerHeight - 8;
-    menu.style.top = `${fitsBelow ? rect.bottom + 6 : Math.max(8, rect.top - 6 - menu.offsetHeight)}px`;
-    menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8))}px`;
-    menu.style.visibility = "";
+    placeMenu(addMenu.el, rect.left, rect.bottom + 6, rect.top - 6);
+    menuItems(addMenu.el)[0]?.focus();
+}
+
+function openAddSubmenu() {
+    const trigger = addMenu.subTrigger;
+    const rect = trigger.getBoundingClientRect();
+    const sub = addMenu.sub;
+    sub.hidden = false;
+    // 右側放不下就開到主選單左邊
+    const left = rect.right + sub.offsetWidth + 8 <= window.innerWidth ? rect.right + 2 : rect.left - sub.offsetWidth - 2;
+    placeMenu(sub, left, rect.top - 4, rect.bottom + 4);
+    trigger.setAttribute("aria-expanded", "true");
+    menuItems(sub)[0]?.focus();
 }
 
 function wireAddMenu() {
-    const menu = document.createElement("div");
-    menu.className = "ts-menu is-dense is-small is-separated pane-dropdown-menu";
-    menu.setAttribute("role", "menu");
-    menu.setAttribute("aria-label", "新增元素");
-    menu.hidden = true;
-    menu.style.position = "fixed";
+    const buildMenu = (label) => {
+        const menu = document.createElement("div");
+        menu.className = "ts-menu is-dense is-small is-separated pane-dropdown-menu";
+        menu.setAttribute("role", "menu");
+        menu.setAttribute("aria-label", label);
+        menu.hidden = true;
+        menu.style.position = "fixed";
+        document.body.appendChild(menu);
+        return menu;
+    };
+    const menu = buildMenu("新增元素");
+    const sub = buildMenu("新增多欄");
+    sub.style.zIndex = "1";
 
-    const addItem = (icon, label, onPick) => {
+    const addItem = (parent, icon, label, onPick) => {
         const item = document.createElement("button");
         item.type = "button";
         item.className = "item";
@@ -605,21 +641,61 @@ function wireAddMenu() {
             closeAddMenu();
             onPick(target);
         });
-        menu.appendChild(item);
+        parent.appendChild(item);
+        return item;
     };
-    for (const { kind, label, icon } of ADD_KINDS) addItem(icon, `新增${label}`, (target) => addElement(kind, { target }));
-    for (const ratio of ROW_RATIOS) addItem("table-columns", `新增多欄：${ratio.join(" / ")}`, (target) => addElement("row", { ratio, target }));
+    for (const { kind, label, icon } of ADD_KINDS) addItem(menu, icon, `新增${label}`, (target) => addElement(kind, { target }));
 
-    document.body.appendChild(menu);
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "item";
+    trigger.setAttribute("role", "menuitem");
+    trigger.setAttribute("aria-haspopup", "menu");
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.innerHTML = '<span class="ts-icon is-table-columns-icon" aria-hidden="true"></span><span>新增多欄</span><span class="ts-icon is-chevron-right-icon add-menu-more" aria-hidden="true"></span>';
+    trigger.addEventListener("click", () => (sub.hidden ? openAddSubmenu() : closeAddSubmenu()));
+    menu.appendChild(trigger);
+    for (const ratio of ROW_RATIOS) addItem(sub, "table-columns", ratio.join(" / "), (target) => addElement("row", { ratio, target }));
+
     addMenu.el = menu;
+    addMenu.sub = sub;
+    addMenu.subTrigger = trigger;
+
     document.addEventListener("click", (evt) => {
-        if (!menu.hidden && !menu.contains(evt.target) && !addMenu.anchor?.contains(evt.target)) closeAddMenu();
+        if (menu.hidden || menu.contains(evt.target) || sub.contains(evt.target) || addMenu.anchor?.contains(evt.target)) return;
+        closeAddMenu();
     });
     document.addEventListener("keydown", (evt) => {
-        if (evt.key === "Escape" && !menu.hidden) {
-            const anchor = addMenu.anchor;
-            closeAddMenu();
-            anchor?.focus();
+        if (menu.hidden) return;
+        const inSub = sub.contains(document.activeElement);
+        if (!inSub && !menu.contains(document.activeElement)) {
+            if (evt.key === "Escape") closeAddMenu();
+            return;
+        }
+        const list = menuItems(inSub ? sub : menu);
+        const index = list.indexOf(document.activeElement);
+        let handled = true;
+        if (evt.key === "ArrowDown") list[(index + 1) % list.length].focus();
+        else if (evt.key === "ArrowUp") list[(index - 1 + list.length) % list.length].focus();
+        else if (evt.key === "Home") list[0].focus();
+        else if (evt.key === "End") list[list.length - 1].focus();
+        else if (evt.key === "ArrowRight" && document.activeElement === trigger) openAddSubmenu();
+        else if (evt.key === "ArrowLeft" && inSub) {
+            closeAddSubmenu();
+            trigger.focus();
+        } else if (evt.key === "Escape") {
+            if (inSub) {
+                closeAddSubmenu();
+                trigger.focus();
+            } else {
+                const anchor = addMenu.anchor;
+                closeAddMenu();
+                anchor?.focus();
+            }
+        } else handled = false;
+        if (handled) {
+            evt.preventDefault();
+            evt.stopPropagation();
         }
     });
 
@@ -868,16 +944,6 @@ function renderOutline() {
     root.innerHTML = "";
     root.appendChild(buildTargetHeader("最上層", null, 0));
     root.appendChild(buildElementList(state.project.template.elements, 0, "root"));
-    if (!state.project.template.elements.length) {
-        const empty = document.createElement("button");
-        empty.type = "button";
-        empty.className = "ts-button is-outlined is-fluid outline-empty-add";
-        empty.setAttribute("aria-haspopup", "menu");
-        empty.setAttribute("aria-expanded", "false");
-        empty.innerHTML = '<span class="ts-icon is-plus-icon" aria-hidden="true"></span><span>新增第一個元素</span>';
-        empty.addEventListener("click", () => openAddMenu(empty, null));
-        root.appendChild(empty);
-    }
     const rows = Array.from(root.querySelectorAll(".outline-row"));
     const active = rows.find((r) => r.dataset.rowKey === focusKey) || root.querySelector(".outline-row.is-selected") || rows[0];
     setOutlineRoving(active);
