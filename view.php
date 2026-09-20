@@ -216,7 +216,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                     </div>
                     <div class="ts-divider"></div>
                     <!-- 印表機資訊（唯讀）：連線後盡量用機器讀到的（WebUSB 裝置名稱、GS I 回傳的廠牌／型號／韌體）；
-                         規格資料（DPI、紙寬、切刀距離）來自內建規格，比對不到已知型號就標示「未識別，使用預設值」。
+                         規格資料（DPI、紙寬、切刀距離）來自內建規格，比對不到已知型號就標示「無法辨識，使用預設值」。
                          各列內容由 updatePrinterInfo() 填入，見 editor.js。 -->
                     <div class="ts-content">
                         <div class="ts-text is-label">印表機資訊</div>

@@ -2149,7 +2149,8 @@ async function attemptSilentPrinterReconnect() {
         }
     }
     updatePrinterConnectionUi();
-    await identifyConnectedPrinter();
+    // 自動重連不送 GS I：只有使用者手動按「連接印表機」才查詢（部分機型會把指令當文字印出）
+    await identifyConnectedPrinter({ query: false });
 }
 
 // 設定 modal 的連線區塊只有一組連接／中斷按鈕，「目前選哪種連接方式」跟「實際連上哪一種」
@@ -2230,7 +2231,7 @@ function setInfoCell(id, text, kind = null) {
 
 // 印表機資訊區（唯讀）。取值優先序：機器自己回報的（WebUSB 裝置名稱、GS I 廠牌／型號／韌體）
 // > 內建規格表的預設值；「可列印寬度」另外允許使用者手動覆寫（見 renderPrintableDotsRows）。
-// 只有型號比對得到內建規格才標成「機器提供」，比對不到就明講「未識別，使用預設值」。
+// 只有型號比對得到內建規格才標成「機器提供」，比對不到就明講「無法辨識，使用預設值」。
 function updatePrinterInfo() {
     const base = getPrinterProfile(state.project.printerProfile.id);
     const profile = getBaseProfile();
@@ -2250,12 +2251,13 @@ function updatePrinterInfo() {
         );
         setInfoCell(
             "printer-info-firmware",
-            identity.pending ? "讀取中…" : identity.firmware || "印表機未回報",
+            identity.pending ? "讀取中…" : identity.firmware || (identity.queried ? "印表機未回報" : "—"),
             identity.firmware ? "machine" : null,
         );
         if (identity.pending) setInfoCell("printer-info-spec", "比對中…");
+        else if (!identity.queried) setInfoCell("printer-info-spec", `無法辨識（自動重連不查詢）`, "default");
         else if (identity.profileId) setInfoCell("printer-info-spec", `${base.brand} ${base.model}（型號與機器回報相符）`, "machine");
-        else setInfoCell("printer-info-spec", `未識別，使用預設值（${base.brand} ${base.model}）`, "default");
+        else setInfoCell("printer-info-spec", `無法辨識，使用預設值（${base.brand} ${base.model}）`, "default");
     }
     setInfoCell("printer-info-dpi", `${base.dpi.x} × ${base.dpi.y} dpi`, "default");
     setInfoCell("printer-info-paper", `${paper.label}（捲紙寬 ${paper.rollWidthMm} mm，由工具列選擇，ESC/POS 讀不到）`);
@@ -2388,14 +2390,14 @@ function renderMarginRows() {
     els["btn-printer-margin-reset"].disabled = Object.keys(margins).length === 0;
 }
 
-// 連線後讀印表機自報的識別資料，再拿去比對內建規格表：
+// 連線後讀印表機自報的辨識資料，再拿去比對內建規格表（query:false＝自動重連，只讀裝置名稱、不送 GS I）：
 // 1. WebUSB 有 manufacturerName／productName（裝置描述元，不用送指令）；序列埠讀不到裝置名稱。
 // 2. GS I n（n=66 廠牌、67 型號、65 韌體）是 ESC/POS 標準的「傳送印表機 ID」指令，但只有
 //    「有回應」才算數：第一個查詢沒回應就整個停下來（逾時的 USB 讀取取消不了，會卡住之後的回應），
 //    也不會影響連線、列印本身。此功能沒有實機驗證，見 README 已知限制。
 // 3. 用 GS I 型號＋裝置名稱去比對 printer-profiles.js 的 model；比對不到不報錯，
-//    UI 明確標成「未識別，使用預設值」，規格照舊用專案指定的預設 profile。
-async function identifyConnectedPrinter() {
+//    UI 明確標成「無法辨識，使用預設值」，規格照舊用專案指定的預設 profile。
+async function identifyConnectedPrinter({ query = true } = {}) {
     const adapter = state.usbConnected ? usbAdapter : state.serialConnected ? serialAdapter : null;
     if (!adapter) {
         state.printerIdentity = null;
@@ -2410,13 +2412,14 @@ async function identifyConnectedPrinter() {
         model: null,
         firmware: null,
         profileId: null,
-        pending: true,
+        queried: query,
+        pending: query,
     };
     state.printerIdentity = identity;
     updatePrinterInfo();
 
     // 跟列印／測試列印／查詢狀態共用同一條連線，忙碌中就不插隊送指令，只用裝置名稱比對
-    const canQuery = !state.printerBusy;
+    const canQuery = query && !state.printerBusy;
     if (canQuery) state.printerBusy = true;
     try {
         if (canQuery) {
@@ -2442,7 +2445,7 @@ async function identifyConnectedPrinter() {
         identity.name = reported;
         identity.nameFromMachine = true;
     }
-    identity.profileId = matchPrinterProfile([identity.model, adapter.deviceLabel]);
+    identity.profileId = !query ? null : matchPrinterProfile([identity.model, adapter.deviceLabel]);
     updatePrinterInfo();
 }
 

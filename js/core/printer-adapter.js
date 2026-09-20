@@ -470,7 +470,7 @@ export class WebSerialEscposAdapter {
         const info = this.port.getInfo();
         return info.usbVendorId
             ? `USB 序列轉接 ${formatUsbId(info.usbVendorId)}:${formatUsbId(info.usbProductId ?? 0)}`
-            : "序列埠（無 USB 識別資訊）";
+            : "序列埠（無 USB 辨識資訊）";
     }
 
     /**
