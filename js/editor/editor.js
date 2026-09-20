@@ -20,6 +20,7 @@ import {
     isLocalFontAccessSupported, getLocalFontFamilies, loadLocalFonts, restoreLocalFontsIfGranted,
     localFontStack, primaryFamilyName, isFontInstalled,
 } from "../core/fonts.js";
+import { WEB_FONTS, findWebFont, isWebFontFailed, onWebFontStatusChange } from "../core/web-fonts.js";
 import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js";
 import { convertHeicIfNeeded } from "../core/heic.js";
 import { exportToPdf } from "../core/pdf-export.js";
@@ -84,6 +85,7 @@ async function init() {
     wireFloatingToolbarFooterAvoidance();
     wireToolbarOverflow();
     onModelChange({ skipInspector: false });
+    onWebFontStatusChange(() => renderInspector()); // 字體載入失敗／恢復時，選單上的標示要跟著更新
     restoreLocalFontsIfGranted().then((restored) => { if (restored) renderInspector(); });
     await attemptSilentPrinterReconnect();
 }
@@ -1016,6 +1018,7 @@ const FONT_CHOICES = [
     ['"Noto Serif TC", PMingLiU, serif', "思源宋體（襯線）"],
     ['DFKai-SB, BiauKai, "Kaiti TC", serif', "標楷體"],
     ["ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", "等寬（數字／條碼文字）"],
+    ...WEB_FONTS.map((font) => [font.stack, font.label]),
 ];
 
 /**
@@ -1034,7 +1037,9 @@ function buildFontSelect({ value, leading, disabled = false, onChange }) {
         parent.appendChild(opt);
     };
     for (const [v, label] of leading) addOption(select, v, label);
-    for (const [v, label] of FONT_CHOICES) addOption(select, v, label);
+    for (const [v, label] of FONT_CHOICES) {
+        addOption(select, v, findWebFont(v) && isWebFontFailed(findWebFont(v).id) ? `${label}（載入失敗，暫用系統字體）` : label);
+    }
 
     const localFonts = getLocalFontFamilies();
     if (localFonts.length) {
@@ -1572,6 +1577,7 @@ async function updatePreview() {
     }
     if (generation !== state.previewGeneration) return; // 過期的渲染結果，丟棄
     lastRenderResult = result;
+    updateFontFallbackNotice(result.fontFallbacks);
     els["canvas-host"].innerHTML = "";
     els["canvas-host"].appendChild(result.canvas);
     if (!els["edit-overlay"]) {
@@ -1580,6 +1586,25 @@ async function updatePreview() {
     }
     els["canvas-host"].appendChild(els["edit-overlay"]);
     renderEditOverlay();
+}
+
+/** 網頁字體（等寬）載入失敗時，在預覽區上方明確提示目前顯示與列印的是系統字體，不默默換字。 */
+function updateFontFallbackNotice(failedLabels) {
+    let notice = els["font-fallback-notice"];
+    if (!failedLabels?.length) {
+        if (notice) notice.hidden = true;
+        return;
+    }
+    if (!notice) {
+        notice = document.createElement("div");
+        notice.className = "ts-notice is-negative";
+        notice.appendChild(Object.assign(document.createElement("div"), { className: "content" }));
+        const body = els["paper-shadow"].parentElement;
+        body.parentElement.insertBefore(notice, body);
+        els["font-fallback-notice"] = notice;
+    }
+    notice.hidden = false;
+    notice.firstChild.textContent = `字體「${failedLabels.join("、")}」沒有載入成功（可能沒有網路），預覽與列印暫時改用系統字體。`;
 }
 
 // 預覽區行內文字編輯（見 inline-text-editor.js）。textSel 是面板工具列操作的選取範圍，

@@ -16,6 +16,7 @@ import { applyDataToElements } from "./merge.js";
 import { dotsToMm, splitDotsByRatio } from "./units.js";
 import { applyThermalSimulation, toGrayscale, applyDither } from "./dithering.js";
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
+import { ensureWebFonts } from "./web-fonts.js";
 
 export const DEFAULT_FONT_FAMILY = '"Noto Sans TC", "Microsoft JhengHei", sans-serif';
 
@@ -66,6 +67,7 @@ export async function renderElements(elements, {
     thresholdLevel = 128,
 } = {}) {
     const assetMap = assets instanceof Map ? assets : new Map(Object.entries(assets || {}));
+    const fontFallbacks = await ensureWebFonts(elements, fontFamily); // 網頁字體要先載好才量得準；載入失敗的字體名稱一併回報
 
     const measureCanvas = document.createElement("canvas");
     measureCanvas.width = Math.max(widthDots, 1);
@@ -93,6 +95,7 @@ export async function renderElements(elements, {
         dpi,
         widthMm: dotsToMm(canvas.width, dpi),
         heightMm: dotsToMm(canvas.height, dpi),
+        fontFallbacks, // 載入失敗、實際改用系統字體的網頁字體名稱（沒有失敗就是空陣列）
         items, // 排版結果樹（每個 item 帶 el/y/height/widthDots，row 另有 columns），供編輯器畫面上疊加可拖曳的元素外框使用
     };
 }
