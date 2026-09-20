@@ -83,6 +83,7 @@ async function init() {
     bindFileInputs();
     bindBatchPanel();
     bindPrinterSettings();
+    bindEditorShortcuts();
     wireResizableColumns();
     wireToolbarOverflow();
     workspace.mount();
@@ -435,6 +436,7 @@ function loadProjectIntoEditor(project) {
     state.selectedId = null;
     state.insertionTarget = null;
     state.previewData = {};
+    resetHistory();
     endBatchPreview();
     updateFeedLinesHint();
     renderPrintableDotsRows();
@@ -1796,9 +1798,11 @@ function buildHeightResizeHandle(box, scale) {
         const realEl = findElementById(state.project.template.elements, box.el.id);
         if (!realEl) return;
         const startY = e.clientY;
-        const startHeight = realEl.heightDots;
+        // 圖片預設是依比例縮放（fit=auto，heightDots 不生效）：從目前畫出的高度起算，並自動切成「拉伸」
+        const startHeight = realEl.type === "image" && realEl.fit !== "stretch" ? box.height : realEl.heightDots;
         function onMove(ev) {
             const deltaDots = (ev.clientY - startY) / scale;
+            if (realEl.type === "image") realEl.fit = "stretch";
             realEl.heightDots = Math.max(1, Math.round(startHeight + deltaDots));
             schedulePreview();
         }
@@ -2535,6 +2539,7 @@ function bindPrinterSettings() {
 
 let saveTimer = null;
 function onModelChange({ skipInspector = false } = {}) {
+    recordHistory();
     renderOutline();
     if (!skipInspector) renderInspector();
     renderVariables();
@@ -2557,6 +2562,130 @@ function scheduleSave() {
         const time = new Date().toLocaleTimeString("zh-TW", { hour12: false });
         els["save-status"].textContent = `已自動儲存 ${time}`;
     }, 500);
+}
+
+// ---- 復原／重做：版面元素樹的快照歷史 ----
+// 每次 onModelChange 記一份快照；連續變動（拖曳、打字）在 HISTORY_MERGE_MS 內併成同一筆。
+// 歷史第 0 筆是載入時的狀態，所以復原不會退到空白以前。
+
+const HISTORY_MERGE_MS = 600;
+const HISTORY_MAX = 100;
+const history = { stack: [], index: -1, at: 0, restoring: false };
+
+function resetHistory() {
+    history.stack = [];
+    history.index = -1;
+    history.at = 0;
+}
+
+function recordHistory() {
+    if (history.restoring) return;
+    const snapshot = JSON.stringify(state.project.template.elements);
+    if (snapshot === history.stack[history.index]) return;
+    const now = Date.now();
+    history.stack.length = history.index + 1;
+    if (history.index > 0 && now - history.at < HISTORY_MERGE_MS) {
+        history.stack[history.index] = snapshot;
+    } else {
+        history.stack.push(snapshot);
+        if (history.stack.length > HISTORY_MAX) history.stack.shift();
+        history.index = history.stack.length - 1;
+    }
+    history.at = now;
+}
+
+function stepHistory(direction) {
+    const next = history.index + direction;
+    if (next < 0 || next >= history.stack.length) return;
+    history.index = next;
+    history.at = 0;
+    state.project.template.elements = JSON.parse(history.stack[next]);
+    if (state.selectedId && !findElementById(state.project.template.elements, state.selectedId)) state.selectedId = null;
+    if (state.insertionTarget && !findElementById(state.project.template.elements, state.insertionTarget.rowId)) state.insertionTarget = null;
+    history.restoring = true;
+    try {
+        onModelChange();
+    } finally {
+        history.restoring = false;
+    }
+}
+
+// ---- 鍵盤快捷鍵與點空白取消選取 ----
+// 焦點在輸入框、文字編輯區或對話框時一律交給瀏覽器（輸入框自己的復原、Delete 刪字）。
+
+let clipboardElement = null;
+
+function flattenElements(elements, out = []) {
+    for (const el of elements) {
+        out.push(el);
+        if (el.type === "row") el.columns.forEach((col) => flattenElements(col, out));
+    }
+    return out;
+}
+
+function deselectElement() {
+    if (!state.selectedId) return;
+    state.selectedId = null;
+    renderOutline();
+    renderInspector();
+    highlightSelectedBlock();
+}
+
+function pasteElement() {
+    if (!clipboardElement) return;
+    const clone = cloneElementWithNewIds(clipboardElement);
+    const found = state.selectedId ? findContainerOf(state.project.template.elements, state.selectedId) : null;
+    if (found) found.array.splice(found.index + 1, 0, clone);
+    else resolveTargetArray(state.project.template.elements, state.insertionTarget).push(clone);
+    state.selectedId = clone.id;
+    onModelChange();
+}
+
+function handleEditorShortcut(e) {
+    if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
+    if (e.target.closest?.("input, textarea, select, [contenteditable], [role=\"tab\"]") && e.key !== "Escape") return;
+    const mod = e.ctrlKey || e.metaKey;
+    const key = e.key.toLowerCase();
+    const id = state.selectedId;
+
+    if (mod && key === "z") {
+        stepHistory(e.shiftKey ? 1 : -1);
+    } else if (mod && key === "y") {
+        stepHistory(1);
+    } else if (mod && key === "d" && id) {
+        duplicateElement(id);
+    } else if (mod && key === "c" && id && !window.getSelection().toString()) {
+        clipboardElement = JSON.parse(JSON.stringify(findElementById(state.project.template.elements, id)));
+        return;
+    } else if (mod && key === "v" && clipboardElement) {
+        pasteElement();
+    } else if ((e.key === "Delete" || e.key === "Backspace") && id && !mod) {
+        deleteElement(id);
+    } else if (e.key === "Escape") {
+        deselectElement();
+        return;
+    } else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.shiftKey) {
+        const dir = e.key === "ArrowUp" ? -1 : 1;
+        if (e.altKey || mod) {
+            if (id) moveElement(id, dir);
+        } else {
+            const flat = flattenElements(state.project.template.elements);
+            const next = flat[flat.findIndex((el) => el.id === id) + dir] || (id ? null : flat[dir < 0 ? flat.length - 1 : 0]);
+            if (next) selectElementById(next.id);
+        }
+    } else {
+        return;
+    }
+    e.preventDefault();
+}
+
+function bindEditorShortcuts() {
+    document.addEventListener("keydown", handleEditorShortcut);
+    els["paper-scroll"].addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        const t = e.target;
+        if (t === els["paper-scroll"] || t === els["paper-shadow"] || t === els["canvas-host"] || t.tagName === "CANVAS") deselectElement();
+    });
 }
 
 init();
