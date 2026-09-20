@@ -92,6 +92,15 @@ export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
         // 主題切換是改 <body class>（見 partials/theme-script.php setTheme）；系統主題變更則靠 media query
         new MutationObserver(scheduleRedraw).observe(document.body, { attributes: true, attributeFilter: ["class"] });
         matchMedia("(prefers-color-scheme: dark)").addEventListener("change", scheduleRedraw);
+        // devicePixelRatio 變了（瀏覽器縮放、拖到另一個螢幕）尺規要用新的倍率重畫；
+        // resolution 的 media query 只在「離開目前 dpr」時觸發一次，所以每次都重新掛。
+        const watchDpr = () => {
+            matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`).addEventListener("change", () => {
+                scheduleRedraw();
+                watchDpr();
+            }, { once: true });
+        };
+        watchDpr();
 
         // 起始縮放：能放得下就用實際大小，欄位太窄就縮到符合寬度，不要一開始就出現橫向捲軸
         zoom = Math.min(1, fitZoom());
