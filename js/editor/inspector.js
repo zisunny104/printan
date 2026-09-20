@@ -4,20 +4,20 @@ import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../c
 import { MIXED, applyStyleToRange, getRangeStyle, getTextContent, replaceFullText } from "../core/document-model.js";
 import { WEB_FONTS, findWebFont, isWebFontFailed } from "../core/web-fonts.js";
 import { applyFieldToElements, findElementById, setRowRatio } from "../core/element-tree.js";
+import { createInfoIcon } from "./ui-helpers.js";
+import {
+    getLocalFontFamilies, isFontInstalled, isLocalFontAccessSupported, loadLocalFonts, localFontStack,
+    primaryFamilyName,
+} from "../core/fonts.js";
 import {
     checkboxInput, emptyState, field, fieldRow, iconButton, iconToggleButton, mkButton, sectionDivider,
     sectionHeader, selectInput, sliderField, textInput,
 } from "./inspector-widgets.js";
-import { createInfoIcon } from "./ui-helpers.js";
 import {
     deleteElement, deleteElements, duplicateElement, duplicateElements, inlineEditor, onModelChange, textSel,
     ungroupElements,
 } from "./editor.js";
 import { els, rt, state } from "./context.js";
-import {
-    getLocalFontFamilies, isFontInstalled, isLocalFontAccessSupported, loadLocalFonts, localFontStack,
-    primaryFamilyName,
-} from "../core/fonts.js";
 
 export function renderInspector() {
     const panel = els.inspector;
