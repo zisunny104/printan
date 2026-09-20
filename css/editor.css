@@ -906,19 +906,64 @@ body {
 /* ==== Modal（使用說明、列印設定） ==== */
 
 /* 使用說明 modal */
-.help-tabs {
+.ts-tab.help-tabs {
+    display: flex;
     flex-wrap: wrap;
+    height: auto; /* Tocas 的分頁列高度固定，八個分頁換行時會蓋到內文 */
     margin: 0 1rem;
 }
 
+.help-dialog-content {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 3rem);
+}
+
+/* 標題、分頁、關閉鈕固定，只有內文捲動 */
 .help-body {
+    flex: 1 1 auto;
     min-height: 12rem;
+    overflow-y: auto;
 }
 
 .help-list {
     margin: 0;
     padding-left: 1.25rem;
     line-height: 1.7;
+}
+
+/* help/help.md 轉出的內容（js/help/markdown.js）：長字串可換行、表格窄版可橫向捲動 */
+.help-body {
+    overflow-wrap: anywhere;
+}
+
+.help-body > div > * + * {
+    margin-top: .75rem;
+}
+
+.help-paragraph {
+    margin: 0;
+    line-height: 1.7;
+}
+
+.help-quote {
+    margin: 0;
+    padding: .5rem .75rem;
+    border: 1px solid var(--ts-gray-300, #ddd);
+    border-radius: var(--ts-border-radius-container, 8px);
+    background: var(--ts-gray-100, #f2f2f2);
+}
+
+.help-table-wrap {
+    overflow-x: auto;
+}
+
+.help-table-wrap .ts-table {
+    width: 100%;
+}
+
+.help-body kbd {
+    white-space: nowrap;
 }
 
 /* 印表機連線狀態燈：modal 標題旁的 badge 跟工具列「印表機設定」鈕內的小圓點共用同一個
