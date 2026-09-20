@@ -88,7 +88,7 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
         });
         resizeObserver.observe(dom.scroll);
         resizeObserver.observe(dom.shadow);
-        // 主題切換是改 <body class>（見 view.php setTheme）；系統主題變更則靠 media query
+        // 主題切換是改 <body class>（見 partials/theme-script.php setTheme）；系統主題變更則靠 media query
         new MutationObserver(scheduleRedraw).observe(document.body, { attributes: true, attributeFilter: ["class"] });
         matchMedia("(prefers-color-scheme: dark)").addEventListener("change", scheduleRedraw);
 

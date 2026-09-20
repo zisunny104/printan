@@ -2,7 +2,7 @@
 
 /**
  * 「ⓘ」說明圖示：把不必常駐的補充說明收進 tooltip，取代標題／欄位旁的灰色說明文字。
- * 動態產生的欄位用這個函式；view.php 的靜態標記直接寫同樣的
+ * 動態產生的欄位用這個函式；partials/*.php 的靜態標記直接寫同樣的
  * <span class="info-icon" tabindex="0" data-tooltip="…"> 結構（樣式見 editor.css .info-icon）。
  * 需要放不下一句話的內容時不要塞 tooltip，改寫進「使用說明」（見 wireHelpDialog）。
  * @param {string} text 一句話內的簡短說明
@@ -21,7 +21,7 @@ export function createInfoIcon(text) {
     return icon;
 }
 
-/** 「使用說明」modal：標題列按鈕開啟，分頁切換各章節（章節內容寫在 view.php #help-dialog）。 */
+/** 「使用說明」modal：標題列按鈕開啟，分頁切換各章節（章節內容寫在 partials/modal-help.php #help-dialog）。 */
 export function wireHelpDialog() {
     const dialog = document.getElementById("help-dialog");
     const openButton = document.getElementById("btn-help");
