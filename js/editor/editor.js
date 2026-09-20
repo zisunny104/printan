@@ -1359,7 +1359,7 @@ function buildHeightResizeHandle(box, scale) {
             const deltaDots = (ev.clientY - startY) / scale;
             if (realEl.type === "image") realEl.fit = "stretch";
             realEl.heightDots = Math.max(1, Math.round(startHeight + deltaDots));
-            schedulePreview();
+            schedulePreviewLive();
         }
         function onUp() {
             document.removeEventListener("pointermove", onMove);
@@ -1399,7 +1399,7 @@ function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHe
             widths[colIndex] = Math.round(widths[colIndex] + deltaDots);
             widths[colIndex + 1] = Math.round(widths[colIndex + 1] - deltaDots);
             realRow.ratio = widths;
-            schedulePreview();
+            schedulePreviewLive();
         }
         function onUp() {
             document.removeEventListener("pointermove", onMove);
@@ -1521,6 +1521,24 @@ let previewTimer = null;
 export function schedulePreview() {
     clearTimeout(previewTimer);
     previewTimer = setTimeout(updatePreview, 120);
+}
+
+// 拖曳把手時用：每個畫格最多重繪一次，且上一次還沒畫完就只標記「還要再畫」，
+// 不會像 120ms debounce 那樣拖著不停就完全不更新，也不會因為結果被判過期而一直畫不出來。
+let liveBusy = false;
+let liveDirty = false;
+function schedulePreviewLive() {
+    liveDirty = true;
+    if (liveBusy) return;
+    liveBusy = true;
+    requestAnimationFrame(async () => {
+        while (liveDirty) {
+            liveDirty = false;
+            clearTimeout(previewTimer);
+            await updatePreview();
+        }
+        liveBusy = false;
+    });
 }
 
 function scheduleSave() {
