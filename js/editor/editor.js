@@ -714,6 +714,24 @@ function moveElementTo(id, newIndex) {
     onModelChange();
 }
 
+/** 跨容器拖曳：把元素搬到另一個容器陣列的 index 位置（同容器時等同 moveElementTo）。
+ *  不能把多欄元素搬進自己底下的欄位（會形成迴圈）。 */
+function moveElementToContainer(id, targetArray, index) {
+    const found = findContainerOf(state.project.template.elements, id);
+    if (!found) return;
+    if (found.array === targetArray) return moveElementTo(id, index);
+    const item = found.array[found.index];
+    if (item.type === "row" && item.columns.some((col) => col === targetArray || containsArray(col, targetArray))) return;
+    found.array.splice(found.index, 1);
+    targetArray.splice(Math.max(0, Math.min(index, targetArray.length)), 0, item);
+    state.insertionTarget = containerToTarget(targetArray);
+    onModelChange();
+}
+
+function containsArray(elements, array) {
+    return elements.some((el) => el.type === "row" && el.columns.some((col) => col === array || containsArray(col, array)));
+}
+
 /** 選取元素：outline 清單點擊、畫布疊層點擊共用同一套邏輯。 */
 function selectElementById(id) {
     state.selectedId = id;
@@ -770,10 +788,10 @@ function buildElementList(elements, depth, parentKey) {
     return frag;
 }
 
-// ---- 大綱拖曳排序：只允許在同一個容器（同一層陣列）內重新排序，跨容器拖放會被擋掉，
-// 因為 moveElementTo() 本身只在元素目前所在的陣列裡搬動位置。----
+// ---- 大綱拖曳排序：可在同一層重新排序，也可拖到其他欄或最上層（放在元素列上＝插在它前／後，
+// 放在容器列上＝放到該容器最前面）；不能把多欄元素拖進自己的欄位。----
 
-let outlineDragState = null; // { id, parentKey }
+let outlineDragState = null; // { id }
 
 function clearOutlineDropIndicators() {
     els["outline-list"].querySelectorAll(".is-drop-before, .is-drop-after").forEach((n) => {
@@ -781,10 +799,27 @@ function clearOutlineDropIndicators() {
     });
 }
 
-function wireOutlineRowDrag(row, el, parentKey) {
+function wireOutlineTargetDrop(row, target) {
+    row.addEventListener("dragover", (evt) => {
+        if (!outlineDragState) return;
+        evt.preventDefault();
+        evt.dataTransfer.dropEffect = "move";
+        clearOutlineDropIndicators();
+        row.classList.add("is-drop-after");
+    });
+    row.addEventListener("drop", (evt) => {
+        if (!outlineDragState) return;
+        evt.preventDefault();
+        const id = outlineDragState.id;
+        outlineDragState = null;
+        moveElementToContainer(id, resolveTargetArray(state.project.template.elements, target), 0);
+    });
+}
+
+function wireOutlineRowDrag(row, el) {
     row.draggable = true;
     row.addEventListener("dragstart", (evt) => {
-        outlineDragState = { id: el.id, parentKey };
+        outlineDragState = { id: el.id };
         evt.dataTransfer.effectAllowed = "move";
         evt.dataTransfer.setData("text/plain", el.id);
         row.classList.add("is-dragging");
@@ -795,7 +830,7 @@ function wireOutlineRowDrag(row, el, parentKey) {
         outlineDragState = null;
     });
     row.addEventListener("dragover", (evt) => {
-        if (!outlineDragState || outlineDragState.parentKey !== parentKey || outlineDragState.id === el.id) return;
+        if (!outlineDragState || outlineDragState.id === el.id) return;
         evt.preventDefault();
         evt.dataTransfer.dropEffect = "move";
         const rect = row.getBoundingClientRect();
@@ -804,15 +839,15 @@ function wireOutlineRowDrag(row, el, parentKey) {
         row.classList.add(before ? "is-drop-before" : "is-drop-after");
     });
     row.addEventListener("drop", (evt) => {
-        if (!outlineDragState || outlineDragState.parentKey !== parentKey || outlineDragState.id === el.id) return;
+        if (!outlineDragState || outlineDragState.id === el.id) return;
         evt.preventDefault();
         const rect = row.getBoundingClientRect();
         const before = evt.clientY < rect.top + rect.height / 2;
         const found = findContainerOf(state.project.template.elements, el.id);
-        if (!found) return;
-        const targetIndex = before ? found.index : found.index + 1;
-        moveElementTo(outlineDragState.id, targetIndex);
+        const id = outlineDragState.id;
         outlineDragState = null;
+        if (!found) return;
+        moveElementToContainer(id, found.array, before ? found.index : found.index + 1);
     });
 }
 
@@ -832,6 +867,7 @@ function buildTargetHeader(label, target, depth) {
     add.setAttribute("aria-haspopup", "menu");
     add.setAttribute("aria-expanded", "false");
     row.appendChild(add);
+    wireOutlineTargetDrop(row, target);
     row.addEventListener("click", () => {
         state.insertionTarget = target;
         state.selectedId = null;
