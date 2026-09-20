@@ -467,6 +467,12 @@ body {
 
 .outline-row.is-target {
     border-color: var(--ts-positive-500, #2e7d32);
+    outline: 1px solid var(--ts-positive-500, #2e7d32);
+    outline-offset: -2px;
+}
+
+.outline-empty-add {
+    margin-top: .5rem;
 }
 
 .outline-target-row {

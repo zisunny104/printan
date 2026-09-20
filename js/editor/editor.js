@@ -97,7 +97,7 @@ async function init() {
 function cacheDom() {
     [
         "save-status", "paper-width-tabs",
-        "btn-add-text", "btn-add-image", "btn-add-spacer", "btn-add-divider", "btn-add-barcode",
+        "btn-outline-add", "btn-add-text", "btn-add-image", "btn-add-spacer", "btn-add-divider", "btn-add-barcode",
         "btn-toggle-thermal", "btn-toggle-preview-mode",
         "btn-new-ptan", "btn-open-ptan", "open-project-from-file", "recent-drafts-list",
         "btn-save-ptan", "btn-export-pdf",
@@ -339,22 +339,17 @@ function wireToolbarOverflow() {
 }
 
 function bindToolbar() {
-    els["btn-add-text"].addEventListener("click", () => insertElement(createTextElement()));
-    els["btn-add-spacer"].addEventListener("click", () => insertElement(createSpacerElement()));
-    els["btn-add-divider"].addEventListener("click", () => insertElement(createDividerElement()));
-    els["btn-add-barcode"].addEventListener("click", () => insertElement(createBarcodeElement()));
-
-    els["btn-add-image"].addEventListener("click", () => {
-        imageFileInputHandler = null;
-        els["image-file-input"].click();
-    });
+    els["btn-add-text"].addEventListener("click", () => addElement("text"));
+    els["btn-add-spacer"].addEventListener("click", () => addElement("spacer"));
+    els["btn-add-divider"].addEventListener("click", () => addElement("divider"));
+    els["btn-add-barcode"].addEventListener("click", () => addElement("barcode"));
+    els["btn-add-image"].addEventListener("click", () => addElement("image"));
 
     document.querySelectorAll("#row-ratio-dropdown .item[data-ratio]").forEach((item) => {
-        item.addEventListener("click", () => {
-            const ratio = item.dataset.ratio.split(",").map(Number);
-            insertElement(createRowElement(ratio));
-        });
+        item.addEventListener("click", () => addElement("row", { ratio: item.dataset.ratio.split(",").map(Number) }));
     });
+
+    wireAddMenu();
 
     els["btn-toggle-thermal"].addEventListener("click", () => {
         state.mode = state.mode === "screen" ? "thermal" : "screen";
@@ -511,11 +506,119 @@ function populateRecentDrafts() {
 
 // ---- Element tree 操作 ----
 
+// 新增元素的種類清單：工具列、左側「＋」選單共用，避免兩處各寫一份。
+const ADD_KINDS = [
+    { kind: "text", label: "文字", icon: "font" },
+    { kind: "image", label: "圖片", icon: "image" },
+    { kind: "spacer", label: "間隔", icon: "arrows-up-down" },
+    { kind: "divider", label: "分隔線", icon: "minus" },
+    { kind: "barcode", label: "條碼", icon: "qrcode" },
+];
+const ROW_RATIOS = [[1, 1], [2, 1], [1, 2], [1, 1, 1]];
+
+/** 新增一個元素。target 有給就插進那個容器（undefined＝目前的插入目標）。 */
+function addElement(kind, { ratio, target } = {}) {
+    if (target !== undefined) state.insertionTarget = target;
+    switch (kind) {
+        case "text": return insertElement(createTextElement());
+        case "spacer": return insertElement(createSpacerElement());
+        case "divider": return insertElement(createDividerElement());
+        case "barcode": return insertElement(createBarcodeElement());
+        case "row": return insertElement(createRowElement(ratio));
+        case "image":
+            imageFileInputHandler = null;
+            els["image-file-input"].click();
+    }
+}
+
+// 新增後要把畫布捲到新元素、文字元素直接進入行內編輯；預覽是延後才畫好的，
+// 所以先記下來，等 renderEditOverlay() 畫完疊層再處理。
+let pendingReveal = null;
+
 function insertElement(element) {
     const target = resolveTargetArray(state.project.template.elements, state.insertionTarget);
     target.push(element);
     state.selectedId = element.id;
+    pendingReveal = { id: element.id, edit: element.type === "text" };
     onModelChange();
+    els["outline-list"].querySelector(".outline-row.is-selected")?.scrollIntoView({ block: "nearest" });
+}
+
+function revealPendingElement() {
+    if (!pendingReveal) return;
+    const { id, edit } = pendingReveal;
+    pendingReveal = null;
+    const block = els["edit-overlay"].querySelector(`.edit-block[data-id="${id}"]`);
+    if (!block) return;
+    block.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (edit) inlineEditor.open(id);
+}
+
+// 「＋」新增選單：版面結構標題與每個容器列共用同一個浮出選單，開啟時記下要插入的容器。
+const addMenu = { el: null, target: null, anchor: null };
+
+function closeAddMenu() {
+    if (!addMenu.el || addMenu.el.hidden) return;
+    addMenu.el.hidden = true;
+    addMenu.anchor?.setAttribute("aria-expanded", "false");
+}
+
+function openAddMenu(anchor, target) {
+    if (!addMenu.el.hidden && addMenu.anchor === anchor) return closeAddMenu();
+    closeAddMenu();
+    addMenu.target = target;
+    addMenu.anchor = anchor;
+    anchor.setAttribute("aria-expanded", "true");
+    const menu = addMenu.el;
+    menu.hidden = false;
+    menu.style.visibility = "hidden";
+    const rect = anchor.getBoundingClientRect();
+    const fitsBelow = rect.bottom + 6 + menu.offsetHeight <= window.innerHeight - 8;
+    menu.style.top = `${fitsBelow ? rect.bottom + 6 : Math.max(8, rect.top - 6 - menu.offsetHeight)}px`;
+    menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.visibility = "";
+}
+
+function wireAddMenu() {
+    const menu = document.createElement("div");
+    menu.className = "ts-menu is-dense is-small is-separated pane-dropdown-menu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "新增元素");
+    menu.hidden = true;
+    menu.style.position = "fixed";
+
+    const addItem = (icon, label, onPick) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "item";
+        item.setAttribute("role", "menuitem");
+        item.innerHTML = `<span class="ts-icon is-${icon}-icon" aria-hidden="true"></span><span></span>`;
+        item.lastChild.textContent = label;
+        item.addEventListener("click", () => {
+            const target = addMenu.target;
+            closeAddMenu();
+            onPick(target);
+        });
+        menu.appendChild(item);
+    };
+    for (const { kind, label, icon } of ADD_KINDS) addItem(icon, `新增${label}`, (target) => addElement(kind, { target }));
+    for (const ratio of ROW_RATIOS) addItem("table-columns", `新增多欄：${ratio.join(" / ")}`, (target) => addElement("row", { ratio, target }));
+
+    document.body.appendChild(menu);
+    addMenu.el = menu;
+    document.addEventListener("click", (evt) => {
+        if (!menu.hidden && !menu.contains(evt.target) && !addMenu.anchor?.contains(evt.target)) closeAddMenu();
+    });
+    document.addEventListener("keydown", (evt) => {
+        if (evt.key === "Escape" && !menu.hidden) {
+            const anchor = addMenu.anchor;
+            closeAddMenu();
+            anchor?.focus();
+        }
+    });
+
+    const header = els["btn-outline-add"];
+    header.addEventListener("click", () => openAddMenu(header, state.insertionTarget));
 }
 
 function resolveTargetArray(rootElements, target) {
@@ -636,8 +739,18 @@ function highlightSelectedBlock() {
 function renderOutline() {
     const root = els["outline-list"];
     root.innerHTML = "";
-    root.appendChild(buildTargetHeader("版面（最上層）", null, 0));
+    root.appendChild(buildTargetHeader("最上層", null, 0));
     root.appendChild(buildElementList(state.project.template.elements, 0, "root"));
+    if (!state.project.template.elements.length) {
+        const empty = document.createElement("button");
+        empty.type = "button";
+        empty.className = "ts-button is-outlined is-fluid outline-empty-add";
+        empty.setAttribute("aria-haspopup", "menu");
+        empty.setAttribute("aria-expanded", "false");
+        empty.innerHTML = '<span class="ts-icon is-plus-icon" aria-hidden="true"></span><span>新增第一個元素</span>';
+        empty.addEventListener("click", () => openAddMenu(empty, null));
+        root.appendChild(empty);
+    }
 }
 
 function buildElementList(elements, depth, parentKey) {
@@ -706,13 +819,17 @@ function buildTargetHeader(label, target, depth) {
     row.className = `outline-row outline-target-row outline-indent-${depth}`;
     if (isSameTarget(state.insertionTarget, target)) row.classList.add("is-target");
     const icon = document.createElement("span");
-    icon.className = "ts-icon is-plus-icon";
+    icon.className = `ts-icon is-${row.classList.contains("is-target") ? "folder-open" : "folder"}-icon`;
     icon.setAttribute("aria-hidden", "true");
     const span = document.createElement("span");
     span.className = "outline-label";
     span.textContent = label;
     row.appendChild(icon);
     row.appendChild(span);
+    const add = iconButton("plus", `新增到「${label}」`, () => openAddMenu(add, target));
+    add.setAttribute("aria-haspopup", "menu");
+    add.setAttribute("aria-expanded", "false");
+    row.appendChild(add);
     row.addEventListener("click", () => {
         state.insertionTarget = target;
         state.selectedId = null;
@@ -1635,6 +1752,7 @@ function renderEditOverlay() {
     // 把手一律留到最後才加進 DOM，確保疊在所有元素外框之上，滑鼠才抓得到
     handleBuilders.forEach((build) => overlay.appendChild(build()));
     inlineEditor.reposition();
+    revealPendingElement();
 }
 
 function walkItems(items, offsetX, offsetY, visit) {

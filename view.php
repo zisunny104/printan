@@ -277,6 +277,10 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                                 <span class="ts-icon is-list-icon" aria-hidden="true"></span>
                                 <span>版面結構</span>
                             </span>
+                            <button type="button" id="btn-outline-add" class="ts-button is-icon is-small"
+                                aria-label="新增元素" aria-haspopup="menu" aria-expanded="false" data-tooltip="新增元素">
+                                <span class="ts-icon is-plus-icon" aria-hidden="true"></span>
+                            </button>
                         </div>
                         <div class="ts-content is-padded">
                             <div id="outline-list" class="outline-list"></div>
