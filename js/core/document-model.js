@@ -26,7 +26,7 @@ export function createTextElement(overrides = {}) {
     return {
         id: nextId("text"),
         type: "text",
-        runs: [createTextRun({ text: "文字內容" })],
+        runs: [createTextRun({ text: "" })],
         fontFamily: null, // null = 使用渲染時的全域預設字體
         fontSize: 32, // dots，run 沒指定字級時的預設值
         lineHeight: 1.3,

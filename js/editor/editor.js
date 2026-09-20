@@ -944,7 +944,7 @@ const BARCODE_FORMAT_LABEL = Object.fromEntries(BARCODE_FORMATS);
 
 function elementLabel(el) {
     switch (el.type) {
-        case "text": { const t = getTextContent(el); return t ? t.slice(0, 14) : "（空白文字）"; }
+        case "text": { const t = getTextContent(el); return t ? t.slice(0, 14) : "文字"; }
         case "image": return el.assetId ? "圖片" : "圖片（未設定）";
         case "spacer": return `間隔 ${el.heightDots}dot`;
         case "divider": return "分隔線";
@@ -1045,7 +1045,7 @@ function renderVariables() {
 
 // 縮放與尺規（見 workspace-view.js）；縮放後紙張的 CSS 寬度變了，編輯疊層座標跟著重算
 const workspace = createWorkspaceView({
-    getPaperRollMm: () => getPaperWidth(getEffectiveProfile(), state.project.paper.widthId).rollWidthMm,
+    getPaperWidthMm: () => getPaperWidth(getEffectiveProfile(), state.project.paper.widthId).printableWidthMm,
     onZoom: () => {
         updatePaperFrame();
         renderEditOverlay();
@@ -1055,17 +1055,16 @@ const workspace = createWorkspaceView({
 function updatePaperFrame() {
     const profile = getEffectiveProfile();
     const paper = getPaperWidth(profile, state.project.paper.widthId);
-    const marginMm = Math.max((paper.rollWidthMm - paper.printableWidthMm) / 2, 0);
-    // 連續紙沒有實體「上邊界」，安全區上緣純粹是視覺留白；下緣則是切刀刀片跟列印頭的
-    // 實際距離（bladeOffsetMm）——太靠下緣的內容，切紙時有被裁到的風險。
+    // 連續紙沒有實體「上邊界」；下緣的切刀安全線是切刀刀片跟列印頭的實際距離（bladeOffsetMm）——
+    // 太靠下緣的內容，切紙時有被裁到的風險。
     const bladeOffsetMm = profile.autocutter?.bladeOffsetMm ?? 0;
     const pxPerMm = workspace.pxPerMm();
-    els["paper-shadow"].style.setProperty("--paper-margin", `${marginMm * pxPerMm}px`);
-    els["paper-shadow"].style.setProperty("--paper-safe-bottom", `${bladeOffsetMm * pxPerMm}px`);
-    // 空白版型的紙張＝最短可切下的一張紙（列印頭到切刀的距離），隨縮放與 profile 變動
-    els["paper-shadow"].style.setProperty("--paper-min-height", `${bladeOffsetMm * pxPerMm}px`);
+    // 畫面上的紙＝可列印區：白底寬度＝printableWidthMm × pxPerMm（對應實際列印的 576 點）
     els["canvas-host"].style.width = `${paper.printableWidthMm * pxPerMm}px`;
-    // 版面完全沒有元素時，安全區虛線框只是誤導（看起來像渲染壞掉），故不顯示
+    els["paper-shadow"].style.setProperty("--paper-safe-bottom", `${bladeOffsetMm * pxPerMm}px`);
+    // 空白版型的白底＝最短可切下的一張紙（列印頭到切刀的距離），隨縮放與 profile 變動
+    els["paper-shadow"].style.setProperty("--paper-min-height", `${bladeOffsetMm * pxPerMm}px`);
+    // 版面完全沒有元素時，切刀安全線只是誤導（看起來像渲染壞掉），故不顯示
     const isEmpty = state.project.template.elements.length === 0;
     els["paper-viewport"].classList.toggle("is-empty", isEmpty);
 }
