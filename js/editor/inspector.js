@@ -310,6 +310,12 @@ function buildTextInspector(panel, el) {
     panel.appendChild(field(null, checkboxInput(el.bold, (v) => { el.bold = v; onModelChange({ skipInspector: true }); }, "預設粗體")));
     panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange({ skipInspector: true }); }, "整行反白")));
     panel.appendChild(field(null, checkboxInput(el.wrap, (v) => { el.wrap = v; onModelChange({ skipInspector: true }); }, "自動換行")));
+    const modeRow = document.createElement("div");
+    modeRow.className = "ts-wrap is-compact has-top-spaced-small";
+    const vertical = el.writingMode === "vertical";
+    modeRow.appendChild(iconToggleButton("grip-lines", "橫書", !vertical, () => { el.writingMode = "horizontal"; onModelChange(); }));
+    modeRow.appendChild(iconToggleButton("grip-lines-vertical", "直書", vertical, () => { el.writingMode = "vertical"; onModelChange(); }));
+    panel.appendChild(modeRow);
 }
 
 function resolveAssetDataUrl(assetId) {

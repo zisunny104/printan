@@ -127,8 +127,11 @@ export function createInlineTextEditor({ getHost, getElement, getBlockNode, getS
         s.fontWeight = el.bold ? "700" : "400";
         s.lineHeight = String(el.lineHeight || 1.3);
         s.letterSpacing = `${(el.letterSpacing || 0) * scale}px`;
-        s.textAlign = el.align || "left";
-        s.whiteSpace = el.wrap ? "pre-wrap" : "pre";
+        // 直書用瀏覽器原生 vertical-rl，編輯框的字向跟畫布一致（換行只靠 Enter，不自動換行）
+        const vertical = el.writingMode === "vertical";
+        s.writingMode = vertical ? "vertical-rl" : "horizontal-tb";
+        s.textAlign = vertical ? "start" : el.align || "left";
+        s.whiteSpace = el.wrap && !vertical ? "pre-wrap" : "pre";
         s.background = el.inverse ? "#000" : "#fff";
         s.color = el.inverse ? "#fff" : "#000";
     }
@@ -157,6 +160,7 @@ export function createInlineTextEditor({ getHost, getElement, getBlockNode, getS
         node.style.top = `${rect.top - host.top}px`;
         node.style.width = `${rect.width}px`;
         node.style.minHeight = `${rect.height}px`;
+        node.style.height = el.writingMode === "vertical" ? `${rect.height}px` : "";
     }
 
     function placeCaret(point) {
