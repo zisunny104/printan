@@ -97,7 +97,7 @@ async function init() {
 function cacheDom() {
     [
         "save-status", "paper-width-tabs",
-        "btn-outline-add", "btn-add-text", "btn-add-image", "btn-add-spacer", "btn-add-divider", "btn-add-barcode",
+        "btn-outline-add", "btn-toolbar-add", "btn-add-text", "btn-add-image", "btn-add-spacer", "btn-add-divider", "btn-add-barcode",
         "btn-toggle-thermal", "btn-toggle-preview-mode",
         "btn-new-ptan", "btn-open-ptan", "open-project-from-file", "recent-drafts-list",
         "btn-save-ptan", "btn-export-pdf",
@@ -619,6 +619,8 @@ function wireAddMenu() {
 
     const header = els["btn-outline-add"];
     header.addEventListener("click", () => openAddMenu(header, state.insertionTarget));
+    const toolbarAdd = els["btn-toolbar-add"];
+    toolbarAdd.addEventListener("click", () => openAddMenu(toolbarAdd, state.insertionTarget));
 }
 
 function resolveTargetArray(rootElements, target) {

@@ -277,7 +277,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                                 <span class="ts-icon is-list-icon" aria-hidden="true"></span>
                                 <span>版面結構</span>
                             </span>
-                            <button type="button" id="btn-outline-add" class="ts-button is-icon is-small"
+                            <button type="button" id="btn-outline-add" class="ts-button is-icon is-ghost is-small"
                                 aria-label="新增元素" aria-haspopup="menu" aria-expanded="false" data-tooltip="新增元素">
                                 <span class="ts-icon is-plus-icon" aria-hidden="true"></span>
                             </button>
@@ -349,6 +349,11 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                          把整顆按鈕收進最後的「更多工具」選單（不是壓縮/裁切），同 pitrace
                          wireToolbarOverflow()。數字愈小愈先被收，「新增文字」最常用留到最後。 -->
                     <div class="canvas-floating-toolbar pane-toolbar" role="toolbar" aria-label="新增元素">
+                        <button type="button" class="ts-button is-start-icon" id="btn-toolbar-add"
+                            aria-haspopup="menu" aria-expanded="false">
+                            <span class="ts-icon is-plus-icon" aria-hidden="true"></span> 新增
+                        </button>
+                        <div class="ts-divider is-vertical" style="height:1.4em"></div>
                         <button class="ts-button is-icon" id="btn-add-text" data-tooltip="新增文字"
                             aria-label="新增文字" data-collapse-priority="6">
                             <span class="ts-icon is-font-icon" aria-hidden="true"></span>
