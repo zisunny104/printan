@@ -365,6 +365,16 @@ async function handleImageFileSelected(file) {
     return assetId;
 }
 
+// 新圖片的預設寬度：小圖（logo、圖示）不放大到滿版，照原始像素寬佔可列印寬的比例；大圖一律 100%
+async function defaultImageWidthPercent(assetId) {
+    const asset = state.project.assets.find((a) => a.id === assetId);
+    const img = new Image();
+    img.src = asset?.dataUrl || "";
+    try { await img.decode(); } catch { return 100; }
+    const printable = getPaperWidth(getEffectiveProfile(), state.project.paper.widthId).printableWidthDots;
+    return Math.min(100, Math.max(10, Math.round((img.naturalWidth / printable) * 100)));
+}
+
 function bindFileInputs() {
     els["image-file-input"].addEventListener("change", async (e) => {
         const file = e.target.files[0];
@@ -375,7 +385,7 @@ function bindFileInputs() {
         const assetId = await handleImageFileSelected(file);
         if (!assetId) return;
         if (handler) handler(assetId);
-        else insertElement(createImageElement({ assetId }));
+        else insertElement(createImageElement({ assetId, widthPercent: await defaultImageWidthPercent(assetId) }));
     });
 
     els["ptan-file-input"].addEventListener("change", async (e) => {
@@ -1152,6 +1162,9 @@ function renderEditOverlay() {
         if (box.el.type === "spacer" || box.el.type === "image" || box.el.type === "barcode") {
             handleBuilders.push(() => buildHeightResizeHandle(box, scale));
         }
+        if (box.el.type === "image" && item.drawHeight > 0) {
+            for (const spec of imageHandleSpecs(box, item)) handleBuilders.push(() => buildImageResizeHandle(box, item, spec, scale));
+        }
         if (box.el.type === "row") {
             let cumulative = 0;
             item.columns.forEach((col, i) => {
@@ -1371,6 +1384,64 @@ function buildHeightResizeHandle(box, scale) {
             document.removeEventListener("pointerup", onUp);
             handle.classList.remove("is-dragging");
             onModelChange();
+        }
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+    });
+    return handle;
+}
+
+/** 圖片縮放把手的位置：靠左的圖只有右側（左緣是錨點）、靠右的只有左側、置中則兩側都有；每側一個邊中點＋一個下角。 */
+function imageHandleSpecs(box, item) {
+    const align = item.el.align || "center";
+    const sides = align === "left" ? ["r"] : align === "right" ? ["l"] : ["l", "r"];
+    const imgX = box.x + (align === "left" ? 0 : align === "right" ? box.width - item.drawWidth : (box.width - item.drawWidth) / 2);
+    return sides.flatMap((side) => {
+        const x = imgX + (side === "r" ? item.drawWidth : 0);
+        return [{ side, corner: false, x, y: box.y + box.height / 2 }, { side, corner: true, x, y: box.y + box.height }];
+    });
+}
+
+/** 圖片拖曳縮放：側邊＝只改寬度；下角＝等比縮放，按住 Shift 改為自由拉伸（fit 切成 stretch、高度跟著游標）。
+ * 寬度存成 widthPercent；置中時兩側同時外擴，所以游標位移要乘 2 才會讓被拖的那條邊跟手。 */
+function buildImageResizeHandle(box, item, { side, corner, x, y }, scale) {
+    const handle = document.createElement("div");
+    handle.className = "edit-resize-handle is-img";
+    const size = 10;
+    handle.style.cssText = `left:${x * scale - size / 2}px;top:${y * scale - size / 2}px;width:${size}px;height:${size}px;`
+        + `background:#fff;border:1.5px solid currentColor;border-radius:2px;color:var(--ts-primary-500,#2b7de9);`
+        + `cursor:${corner ? (side === "r" ? "nwse-resize" : "nesw-resize") : "ew-resize"}`;
+    handle.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const realEl = findElementById(state.project.template.elements, box.el.id);
+        if (!realEl) return;
+        handle.classList.add("is-dragging");
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startWidth = item.drawWidth;
+        const startHeight = item.drawHeight;
+        const startStretchHeight = realEl.heightDots;
+        const factor = (realEl.align || "center") === "center" ? 2 : 1;
+        let moved = false;
+        function onMove(ev) {
+            moved = true;
+            const dx = ((ev.clientX - startX) / scale) * (side === "r" ? 1 : -1) * factor;
+            const width = Math.min(box.width, Math.max(box.width * 0.01, startWidth + dx));
+            realEl.widthPercent = Math.round((width / box.width) * 1000) / 10;
+            if (corner && ev.shiftKey) {
+                realEl.fit = "stretch";
+                realEl.heightDots = Math.max(1, Math.round(startHeight + (ev.clientY - startY) / scale));
+            } else if (realEl.fit === "stretch" && startStretchHeight > 0) {
+                realEl.heightDots = Math.max(1, Math.round((startStretchHeight * width) / startWidth));
+            }
+            schedulePreviewLive();
+        }
+        function onUp() {
+            document.removeEventListener("pointermove", onMove);
+            document.removeEventListener("pointerup", onUp);
+            handle.classList.remove("is-dragging");
+            if (moved) onModelChange();
         }
         document.addEventListener("pointermove", onMove);
         document.addEventListener("pointerup", onUp);

@@ -459,7 +459,13 @@ function buildImageInspector(panel, el) {
 
     panel.appendChild(sectionDivider());
     panel.appendChild(sectionHeader("ruler", "尺寸與版面"));
-    panel.appendChild(sliderField("寬度 (%)", Math.max(1, Math.min(100, el.widthPercent ?? 100)), 1, 100, (v) => { el.widthPercent = v; onModelChange({ skipInspector: true }); }));
+    const widthInput = textInput(Math.max(1, Math.min(100, el.widthPercent ?? 100)), (v) => {
+        if (!(v > 0)) return;
+        el.widthPercent = Math.min(100, Math.max(1, v));
+        onModelChange({ skipInspector: true });
+    }, "number");
+    Object.assign(widthInput.querySelector("input"), { min: 1, max: 100, step: 1 });
+    panel.appendChild(field("寬度 (%)", widthInput));
 
     const layoutRow = document.createElement("div");
     layoutRow.className = "ts-wrap is-compact has-top-spaced-small";
