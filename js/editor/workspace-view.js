@@ -70,6 +70,14 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
             scheduleRedraw();
         });
 
+        // Ctrl／⌘＋滾輪與觸控板雙指捏合（瀏覽器以 wheel＋ctrlKey 送出）：以游標為錨點縮放，只在工作區內攔截
+        dom.scroll.addEventListener("wheel", (e) => {
+            if (!e.ctrlKey && !e.metaKey) return;
+            e.preventDefault();
+            const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1);
+            const sr = dom.scroll.getBoundingClientRect();
+            setZoom(zoom * Math.exp(-Math.max(-60, Math.min(60, delta)) * 0.01), false, { x: e.clientX - sr.left, y: e.clientY - sr.top });
+        }, { passive: false });
         dom.scroll.addEventListener("scroll", scheduleRedraw, { passive: true });
         const resizeObserver = new ResizeObserver(() => {
             if (fitLocked) setZoom(fitZoom(), true);
@@ -103,24 +111,26 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
         return [...ZOOM_STEPS].reverse().find((z) => z < zoom - eps) ?? ZOOM_MIN;
     }
 
-    // 縮放時讓工作區目前看到的中心點維持在畫面中心，不會一縮放就跳到別處
-    function setZoom(next, fit = false) {
+    // 縮放時讓錨點（預設是工作區畫面中心；滾輪縮放是游標位置）下的紙面位置不動，不會一縮放就跳到別處
+    function setZoom(next, fit = false, focus = null) {
         next = Math.min(Math.max(next, ZOOM_MIN), ZOOM_MAX);
         fitLocked = fit;
         if (Math.abs(next - zoom) < 0.0005) return;
         const { scroll, shadow } = dom;
-        const anchorBefore = readAnchor(scroll, shadow);
+        const fx = focus ? focus.x : scroll.clientWidth / 2;
+        const fy = focus ? focus.y : scroll.clientHeight / 2;
+        const anchorBefore = readAnchor(scroll, shadow, fx, fy);
         zoom = next;
         onZoom();
-        const anchorAfter = readAnchor(scroll, shadow);
-        scroll.scrollTop = anchorAfter.originY + anchorBefore.mmY * pxPerMm() - scroll.clientHeight / 2;
-        scroll.scrollLeft = anchorAfter.originX + anchorBefore.mmX * pxPerMm() - scroll.clientWidth / 2;
+        const anchorAfter = readAnchor(scroll, shadow, fx, fy);
+        scroll.scrollTop = anchorAfter.originY + anchorBefore.mmY * pxPerMm() - fy;
+        scroll.scrollLeft = anchorAfter.originX + anchorBefore.mmX * pxPerMm() - fx;
         syncUi();
         redraw();
     }
 
-    // 紙張左上角在捲動內容座標系裡的位置（originX/Y），以及目前視窗中心對應紙上的 mm
-    function readAnchor(scroll, shadow) {
+    // 紙張左上角在捲動內容座標系裡的位置（originX/Y），以及視窗內 (fx, fy) 那一點對應紙上的 mm
+    function readAnchor(scroll, shadow, fx, fy) {
         const sr = scroll.getBoundingClientRect();
         const pr = shadow.getBoundingClientRect();
         const originX = pr.left - sr.left + scroll.scrollLeft;
@@ -128,8 +138,8 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
         return {
             originX,
             originY,
-            mmX: (scroll.scrollLeft + scroll.clientWidth / 2 - originX) / pxPerMm(),
-            mmY: (scroll.scrollTop + scroll.clientHeight / 2 - originY) / pxPerMm(),
+            mmX: (scroll.scrollLeft + fx - originX) / pxPerMm(),
+            mmY: (scroll.scrollTop + fy - originY) / pxPerMm(),
         };
     }
 
