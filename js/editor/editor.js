@@ -5,20 +5,19 @@
 import { createEmptyProject, loadProject } from "../core/schema.js";
 import {
     getPrinterProfile, getPaperWidth, getDefaultPrinterProfileId, getPrintHeadWidthDots,
-    withPrintableDotsOverrides, sanitizePrintableDotsOverrides, matchPrinterProfile,
-    withMarginCalibration, sanitizeMarginCalibration, getMarginPad, MARGIN_MM_MAX,
-    PRINTABLE_DOTS_MIN, PRINTABLE_DOTS_MAX,
+    withPrintableDotsOverrides, sanitizePrintableDotsOverrides, matchPrinterProfile, withMarginCalibration,
+    sanitizeMarginCalibration, getMarginPad, MARGIN_MM_MAX, PRINTABLE_DOTS_MIN, PRINTABLE_DOTS_MAX,
 } from "../core/printer-profiles.js";
 import {
-    createTextElement, createImageElement, createSpacerElement, createDividerElement,
-    createRowElement, createBarcodeElement, cloneElementWithNewIds, extractPlaceholders, getTextContent,
-    getRangeStyle, applyStyleToRange, replaceFullText, MIXED,
+    createTextElement, createImageElement, createSpacerElement, createDividerElement, createRowElement,
+    createBarcodeElement, cloneElementWithNewIds, extractPlaceholders, getTextContent, getRangeStyle,
+    applyStyleToRange, replaceFullText, MIXED,
 } from "../core/document-model.js";
 import {
-    childArrays, resolveTargetArray, findElementById, findContainerOf, isSameTarget, flattenElements, setRowRatio,
-    removeElements, groupElementsIn, ungroupElementsIn, duplicateElementsIn, moveElementBy, moveElementsBy,
-    moveElementToIndex, moveElementToContainerIn, containerToTarget as containerToTargetIn, selectionToIds,
-    idsToSelection, pruneSelectionIn, applyFieldToElements, snapshotElements, restoreElements,
+    childArrays, resolveTargetArray, findElementById, findContainerOf, isSameTarget, flattenElements,
+    setRowRatio, removeElements, groupElementsIn, ungroupElementsIn, duplicateElementsIn, moveElementBy,
+    moveElementsBy, moveElementToIndex, moveElementToContainerIn, containerToTarget as containerToTargetIn,
+    selectionToIds, idsToSelection, pruneSelectionIn, applyFieldToElements, snapshotElements, restoreElements,
 } from "../core/element-tree.js";
 import { renderTemplate, renderBatch } from "../core/renderer.js";
 import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
@@ -32,52 +31,16 @@ import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js"
 import { convertHeicIfNeeded } from "../core/heic.js";
 import { exportToPdf } from "../core/pdf-export.js";
 import { saveDraft, loadDraft, deleteDraft, listRecent } from "../core/storage.js";
-import {
-    SystemDialogAdapter, WebUsbEscposAdapter, WebSerialEscposAdapter, interpretRealtimeStatus,
-} from "../core/printer-adapter.js";
+import { SystemDialogAdapter, interpretRealtimeStatus } from "../core/printer-adapter.js";
 import { wireResizableColumns } from "./resizable-columns.js";
 import { renderTestPrint, renderCalibrationSheet } from "./test-print-project.js";
 import { createInlineTextEditor } from "./inline-text-editor.js";
 import { createWorkspaceView } from "./workspace-view.js";
 import { wireHelpDialog, createInfoIcon } from "./ui-helpers.js";
+import {
+    BATCH_PANEL_EXPANDED_KEY, LAST_DRAFT_KEY, PRINT_PREFS_KEY, els, rt, serialAdapter, state, usbAdapter,
+} from "./context.js";
 
-const LAST_DRAFT_KEY = "printan:lastDraftId";
-
-const state = {
-    project: null,
-    selectedId: null,
-    multi: [], // 多選時的全部 id（同一層內，含 selectedId）；單選時是空陣列
-    insertionTarget: null, // null = 根目錄；{ rowId, colIndex } = 某個 row 的某一欄
-    previewData: {},
-    mode: "screen", // "screen" | "thermal"
-    viewMode: "edit", // "edit"（畫布顯示可拖曳的虛線外框）| "preview"（隱藏編輯用外框，接近實際列印畫面）
-    previewGeneration: 0,
-    batchPreview: { active: false, records: [], index: 0 }, // 逐筆預覽批次資料時取代 previewData
-    usbConnected: false, // WebUSB 印表機是否已連接；true 時「列印」按鈕直接送 ESC/POS，不走系統對話框
-    serialConnected: false, // WebSerial 印表機是否已連接；設定 modal 的連線區塊同一時間只允許連一種方式，見 updatePrinterConnectionUi
-    // 列印／測試列印／查詢狀態三個操作共用同一個 usbAdapter／serialAdapter（同一個 USB 裝置或
-    // 序列埠），沒有各自獨立的通道；同時觸發兩個會讓 transferOut／write 的位元組流疊在一起，
-    // 印表機收到的可能是兩份 ESC/POS 指令交錯後的亂碼，或狀態查詢讀到不相干的回應。
-    // 用一個共用旗標序列化這三個操作，見 printCurrent／testPrintCurrentPrinter／queryPrinterStatus。
-    printerBusy: false,
-    // 連線後讀到的印表機識別資料（WebUSB 裝置名稱 + GS I 回傳的廠牌／型號／韌體）與比對到的 profile，
-    // 未連接時為 null；見 identifyConnectedPrinter()。
-    printerIdentity: null,
-    printPrefs: { feedLines: 4, cutPaper: true, serialBaudRate: 9600, connectMethod: "usb", printableDots: {}, margins: {} }, // 走紙／切紙／序列傳輸速率／上次選的連接方式／各紙寬「可列印點數」覆寫（{ 紙寬id: 點數 }，空物件＝全用內建規格值）／各紙寬左右邊距校正（{ 紙寬id: { leftMm, rightMm } }，空物件＝不校正）偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）。
-    // feedLines 預設 4（2026-09 實機驗證：0 會切到內容尾端、4 不會）：印表機規格檔的
-    // autocutter.bladeOffsetMm（切刀跟列印頭之間固定的實體距離）不是自動切紙機構自己會走的，
-    // 是「切紙前」需要應用程式自己走紙走過這段距離，走不夠切刀就會切在剛印完、還沒通過
-    // 切刀位置的內容上，見 updateFeedLinesHint()。
-};
-
-const usbAdapter = new WebUsbEscposAdapter(); // 整個編輯器共用同一個連線實例
-const serialAdapter = new WebSerialEscposAdapter(); // 跟 usbAdapter 一樣整個編輯器共用同一個連線實例
-
-const BATCH_PANEL_EXPANDED_KEY = "printan-batch-panel-expanded";
-const PRINT_PREFS_KEY = "printan:printPrefs";
-
-const els = {}; // 快取常用 DOM 節點
-let lastRenderResult = null; // 最近一次渲染結果（含排版 items 樹），供編輯疊層與模式切換重繪使用
 
 async function init() {
     cacheDom();
@@ -390,7 +353,6 @@ function bindToolbar() {
 // image-file-input 是整個編輯器共用的單一 hidden input（工具列「新增圖片」與各圖片元素
 // inspector 的「更換圖片」都借用同一個），用這個變數帶「這一次選檔要怎麼處理」，避免像過去
 // 那樣在同一個 input 上疊加第二個 change 監聽器（會兩邊都觸發，多插入一個重複元素）。
-let imageFileInputHandler = null; // null＝新增一個圖片元素；有值＝把選到的 assetId 交給這個 callback（例如更換既有元素的圖片）
 
 async function handleImageFileSelected(file) {
     let converted;
@@ -410,8 +372,8 @@ function bindFileInputs() {
     els["image-file-input"].addEventListener("change", async (e) => {
         const file = e.target.files[0];
         e.target.value = "";
-        const handler = imageFileInputHandler;
-        imageFileInputHandler = null;
+        const handler = rt.imageFileInputHandler;
+        rt.imageFileInputHandler = null;
         if (!file) return;
         const assetId = await handleImageFileSelected(file);
         if (!assetId) return;
@@ -537,29 +499,28 @@ function addElement(kind, { ratio, target } = {}) {
         case "barcode": return insertElement(createBarcodeElement());
         case "row": return insertElement(createRowElement(ratio));
         case "image":
-            imageFileInputHandler = null;
+            rt.imageFileInputHandler = null;
             els["image-file-input"].click();
     }
 }
 
 // 新增後要把畫布捲到新元素、文字元素直接進入行內編輯；預覽是延後才畫好的，
 // 所以先記下來，等 renderEditOverlay() 畫完疊層再處理。
-let pendingReveal = null;
 
 function insertElement(element) {
     const target = resolveTargetArray(state.project.template.elements, state.insertionTarget);
     target.push(element);
     state.selectedId = element.id;
     state.multi = [];
-    pendingReveal = { id: element.id, edit: element.type === "text" };
+    rt.pendingReveal = { id: element.id, edit: element.type === "text" };
     onModelChange();
     els["outline-list"].querySelector(".outline-row.is-selected")?.scrollIntoView({ block: "nearest" });
 }
 
 function revealPendingElement() {
-    if (!pendingReveal) return;
-    const { id, edit } = pendingReveal;
-    pendingReveal = null;
+    if (!rt.pendingReveal) return;
+    const { id, edit } = rt.pendingReveal;
+    rt.pendingReveal = null;
     const block = els["edit-overlay"].querySelector(`.edit-block[data-id="${id}"]`);
     if (!block) return;
     block.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -1622,7 +1583,7 @@ function buildImageInspector(panel, el) {
     const isVariable = typeof el.assetId === "string" && /\{\{.*\}\}/.test(el.assetId);
 
     const pickBtn = mkButton(el.assetId && !isVariable ? "更換圖片" : "選擇圖片", "upload", () => {
-        imageFileInputHandler = (assetId) => {
+        rt.imageFileInputHandler = (assetId) => {
             el.assetId = assetId;
             el.cropRect = null; // 換圖後舊的裁切窗格對新圖不再有意義
             onModelChange();
@@ -1877,7 +1838,7 @@ async function updatePreview() {
         return;
     }
     if (generation !== state.previewGeneration) return; // 過期的渲染結果，丟棄
-    lastRenderResult = result;
+    rt.lastRenderResult = result;
     updateFontFallbackNotice(result.fontFallbacks);
     els["canvas-host"].innerHTML = "";
     els["canvas-host"].appendChild(result.canvas);
@@ -1915,7 +1876,7 @@ const inlineEditor = createInlineTextEditor({
     getHost: () => els["paper-shadow"],
     getElement: (id) => findElementById(state.project.template.elements, id),
     getBlockNode: (id) => els["edit-overlay"]?.querySelector(`.edit-block[data-id="${id}"]`),
-    getScale: () => (lastRenderResult ? lastRenderResult.canvas.clientWidth / lastRenderResult.widthDots : 1) || 1,
+    getScale: () => (rt.lastRenderResult ? rt.lastRenderResult.canvas.clientWidth / rt.lastRenderResult.widthDots : 1) || 1,
     onInput: () => onModelChange(),
     onSelection: (id, start, end) => {
         if (id !== state.selectedId) return;
@@ -1933,12 +1894,12 @@ function renderEditOverlay() {
     const overlay = els["edit-overlay"];
     if (!overlay) return;
     overlay.innerHTML = "";
-    if (state.viewMode !== "edit" || !lastRenderResult) {
+    if (state.viewMode !== "edit" || !rt.lastRenderResult) {
         inlineEditor.close();
         return;
     }
 
-    const { items, widthDots, canvas } = lastRenderResult;
+    const { items, widthDots, canvas } = rt.lastRenderResult;
     const scale = canvas.clientWidth / widthDots || 1;
     const handleBuilders = [];
 
