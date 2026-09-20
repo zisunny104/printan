@@ -82,6 +82,26 @@ export function setRowRatio(rowEl, newRatio) {
     rowEl.columns = newColumns;
 }
 
+export const MAX_ROW_COLUMNS = 6;
+
+/** 把第 colIndex 欄對半切成兩欄（新欄在右、空的）；達欄數上限回傳 false。 */
+export function splitRowColumn(rowEl, colIndex) {
+    if (rowEl.columns.length >= MAX_ROW_COLUMNS || !rowEl.columns[colIndex]) return false;
+    const half = rowEl.ratio[colIndex] / 2;
+    rowEl.ratio.splice(colIndex, 1, half, half);
+    rowEl.columns.splice(colIndex + 1, 0, []);
+    return true;
+}
+
+/** 拿掉第 boundary 欄與下一欄之間的分割：右欄內容併入左欄，比例相加；只剩一欄時回傳 false。 */
+export function mergeRowColumns(rowEl, boundary) {
+    if (rowEl.columns.length < 2 || !rowEl.columns[boundary + 1]) return false;
+    rowEl.columns[boundary].push(...rowEl.columns[boundary + 1]);
+    rowEl.columns.splice(boundary + 1, 1);
+    rowEl.ratio.splice(boundary, 2, rowEl.ratio[boundary] + rowEl.ratio[boundary + 1]);
+    return true;
+}
+
 /** 刪除元素，回傳實際刪掉的 id。 */
 export function removeElements(root, ids) {
     const removed = [];

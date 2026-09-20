@@ -3,7 +3,7 @@
 import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
 import { MIXED, applyStyleToRange, getRangeStyle, getTextContent, replaceFullText } from "../core/document-model.js";
 import { WEB_FONTS, findWebFont, isWebFontFailed } from "../core/web-fonts.js";
-import { applyFieldToElements, findElementById, setRowRatio } from "../core/element-tree.js";
+import { applyFieldToElements, findElementById, setRowRatio, splitRowColumn, MAX_ROW_COLUMNS } from "../core/element-tree.js";
 import { createInfoIcon } from "./ui-helpers.js";
 import {
     getLocalFontFamilies, isFontInstalled, isLocalFontAccessSupported, loadLocalFonts, localFontStack,
@@ -535,18 +535,21 @@ function buildGroupInspector(panel, el) {
 
 function buildRowInspector(panel, el) {
     panel.appendChild(sectionHeader("table-columns", "多欄"));
-    const label = document.createElement("label");
-    label.className = "ts-text is-label has-top-spaced-small";
-    label.textContent = "欄位比例";
-    panel.appendChild(label);
-
-    const presets = [[1, 1], [2, 1], [1, 2], [1, 1, 1]];
+    const ratioText = el.ratio.map((v) => Math.round(v * 100) / 100).join(" : ");
+    // 用 change 而非 input：套用會重繪檢視器，邊打邊套用會失去焦點
+    const ratioInput = textInput(ratioText, () => {}, "text", "1 : 1");
+    ratioInput.querySelector("input").addEventListener("change", (e) => {
+        const ratio = e.target.value.split(/[:：,，\s]+/).filter(Boolean).map(Number);
+        if (!ratio.length || ratio.length > MAX_ROW_COLUMNS || ratio.some((n) => !(n > 0))) return renderInspector();
+        setRowRatio(el, ratio);
+        onModelChange();
+    });
+    panel.appendChild(field("欄位比例", ratioInput));
     const wrap = document.createElement("div");
     wrap.className = "ts-wrap is-compact has-top-spaced-small";
-    for (const ratio of presets) {
-        const active = el.ratio.length === ratio.length && el.ratio.every((v, i) => v === ratio[i]);
-        wrap.appendChild(mkButton(ratio.join(" : "), null, () => { setRowRatio(el, ratio); onModelChange(); }, { outlined: !active }));
-    }
+    wrap.appendChild(mkButton("分割欄位", "table-columns", () => {
+        if (splitRowColumn(el, el.columns.length - 1)) onModelChange();
+    }, { outlined: true }));
     panel.appendChild(wrap);
 }
 

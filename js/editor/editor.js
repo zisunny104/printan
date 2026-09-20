@@ -14,7 +14,7 @@ import {
 import {
     childArrays, resolveTargetArray, findElementById, findContainerOf, isSameTarget, flattenElements,
     removeElements, groupElementsIn, ungroupElementsIn, duplicateElementsIn, moveElementBy, moveElementsBy,
-    moveElementToIndex, moveElementToContainerIn, containerToTarget as containerToTargetIn, selectionToIds,
+    moveElementToIndex, moveElementToContainerIn, splitRowColumn, mergeRowColumns, MAX_ROW_COLUMNS, containerToTarget as containerToTargetIn, selectionToIds,
     idsToSelection, pruneSelectionIn, snapshotElements, restoreElements,
 } from "../core/element-tree.js";
 import { renderTemplate, renderBatch } from "../core/renderer.js";
@@ -1160,6 +1160,11 @@ function renderEditOverlay() {
                 const boundaryXDots = box.x + cumulative;
                 handleBuilders.push(() => buildColumnResizeHandle(box.el, i, boundaryXDots, box.y, box.height, box.width, scale));
             });
+            if (item.columns.length < MAX_ROW_COLUMNS) {
+                item.columns.forEach((col, i) => {
+                    handleBuilders.push(() => buildColumnSplitButton(box.el.id, i, box.x + col.x + col.width / 2, box.y, scale));
+                });
+            }
         }
     });
 
@@ -1391,7 +1396,9 @@ function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHe
         const startX = e.clientX;
         const startWidths = splitDotsByRatio(rowWidthDots, realRow.ratio);
         const minWidth = 10;
+        let moved = false;
         function onMove(ev) {
+            moved = true;
             let deltaDots = (ev.clientX - startX) / scale;
             deltaDots = Math.max(deltaDots, minWidth - startWidths[colIndex]);
             deltaDots = Math.min(deltaDots, startWidths[colIndex + 1] - minWidth);
@@ -1405,12 +1412,30 @@ function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHe
             document.removeEventListener("pointermove", onMove);
             document.removeEventListener("pointerup", onUp);
             handle.classList.remove("is-dragging");
-            onModelChange();
+            if (moved) onModelChange(); // 沒動就不重繪，否則雙擊的第二下會落在被換掉的把手上
         }
         document.addEventListener("pointermove", onMove);
         document.addEventListener("pointerup", onUp);
     });
+    // 雙擊分隔線：拿掉這條分割，右欄內容併入左欄
+    handle.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        const realRow = findElementById(state.project.template.elements, rowEl.id);
+        if (realRow && mergeRowColumns(realRow, colIndex)) onModelChange();
+    });
     return handle;
+}
+
+/** 欄位上方的「＋」：把這一欄對半分成兩欄。 */
+function buildColumnSplitButton(rowId, colIndex, centerXDots, rowYDots, scale) {
+    const btn = iconButton("plus", "分割欄位", () => {
+        const realRow = findElementById(state.project.template.elements, rowId);
+        if (realRow && splitRowColumn(realRow, colIndex)) onModelChange();
+    });
+    btn.classList.add("edit-col-split");
+    btn.style.cssText = `position:absolute;pointer-events:auto;transform:translateX(-50%);left:${centerXDots * scale}px;top:${rowYDots * scale}px`;
+    btn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    return btn;
 }
 
 // ---- 匯出 / 列印 ----
