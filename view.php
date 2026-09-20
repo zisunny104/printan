@@ -529,6 +529,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
             <div class="ts-tab is-dense is-segmented help-tabs" role="tablist">
                 <a class="item" role="tab" data-help-tab="basic">基本操作</a>
                 <a class="item" role="tab" data-help-tab="layout">版面元素</a>
+                <a class="item" role="tab" data-help-tab="text">文字樣式</a>
                 <a class="item" role="tab" data-help-tab="variables">文字與變數</a>
                 <a class="item" role="tab" data-help-tab="fonts">字體</a>
                 <a class="item" role="tab" data-help-tab="barcode">條碼</a>
@@ -540,7 +541,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                     <ul class="help-list">
                         <li>用工作區下方的工具列，或左側「版面結構」的「＋」新增元素；點選元素後到右側「元素設定」調整。</li>
                         <li>在工作區拖曳元素外框可調整順序；拖曳間隔、圖片、條碼的下緣調整高度，拖曳欄與欄之間的把手調整欄寬。</li>
-                        <li>已選取的文字再點一次，可直接在紙上編輯。</li>
+                        <li>已選取的文字再點一次，可直接在紙上編輯；點紙外空白處取消選取。</li>
                         <li>工作區標題列可縮放與開關尺規；「1:1」是實際大小。虛線標出可列印範圍與切刀安全線。</li>
                         <li>版型自動存在這台電腦的瀏覽器；「匯出」可存成 .ptan 檔或 PDF。</li>
                     </ul>
@@ -550,7 +551,14 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         <li>「版面結構」列出所有元素。「最上層」與「第 N 欄」是容器，點選後新元素會加到那裡。</li>
                         <li>元素有文字、圖片、間隔（空白高度）、分隔線、條碼、多欄。</li>
                         <li>多欄可選 1/1、2/1、1/2、1/1/1 的欄寬比例，欄內可再放任何元素。</li>
-                        <li>同層元素可用列上的上移／下移，或在工作區拖曳排序。</li>
+                        <li>同層元素可用列上的上移／下移，或在工作區拖曳排序；在「版面結構」拖曳列可換層，放到「最上層」「第 N 欄」列上就移進該容器。</li>
+                    </ul>
+                </div>
+                <div data-help-panel="text" hidden>
+                    <ul class="help-list">
+                        <li>在紙上或「元素設定」的文字框選取一段字，再套用粗體、斜體、底線、刪除線、反白（黑底白字）。</li>
+                        <li>選取範圍可各自設定字體與字級（dot）；沒選取時設定的是整個文字元素的預設值。</li>
+                        <li>對齊（靠左／置中／靠右）是整個文字元素的設定。</li>
                     </ul>
                 </div>
                 <div data-help-panel="variables" hidden>
@@ -577,14 +585,20 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <div data-help-panel="print" hidden>
                     <ul class="help-list">
                         <li>「列印設定」可連接印表機（USB 或序列埠，需 Chrome／Edge），並設定走紙、切紙、可列印點數、邊距校正。</li>
-                        <li>未連接印表機時，「列印」會走瀏覽器的系統列印對話框。</li>
+                        <li>直連印表機才有邊距校正；未連接時「列印」走系統列印對話框。</li>
+                        <li>系統列印與 PDF 只能縮窄可列印寬度，沒有左側補白，邊距校正對它們無效。</li>
+                        <li>邊距校正：按「校正紙」印出量尺，量出左右實際留白（mm）填入該紙寬的兩格；兩格都填才生效，清空即不校正。</li>
+                        <li>測試列印可確認走紙與切紙位置；切紙前走紙不夠，切刀會切到剛印完的內容。</li>
                         <li>熱感圖示切換為 1-bit 抖動預覽，接近實際列印效果。</li>
-                        <li>切紙前走紙不夠，切刀會切到剛印完的內容；測試列印可確認邊距與切紙位置。</li>
                     </ul>
                 </div>
                 <div data-help-panel="shortcuts" hidden>
                     <ul class="help-list">
-                        <li><kbd>Esc</kbd>：關閉選單，或結束紙上的文字編輯。</li>
+                        <li><kbd>Delete</kbd>：刪除選取的元素。</li>
+                        <li><kbd>Ctrl</kbd>+<kbd>Z</kbd>：復原；<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> 或 <kbd>Ctrl</kbd>+<kbd>Y</kbd>：重做。</li>
+                        <li><kbd>Ctrl</kbd>+<kbd>D</kbd>：複製一份到下方；<kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd>：複製、貼上。</li>
+                        <li><kbd>↑</kbd> <kbd>↓</kbd>：選取上一個／下一個元素；加 <kbd>Alt</kbd> 或 <kbd>Ctrl</kbd> 則移動它的順序。</li>
+                        <li><kbd>Esc</kbd>：取消選取、關閉選單或結束紙上的文字編輯。</li>
                         <li>欄寬拉桿：方向鍵微調，雙擊重設。</li>
                     </ul>
                 </div>
