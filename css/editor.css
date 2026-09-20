@@ -497,12 +497,28 @@ body {
 }
 
 .outline-row .outline-actions {
-    display: none;
+    display: flex;
     gap: .1rem;
+    visibility: hidden;
 }
 
-.outline-row:hover .outline-actions {
-    display: flex;
+.outline-row:hover .outline-actions,
+.outline-row:focus-within .outline-actions {
+    visibility: visible;
+}
+
+/* 列高固定：操作按鈕（含容器列的「＋」）一律縮成小方塊，顯示／隱藏只切 visibility，列高不會跳動 */
+.outline-row {
+    box-sizing: border-box;
+    height: 2.25rem;
+}
+
+.outline-row .ts-button.is-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    min-height: 0;
+    padding: 0;
+    flex: none;
 }
 
 /* 大綱拖曳排序：整列可拖曳；拖曳中降低透明度；插入位置用上/下邊框標示 */
