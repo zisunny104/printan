@@ -6,6 +6,7 @@ import { createEmptyProject, loadProject } from "../core/schema.js";
 import {
     getPrinterProfile, getPaperWidth, getDefaultPrinterProfileId, getPrintHeadWidthDots,
     withPrintableDotsOverrides, sanitizePrintableDotsOverrides, matchPrinterProfile,
+    withMarginCalibration, sanitizeMarginCalibration, getMarginPad, MARGIN_MM_MAX,
     PRINTABLE_DOTS_MIN, PRINTABLE_DOTS_MAX,
 } from "../core/printer-profiles.js";
 import {
@@ -53,7 +54,7 @@ const state = {
     // 連線後讀到的印表機識別資料（WebUSB 裝置名稱 + GS I 回傳的廠牌／型號／韌體）與比對到的 profile，
     // 未連接時為 null；見 identifyConnectedPrinter()。
     printerIdentity: null,
-    printPrefs: { feedLines: 4, cutPaper: true, serialBaudRate: 9600, connectMethod: "usb", printableDots: {} }, // 走紙／切紙／序列傳輸速率／上次選的連接方式／各紙寬「可列印點數」覆寫（{ 紙寬id: 點數 }，空物件＝全用內建規格值）偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）。
+    printPrefs: { feedLines: 4, cutPaper: true, serialBaudRate: 9600, connectMethod: "usb", printableDots: {}, margins: {} }, // 走紙／切紙／序列傳輸速率／上次選的連接方式／各紙寬「可列印點數」覆寫（{ 紙寬id: 點數 }，空物件＝全用內建規格值）／各紙寬左右邊距校正（{ 紙寬id: { leftMm, rightMm } }，空物件＝不校正）偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）。
     // feedLines 預設 4（2026-09 實機驗證：0 會切到內容尾端、4 不會）：印表機規格檔的
     // autocutter.bladeOffsetMm（切刀跟列印頭之間固定的實體距離）不是自動切紙機構自己會走的，
     // 是「切紙前」需要應用程式自己走紙走過這段距離，走不夠切刀就會切在剛印完、還沒通過
@@ -106,7 +107,7 @@ function cacheDom() {
         "btn-printer-connect", "btn-printer-disconnect", "pref-serial-baud-rate",
         "pref-feed-lines", "pref-feed-lines-hint", "pref-cut-paper", "btn-printer-settings-close",
         "btn-printer-test-print", "btn-printer-query-status", "printer-status-result",
-        "btn-printer-forget", "printer-dots-list", "btn-printer-dots-reset",
+        "btn-printer-forget", "printer-dots-list", "btn-printer-dots-reset", "printer-margin-list", "btn-printer-margin-reset",
         "printer-info-device", "printer-info-firmware", "printer-info-spec", "printer-info-dpi",
         "printer-info-paper", "printer-info-printable", "printer-info-blade",
     ].forEach((id) => (els[id] = document.getElementById(id)));
@@ -138,8 +139,13 @@ async function restoreOrCreateProject() {
 // 目前實際採用的印表機規格：註冊表裡專案指定的 profile，再套上使用者手動覆寫的「可列印點數」。
 // 渲染（renderTemplate 的 options.profile）、預覽紙張框、列印頭寬度、測試列印都要吃這一份，
 // 不然畫面預覽跟實際送出的 raster 寬度會不一致。
-function getEffectiveProfile() {
+function getBaseProfile() {
     return withPrintableDotsOverrides(getPrinterProfile(state.project.printerProfile.id), state.printPrefs.printableDots);
+}
+
+// 再套上左右邊距校正（可列印寬度扣掉補白）；列印頭寬度、印表機資訊要用校正前的 getBaseProfile()
+function getEffectiveProfile() {
+    return withMarginCalibration(getBaseProfile(), state.printPrefs.margins);
 }
 
 // 「切紙前走紙行數」走不夠，切刀會切在剛印完、還沒通過切刀位置的內容上：
@@ -428,6 +434,7 @@ function loadProjectIntoEditor(project) {
     endBatchPreview();
     updateFeedLinesHint();
     renderPrintableDotsRows();
+    renderMarginRows();
     populatePaperWidthTabs();
     populateRecentDrafts();
     onModelChange();
@@ -1890,9 +1897,10 @@ function bindBatchPanel() {
 
 // ESC/POS 直連列印（WebUSB／WebSerial）用的列印選項：在使用者的走紙／切紙偏好之外，
 // 額外帶入目前印表機 profile 的列印頭最大寬度，讓 buildEscposJob 統一置中輸出
-// （見 printer-adapter.js centerCanvasOnWidth），避免紙寬較窄時印出來的內容偏移。
+// （見 printer-adapter.js centerCanvasOnWidth），避免紙寬較窄時印出來的內容偏移；左右邊距校正的補白點數一併帶入。
 function getEscposPrintOptions() {
-    return { ...state.printPrefs, targetWidthDots: getPrintHeadWidthDots(getEffectiveProfile()) };
+    const pad = getMarginPad(getEffectiveProfile(), state.project.paper.widthId);
+    return { ...state.printPrefs, targetWidthDots: getPrintHeadWidthDots(getBaseProfile()), padLeftDots: pad.left, padRightDots: pad.right };
 }
 
 async function printCurrent() {
@@ -1942,6 +1950,7 @@ function loadPrintPrefs() {
         const saved = JSON.parse(localStorage.getItem(PRINT_PREFS_KEY) || "{}");
         state.printPrefs = { ...state.printPrefs, ...saved };
         state.printPrefs.printableDots = sanitizePrintableDotsOverrides(state.printPrefs.printableDots);
+        state.printPrefs.margins = sanitizeMarginCalibration(state.printPrefs.margins);
     } catch {
         // 格式壞掉就用預設值，不擋流程
     }
@@ -2054,7 +2063,7 @@ function setInfoCell(id, text, kind = null) {
 // 只有型號比對得到內建規格才標成「機器提供」，比對不到就明講「未識別，使用預設值」。
 function updatePrinterInfo() {
     const base = getPrinterProfile(state.project.printerProfile.id);
-    const profile = getEffectiveProfile();
+    const profile = getBaseProfile();
     const paper = getPaperWidth(profile, state.project.paper.widthId);
     const basePaper = getPaperWidth(base, state.project.paper.widthId);
     const identity = state.printerIdentity;
@@ -2151,6 +2160,62 @@ function renderPrintableDotsRows() {
         els["printer-dots-list"].appendChild(row);
     }
     syncResetButton();
+}
+
+// 每個紙寬一列「邊距校正」：填測試列印量到的左右留白（mm），兩格都填才生效、兩格清空＝不校正；
+// 存在本機偏好，不進 .ptan。
+function renderMarginRows() {
+    const base = getPrinterProfile(state.project.printerProfile.id);
+    const margins = state.printPrefs.margins;
+    els["printer-margin-list"].replaceChildren();
+    for (const paper of base.paperWidths) {
+        const row = document.createElement("div");
+        row.className = "printer-dots-row";
+
+        const label = document.createElement("span");
+        label.className = "ts-text is-label printer-dots-label";
+        label.textContent = paper.label;
+        row.appendChild(label);
+
+        const inputs = [["leftMm", "左"], ["rightMm", "右"]].map(([key, name]) => {
+            const wrap = document.createElement("div");
+            wrap.className = "ts-input is-small printer-dots-input";
+            const input = document.createElement("input");
+            input.type = "number";
+            input.min = 0;
+            input.max = MARGIN_MM_MAX;
+            input.step = 0.1;
+            input.placeholder = name;
+            input.value = margins[paper.id]?.[key] ?? "";
+            input.setAttribute("aria-label", `${paper.label} ${name}邊留白（mm）`);
+            wrap.appendChild(input);
+            row.appendChild(wrap);
+            return { key, input };
+        });
+
+        const unit = document.createElement("span");
+        unit.className = "ts-text is-description is-small";
+        unit.textContent = "mm";
+        row.appendChild(unit);
+
+        const commit = () => {
+            const [left, right] = inputs.map(({ input }) => input.value.trim());
+            if (left === "" && right === "") {
+                delete margins[paper.id];
+            } else {
+                const next = sanitizeMarginCalibration({ [paper.id]: { leftMm: left, rightMm: right } })[paper.id];
+                if (!next) return; // 只填一邊：等另一邊也填了才生效
+                margins[paper.id] = next;
+                inputs.forEach(({ key, input }) => { input.value = next[key]; });
+            }
+            savePrintPrefs();
+            els["btn-printer-margin-reset"].disabled = Object.keys(margins).length === 0;
+            schedulePreview();
+        };
+        inputs.forEach(({ input }) => input.addEventListener("change", commit));
+        els["printer-margin-list"].appendChild(row);
+    }
+    els["btn-printer-margin-reset"].disabled = Object.keys(margins).length === 0;
 }
 
 // 連線後讀印表機自報的識別資料，再拿去比對內建規格表：
@@ -2317,6 +2382,7 @@ function bindPrinterSettings() {
     els["pref-cut-paper"].checked = state.printPrefs.cutPaper;
     els["pref-serial-baud-rate"].value = state.printPrefs.serialBaudRate;
     renderPrintableDotsRows();
+    renderMarginRows();
     updatePrinterConnectionUi();
 
     els["btn-printer-settings"].addEventListener("click", () => {
@@ -2387,6 +2453,13 @@ function bindPrinterSettings() {
         savePrintPrefs();
         renderPrintableDotsRows();
         updatePrinterInfo();
+        schedulePreview();
+    });
+
+    els["btn-printer-margin-reset"].addEventListener("click", () => {
+        state.printPrefs.margins = {};
+        savePrintPrefs();
+        renderMarginRows();
         schedulePreview();
     });
 

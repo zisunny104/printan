@@ -103,8 +103,10 @@ function canvasToEscposRaster(canvas) {
  * 印表機韌體預設的起印水平位置不一定跟紙張實際擺放位置對齊，可能造成印出來的內容
  * 偏移；統一都送「列印頭最大寬度」的 raster、把實際內容置中，不管韌體從哪裡起印，
  * 內容相對紙張的位置都一致。來源本來就等於或超過目標寬度時直接回傳原 canvas。
+ * padLeftDots／padRightDots 是左右邊距校正的補白（見 printer-profiles.js withMarginCalibration）：
+ * canvas 已經扣掉補白，位置＝原本的置中位置再往右 padLeftDots；沒校正時兩者為 0，跟單純置中一樣。
  */
-function centerCanvasOnWidth(canvas, targetWidthDots) {
+function centerCanvasOnWidth(canvas, targetWidthDots, padLeftDots = 0, padRightDots = 0) {
     if (!targetWidthDots || canvas.width >= targetWidthDots) return canvas;
     const padded = document.createElement("canvas");
     padded.width = targetWidthDots;
@@ -112,19 +114,20 @@ function centerCanvasOnWidth(canvas, targetWidthDots) {
     const ctx = padded.getContext("2d");
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, padded.width, padded.height);
-    ctx.drawImage(canvas, Math.floor((targetWidthDots - canvas.width) / 2), 0);
+    const slack = targetWidthDots - (canvas.width + padLeftDots + padRightDots);
+    ctx.drawImage(canvas, Math.max(0, Math.floor(slack / 2)) + padLeftDots, 0);
     return padded;
 }
 
 /**
  * 組出完整一次列印工作的 ESC/POS 指令位元組：初始化 → raster 點陣圖 → 走紙 → 切紙。
  * @param {{canvas: HTMLCanvasElement}} renderResult
- * @param {{feedLines?: number, cutPaper?: boolean, targetWidthDots?: number|null}} options
+ * @param {{feedLines?: number, cutPaper?: boolean, targetWidthDots?: number|null, padLeftDots?: number, padRightDots?: number}} options
  *   targetWidthDots：印表機列印頭最大寬度（見 printer-profiles.js getPrintHeadWidthDots），
  *   有值時會把 canvas 置中貼到這個寬度再組 raster，見 centerCanvasOnWidth。
  */
-function buildEscposJob(renderResult, { feedLines = 0, cutPaper = false, targetWidthDots = null } = {}) {
-    const canvas = centerCanvasOnWidth(renderResult.canvas, targetWidthDots);
+function buildEscposJob(renderResult, { feedLines = 0, cutPaper = false, targetWidthDots = null, padLeftDots = 0, padRightDots = 0 } = {}) {
+    const canvas = centerCanvasOnWidth(renderResult.canvas, targetWidthDots, padLeftDots, padRightDots);
     const { bytesPerLine, height, raster } = canvasToEscposRaster(canvas);
     if (bytesPerLine > 0xffff || height > 0xffff) {
         throw new Error("圖片尺寸超過 ESC/POS raster 指令支援的範圍");

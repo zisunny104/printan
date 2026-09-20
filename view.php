@@ -193,6 +193,15 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                         <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-dots-reset">
                             <span class="ts-icon is-rotate-left-icon" aria-hidden="true"></span> 還原預設點數
                         </button>
+                        <div class="has-top-spaced"></div>
+                        <div class="ts-text is-label">邊距校正</div>
+                        <div class="has-top-spaced-small"></div>
+                        <!-- 每個紙寬一列（左／右留白 mm），由 renderMarginRows() 產生，見 editor.js -->
+                        <div id="printer-margin-list"></div>
+                        <div class="has-top-spaced-small"></div>
+                        <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-margin-reset">
+                            <span class="ts-icon is-rotate-left-icon" aria-hidden="true"></span> 重設
+                        </button>
                     </div>
                     <div class="ts-divider"></div>
                     <!-- 印表機資訊（唯讀）：連線後盡量用機器讀到的（WebUSB 裝置名稱、GS I 回傳的廠牌／型號／韌體）；

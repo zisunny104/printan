@@ -148,6 +148,60 @@ export function withPrintableDotsOverrides(profile, overrides) {
     };
 }
 
+// 左右邊距校正：熱感頭實際起印位置常有幾毫米的機差，量出「印在紙上的左右留白」後，
+// 把留白較小的一側補白到跟較大的一側一樣寬，內容才會真正置中；補白的點數要從排版寬度扣掉。
+export const MARGIN_MM_MAX = 20;
+
+/** 整理成 { 紙寬id: { leftMm, rightMm } }：左右都要是 0–20 mm 的數字（取到 0.1 mm），其他丟掉。 */
+export function sanitizeMarginCalibration(raw) {
+    const out = {};
+    if (!raw || typeof raw !== "object") return out;
+    const pick = (v) => {
+        const n = Math.round(Number(v) * 10) / 10;
+        return Number.isFinite(n) && n > 0 ? Math.min(n, MARGIN_MM_MAX) : null;
+    };
+    for (const [paperId, value] of Object.entries(raw)) {
+        const leftMm = pick(value?.leftMm);
+        const rightMm = pick(value?.rightMm);
+        if (leftMm !== null && rightMm !== null) out[paperId] = { leftMm, rightMm };
+    }
+    return out;
+}
+
+/** 量到的左右留白（mm）→ 要補的左右點數；只有留白較小的那側需要補。 */
+export function marginPadDots(margin, dpiX) {
+    const diff = Math.round((Math.abs(margin.rightMm - margin.leftMm) / 25.4) * dpiX);
+    return { left: margin.rightMm > margin.leftMm ? diff : 0, right: margin.leftMm > margin.rightMm ? diff : 0 };
+}
+
+/**
+ * 回傳套用「左右邊距校正」後的 profile 副本：該紙寬的可列印點數（與 mm）扣掉補白，
+ * 並記下 marginPadDots，送出 raster 時 printer-adapter.js 會用它把內容擺到正確的水平位置。
+ * 要算列印頭最大寬度時請用「校正前」的 profile，不然補白會被誤算成列印頭變窄。
+ */
+export function withMarginCalibration(profile, margins) {
+    const clean = sanitizeMarginCalibration(margins);
+    if (Object.keys(clean).length === 0) return profile;
+    return {
+        ...profile,
+        paperWidths: profile.paperWidths.map((paper) => {
+            const margin = clean[paper.id];
+            if (!margin) return paper;
+            const pad = marginPadDots(margin, profile.dpi.x);
+            const room = Math.max(paper.printableWidthDots - PRINTABLE_DOTS_MIN, 0);
+            const left = Math.min(pad.left, room);
+            const right = Math.min(pad.right, room);
+            const dots = paper.printableWidthDots - left - right;
+            return { ...paper, printableWidthDots: dots, printableWidthMm: (dots / profile.dpi.x) * 25.4, marginPadDots: { left, right } };
+        }),
+    };
+}
+
+/** 目前紙寬要補的左右點數（沒校正就是 0）。 */
+export function getMarginPad(profile, widthId) {
+    return profile.paperWidths.find((p) => p.id === widthId)?.marginPadDots || { left: 0, right: 0 };
+}
+
 /**
  * 印表機列印頭的最大點陣寬度，用該 profile 所有紙寬選項裡最寬的 printableWidthDots 推得
  * （同一顆列印頭通常固定寬度，紙寬只是切換用哪一段列印頭在打點）。
