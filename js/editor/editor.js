@@ -33,7 +33,7 @@ import { wireResizableColumns } from "./resizable-columns.js";
 import { renderTestPrint, renderCalibrationSheet } from "./test-print-project.js";
 import { createInlineTextEditor } from "./inline-text-editor.js";
 import { createWorkspaceView } from "./workspace-view.js";
-import { wireHelpDialog } from "./ui-helpers.js";
+import { wireHelpDialog, createInfoIcon } from "./ui-helpers.js";
 
 const LAST_DRAFT_KEY = "printan:lastDraftId";
 
@@ -1156,10 +1156,11 @@ function emptyState(icon, title, description) {
     return wrap;
 }
 
-function sectionHeader(icon, text) {
+function sectionHeader(icon, text, info) {
     const wrap = document.createElement("div");
     wrap.className = "has-top-spaced ts-header is-start-icon is-small";
     wrap.innerHTML = `<span class="ts-icon is-${icon}-icon" aria-hidden="true"></span> ${text}`;
+    if (info) wrap.appendChild(createInfoIcon(info));
     return wrap;
 }
 
@@ -1190,13 +1191,14 @@ function iconToggleButton(icon, label, active, onClick) {
     return b;
 }
 
-function field(labelText, inputEl) {
+function field(labelText, inputEl, info) {
     const wrap = document.createElement("div");
     wrap.className = "has-top-spaced-small";
     if (labelText) {
         const label = document.createElement("label");
         label.className = "ts-text is-label";
         label.textContent = labelText;
+        if (info) label.appendChild(createInfoIcon(info));
         wrap.appendChild(label);
         const inner = document.createElement("div");
         inner.className = "has-top-spaced-small";
@@ -1359,13 +1361,12 @@ function localFontEntry() {
     const note = document.createElement("div");
     note.className = "ts-text is-small is-description has-top-spaced-small";
     const count = getLocalFontFamilies().length;
-    const explain = "字體檔不會存進 .ptan，只記字體名稱；沒有該字體的電腦會改用預設字體。";
+    const info = createInfoIcon("允許後可選用本機字體；.ptan 只記字體名稱，沒有該字體的電腦改用預設字體");
     if (count) {
-        note.textContent = `已加入 ${count} 款本機字體。${explain}`;
+        note.append(`已加入 ${count} 款本機字體`, info);
         wrap.appendChild(note);
         return wrap;
     }
-    note.textContent = `允許後可選用這台電腦安裝的字體。${explain}`;
     const button = mkButton("使用本機字體", "font", async () => {
         button.disabled = true;
         try {
@@ -1373,13 +1374,15 @@ function localFontEntry() {
             renderInspector();
         } catch (err) {
             button.disabled = false;
+            note.hidden = false;
             note.className = "ts-text is-small is-negative has-top-spaced-small";
             note.textContent = err.name === "NotAllowedError" || err.name === "SecurityError"
                 ? "沒有取得本機字體的存取權限，請在瀏覽器詢問時選擇「允許」。"
                 : `無法讀取本機字體：${err.message}`;
         }
     });
-    wrap.append(button, note);
+    note.hidden = true;
+    wrap.append(button, info, note);
     return wrap;
 }
 
@@ -1428,7 +1431,7 @@ function rangeFontSizeInput(value, hasRange, onChange) {
 }
 
 function buildTextInspector(panel, el) {
-    panel.appendChild(sectionHeader("align-left", "內容（可用 {{變數}}）"));
+    panel.appendChild(sectionHeader("align-left", "內容", VARIABLE_INFO));
 
     const sel = textSel;
     const live = inlineEditor.isEditing(el.id) ? inlineEditor.getSelection() : null;
@@ -1747,6 +1750,8 @@ function buildRowInspector(panel, el) {
     panel.appendChild(wrap);
 }
 
+const VARIABLE_INFO = "可用 {{變數}} 代入資料";
+
 function barcodeNote(text, isError) {
     const note = document.createElement("div");
     setBarcodeNote(note, text, isError);
@@ -1764,8 +1769,7 @@ function buildBarcodeInspector(panel, el) {
     panel.appendChild(field("類型", selectInput(BARCODE_FORMATS, el.format, (v) => {
         el.format = v;
         onModelChange();
-    })));
-    panel.appendChild(barcodeNote(BARCODE_FORMAT_INFO[el.format] || "", false));
+    }), BARCODE_FORMAT_INFO[el.format]));
 
     const valueHint = barcodeNote("", false);
     const refreshValueHint = () => {
@@ -1775,11 +1779,11 @@ function buildBarcodeInspector(panel, el) {
         const checked = validateBarcodeValue(el.format, value);
         setBarcodeNote(valueHint, checked.ok ? checked.note : checked.message, !checked.ok);
     };
-    panel.appendChild(field("內容（可用 {{變數}}）", textInput(el.value || "", (v) => {
+    panel.appendChild(field("內容", textInput(el.value || "", (v) => {
         el.value = v;
         refreshValueHint();
         onModelChange({ skipInspector: true });
-    })));
+    }), VARIABLE_INFO));
     panel.appendChild(valueHint);
     refreshValueHint();
     if (el.format !== "qrcode") {
