@@ -127,10 +127,27 @@ body {
 }
 
 .pane-zoom-value {
-    min-width: 2.75rem;
-    text-align: center;
+    box-sizing: border-box;
+    width: 3.25rem;
+    height: 1.5rem;
+    padding: 0 .25rem;
+    border: 1px solid transparent;
+    border-radius: .3rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
     font-weight: 400;
     font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.pane-zoom-value:hover {
+    border-color: var(--ts-gray-300);
+}
+
+.pane-zoom-value:focus-visible {
+    outline: 2px solid light-dark(#1d4ed8, #93c5fd);
+    outline-offset: -1px;
 }
 
 .pane-zoom-controls .ts-button.is-small {

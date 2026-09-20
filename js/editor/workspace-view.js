@@ -36,6 +36,7 @@ function saveRulersPref(value) {
  */
 export function createWorkspaceView({ getPaperRollMm, onZoom }) {
     let zoom = 1;
+    let zoomEditing = false; // 百分比欄位正在輸入：先不要用縮放值蓋掉使用者打的字
     let fitLocked = false; // 「符合寬度」啟用中：視窗大小改變時要跟著重算
     let showRulers = readRulersPref();
     let dom = null;
@@ -59,6 +60,7 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
             btnRulers: byId("btn-toggle-rulers"),
         };
 
+        wireZoomInput();
         dom.btnOut.addEventListener("click", () => setZoom(nextStep(-1)));
         dom.btnIn.addEventListener("click", () => setZoom(nextStep(1)));
         dom.btnFit.addEventListener("click", () => setZoom(fitZoom(), true));
@@ -94,6 +96,38 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
         zoom = Math.min(1, fitZoom());
         fitLocked = zoom < 1;
         syncUi();
+    }
+
+    // 百分比欄位：Enter／失焦套用（超出範圍夾到邊界、不是數字就還原），Esc 還原；↑↓ ±1%，Shift ±10%。
+    // 鍵盤事件不往外傳，避免 ↑↓ 被當成移動畫布元素。
+    function wireZoomInput() {
+        const input = dom.value;
+        const percent = () => Math.round(zoom * 100);
+        const commit = () => {
+            const n = parseFloat(input.value.replace(/[^\d.]/g, ""));
+            zoomEditing = false;
+            if (Number.isFinite(n)) setZoom(n / 100);
+            syncUi();
+        };
+        input.addEventListener("focus", () => input.select());
+        input.addEventListener("input", () => { zoomEditing = true; });
+        input.addEventListener("blur", commit);
+        input.addEventListener("keydown", (e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+                commit();
+                input.select();
+            } else if (e.key === "Escape") {
+                zoomEditing = false;
+                syncUi();
+                input.blur();
+            } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                e.preventDefault();
+                const step = (e.shiftKey ? 10 : 1) * (e.key === "ArrowUp" ? 1 : -1);
+                setZoom((percent() + step) / 100);
+                input.select();
+            }
+        });
     }
 
     function fitZoom() {
@@ -144,7 +178,7 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
     }
 
     function syncUi() {
-        dom.value.textContent = `${Math.round(zoom * 100)}%`;
+        if (!zoomEditing) dom.value.value = `${Math.round(zoom * 100)}%`;
         const fitZoomNow = Math.min(Math.max(fitZoom(), ZOOM_MIN), ZOOM_MAX);
         dom.btnFit.setAttribute("aria-pressed", String(Math.abs(zoom - fitZoomNow) < 0.005));
         dom.btnActual.setAttribute("aria-pressed", String(Math.abs(zoom - 1) < 0.0005));

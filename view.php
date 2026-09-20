@@ -320,7 +320,8 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                                     data-tooltip="縮小" aria-label="縮小">
                                     <span class="ts-icon is-minus-icon" aria-hidden="true"></span>
                                 </button>
-                                <span class="pane-zoom-value" id="zoom-value" aria-live="polite">100%</span>
+                                <input type="text" class="pane-zoom-value" id="zoom-value" inputmode="numeric" autocomplete="off"
+                                    spellcheck="false" aria-label="縮放比例" value="100%">
                                 <button class="ts-button is-icon is-ghost" id="btn-zoom-in"
                                     data-tooltip="放大" aria-label="放大">
                                     <span class="ts-icon is-plus-icon" aria-hidden="true"></span>
