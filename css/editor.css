@@ -953,6 +953,18 @@ body {
     margin: 0 1rem;
 }
 
+/* 分頁是 <button>（鍵盤可聚焦），外觀維持 Tocas 的 .item */
+.ts-tab.help-tabs > button.item {
+    appearance: none;
+    border: 0;
+    font: inherit;
+}
+
+.ts-tab.help-tabs > button.item:focus-visible {
+    outline: 2px solid light-dark(#1d4ed8, #93c5fd);
+    outline-offset: -2px;
+}
+
 .help-dialog-content {
     display: flex;
     flex-direction: column;

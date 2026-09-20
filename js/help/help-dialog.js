@@ -15,6 +15,7 @@ export function wireHelpDialog() {
 
     function showError() {
         tabsBox.hidden = true;
+        if (dialog.open) document.getElementById("btn-help-close")?.focus();
         body.textContent = "";
         const notice = document.createElement("div");
         notice.className = "ts-notice is-negative";
@@ -25,15 +26,27 @@ export function wireHelpDialog() {
         body.appendChild(notice);
     }
 
-    function select(name) {
+    function select(name, { focus = false } = {}) {
         for (const tab of tabsBox.children) {
             const active = tab.dataset.helpTab === name;
             tab.classList.toggle("is-active", active);
             tab.setAttribute("aria-selected", String(active));
+            tab.tabIndex = active ? 0 : -1; // roving tabindex：Tab 只停在目前分頁，方向鍵切換
+            if (active && focus) tab.focus();
         }
         for (const panel of body.children) panel.hidden = panel.dataset.helpPanel !== name;
         body.scrollTop = 0;
     }
+
+    tabsBox.addEventListener("keydown", (e) => {
+        const tabs = [...tabsBox.children];
+        const current = tabs.findIndex((t) => t === document.activeElement);
+        if (current < 0) return;
+        const next = { ArrowRight: current + 1, ArrowLeft: current - 1, Home: 0, End: tabs.length - 1 }[e.key];
+        if (next === undefined) return;
+        e.preventDefault();
+        select(String((next + tabs.length) % tabs.length), { focus: true });
+    });
 
     function build(chapters) {
         tabsBox.hidden = false;
@@ -41,14 +54,20 @@ export function wireHelpDialog() {
         body.textContent = "";
         chapters.forEach((chapter, index) => {
             const name = String(index);
-            const tab = document.createElement("a");
+            const tab = document.createElement("button");
+            tab.type = "button";
             tab.className = "item";
+            tab.id = `help-tab-${name}`;
             tab.setAttribute("role", "tab");
+            tab.setAttribute("aria-controls", `help-panel-${name}`);
             tab.dataset.helpTab = name;
             tab.textContent = chapter.title;
             tab.addEventListener("click", () => select(name));
             tabsBox.appendChild(tab);
             const panel = document.createElement("div");
+            panel.id = `help-panel-${name}`;
+            panel.setAttribute("role", "tabpanel");
+            panel.setAttribute("aria-labelledby", `help-tab-${name}`);
             panel.dataset.helpPanel = name;
             panel.innerHTML = renderMarkdown(chapter.body); // markdown.js 已先跳脫再套標記
             body.appendChild(panel);
@@ -68,6 +87,7 @@ export function wireHelpDialog() {
                 const chapters = splitChapters(text);
                 if (!chapters.length) throw new Error("沒有章節");
                 build(chapters);
+                if (dialog.open) tabsBox.querySelector('[tabindex="0"]')?.focus();
             })
             .catch((err) => {
                 console.error("使用說明載入失敗", err);
@@ -76,9 +96,13 @@ export function wireHelpDialog() {
             .finally(() => { loading = null; });
     }
 
+    // 開啟時焦點放在目前分頁（還在載入或失敗時放在關閉鈕）；Esc 由 <dialog> 原生處理，
+    // 關閉後（Esc 或關閉鈕）焦點明確還給開啟鈕。
     openButton.addEventListener("click", () => {
         dialog.showModal();
         load();
+        (tabsBox.querySelector('[tabindex="0"]') ?? document.getElementById("btn-help-close"))?.focus();
     });
+    dialog.addEventListener("close", () => openButton.focus());
     document.getElementById("btn-help-close")?.addEventListener("click", () => dialog.close());
 }
