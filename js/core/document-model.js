@@ -35,6 +35,7 @@ export function createTextElement(overrides = {}) {
         inverse: false, // 整行反白：每一行從左到右鋪滿黑底、文字改白字（舊檔沒有此欄位＝false）
         align: "left", // left | center | right
         wrap: true,
+        writingMode: "horizontal", // horizontal | vertical（直書：由上而下、行由右而左；舊檔沒有此欄位＝horizontal）
         maxLines: 0, // 0 = 不限制；>0 時超出以「…」截斷
         ...overrides,
     };

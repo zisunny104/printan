@@ -106,9 +106,9 @@ function migrateElements(elements) {
 }
 
 export function serializeProject(project) {
-    // 沒用到群組就仍寫 v1，舊版 Printan 也能開；有群組才寫 v2
+    // 沒用到群組（或直書）就仍寫 v1，舊版 Printan 也能開；有群組才寫 v2
     // （內嵌字體 embeddedFonts 同理：有才寫 v2）
     let usesGroup = Array.isArray(project.embeddedFonts) && project.embeddedFonts.length > 0;
-    walkElements(project.template?.elements || [], (el) => { if (el.type === "group") usesGroup = true; });
+    walkElements(project.template?.elements || [], (el) => { if (el.type === "group" || el.writingMode === "vertical") usesGroup = true; });
     return JSON.stringify({ ...project, version: usesGroup ? PTAN_VERSION : 1, format: PTAN_FORMAT }, null, 2);
 }
