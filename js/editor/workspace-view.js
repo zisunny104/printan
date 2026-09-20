@@ -36,6 +36,7 @@ function saveRulersPref(value) {
  */
 export function createWorkspaceView({ getPaperRollMm, onZoom }) {
     let zoom = 1;
+    let fitLocked = false; // 「符合寬度」啟用中：視窗大小改變時要跟著重算
     let showRulers = readRulersPref();
     let dom = null;
     let rafId = 0;
@@ -60,7 +61,7 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
 
         dom.btnOut.addEventListener("click", () => setZoom(nextStep(-1)));
         dom.btnIn.addEventListener("click", () => setZoom(nextStep(1)));
-        dom.btnFit.addEventListener("click", () => setZoom(fitZoom()));
+        dom.btnFit.addEventListener("click", () => setZoom(fitZoom(), true));
         dom.btnActual.addEventListener("click", () => setZoom(1));
         dom.btnRulers.addEventListener("click", () => {
             showRulers = !showRulers;
@@ -70,7 +71,11 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
         });
 
         dom.scroll.addEventListener("scroll", scheduleRedraw, { passive: true });
-        const resizeObserver = new ResizeObserver(scheduleRedraw);
+        const resizeObserver = new ResizeObserver(() => {
+            if (fitLocked) setZoom(fitZoom(), true);
+            else syncUi();
+            scheduleRedraw();
+        });
         resizeObserver.observe(dom.scroll);
         resizeObserver.observe(dom.shadow);
         // 主題切換是改 <body class>（見 view.php setTheme）；系統主題變更則靠 media query
@@ -79,6 +84,7 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
 
         // 起始縮放：能放得下就用實際大小，欄位太窄就縮到符合寬度，不要一開始就出現橫向捲軸
         zoom = Math.min(1, fitZoom());
+        fitLocked = zoom < 1;
         syncUi();
     }
 
@@ -98,8 +104,9 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
     }
 
     // 縮放時讓工作區目前看到的中心點維持在畫面中心，不會一縮放就跳到別處
-    function setZoom(next) {
+    function setZoom(next, fit = false) {
         next = Math.min(Math.max(next, ZOOM_MIN), ZOOM_MAX);
+        fitLocked = fit;
         if (Math.abs(next - zoom) < 0.0005) return;
         const { scroll, shadow } = dom;
         const anchorBefore = readAnchor(scroll, shadow);
@@ -128,6 +135,9 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
 
     function syncUi() {
         dom.value.textContent = `${Math.round(zoom * 100)}%`;
+        const fitZoomNow = Math.min(Math.max(fitZoom(), ZOOM_MIN), ZOOM_MAX);
+        dom.btnFit.setAttribute("aria-pressed", String(Math.abs(zoom - fitZoomNow) < 0.005));
+        dom.btnActual.setAttribute("aria-pressed", String(Math.abs(zoom - 1) < 0.0005));
         dom.btnOut.disabled = zoom <= ZOOM_MIN + 0.0005;
         dom.btnIn.disabled = zoom >= ZOOM_MAX - 0.0005;
         dom.btnRulers.classList.toggle("is-active", showRulers);

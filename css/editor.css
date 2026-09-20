@@ -144,6 +144,16 @@ body {
     color: #fff;
 }
 
+.pane-zoom-controls .ts-button[aria-pressed="true"] {
+    background: var(--ts-primary-700, #0050b3);
+    color: #fff;
+}
+
+.pane-zoom-controls .ts-button[aria-pressed="true"]:hover {
+    background: var(--ts-primary-800, #003a8c);
+    color: #fff;
+}
+
 .pane-card-header .ts-button.is-icon.is-active:hover {
     background: var(--ts-primary-800, #003a8c);
     color: #fff;
