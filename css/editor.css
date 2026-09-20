@@ -815,6 +815,11 @@ body {
 
 /* ==== 檢查器（元素設定與批次資料） ==== */
 
+/* 卡片本身已有內距，第一個小標（has-top-spaced 的 margin-top）不再多疊一層，否則標題列與第一個小標之間多出一大段空白 */
+#inspector > :first-child {
+    margin-top: 0 !important; /* Tocas 的 has-top-spaced 是 !important */
+}
+
 .pane-empty-state-static {
     display: flex;
     flex-direction: column;

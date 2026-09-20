@@ -785,7 +785,6 @@ function renderOutline() {
     document.querySelectorAll("body > .ts-tooltip").forEach((tip) => tip.remove());
     const focusKey = root.contains(document.activeElement) ? document.activeElement.closest(".outline-row")?.dataset.rowKey : null;
     root.innerHTML = "";
-    root.appendChild(buildTargetHeader("最上層", null, 0));
     root.appendChild(buildElementList(state.project.template.elements, 0, "root"));
     const rows = Array.from(root.querySelectorAll(".outline-row"));
     const active = rows.find((r) => r.dataset.rowKey === focusKey) || root.querySelector(".outline-row.is-selected") || rows[0];
