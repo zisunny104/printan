@@ -1918,6 +1918,8 @@ function updatePaperFrame() {
     const pxPerMm = workspace.pxPerMm();
     els["paper-shadow"].style.setProperty("--paper-margin", `${marginMm * pxPerMm}px`);
     els["paper-shadow"].style.setProperty("--paper-safe-bottom", `${bladeOffsetMm * pxPerMm}px`);
+    // 空白版型的紙張＝最短可切下的一張紙（列印頭到切刀的距離），隨縮放與 profile 變動
+    els["paper-shadow"].style.setProperty("--paper-min-height", `${bladeOffsetMm * pxPerMm}px`);
     els["canvas-host"].style.width = `${paper.printableWidthMm * pxPerMm}px`;
     // 版面完全沒有元素時，安全區虛線框只是誤導（看起來像渲染壞掉），故不顯示
     const isEmpty = state.project.template.elements.length === 0;

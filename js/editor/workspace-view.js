@@ -184,7 +184,10 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
             canvas.height = Math.round(h * dpr);
         }
         const ctx = canvas.getContext("2d");
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        // 以 canvas 實際像素／CSS 尺寸換算，避免四捨五入後的落差造成拉伸
+        const sx = canvas.width / w;
+        const sy = canvas.height / h;
+        ctx.setTransform(sx, 0, 0, sy, 0, 0);
         ctx.clearRect(0, 0, w, h);
 
         const ppm = pxPerMm();
@@ -194,17 +197,19 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
         const thickness = orientation === "h" ? h : w;
         const extentMm = extentPx / ppm;
         const firstIndex = Math.max(0, Math.floor((0 - originPx) / ppm / minorStep));
-        const lastIndex = Math.min(Math.floor(extentMm / minorStep), Math.ceil((length - originPx) / ppm / minorStep));
+        // 標稱 80mm 的紙實寬 79.5mm，容許超出半毫米才標得出 80
+        const lastIndex = Math.min(Math.floor((extentMm + 0.51) / minorStep), Math.ceil((length - originPx) / ppm / minorStep));
 
         ctx.strokeStyle = ctx.fillStyle = getComputedStyle(box).color;
-        ctx.lineWidth = 1;
-        ctx.font = "9px system-ui, sans-serif";
+        ctx.lineWidth = 1 / dpr;
+        ctx.font = "10px system-ui, sans-serif";
         ctx.textBaseline = "top";
         ctx.beginPath();
         const labels = [];
         for (let i = firstIndex; i <= lastIndex; i++) {
             const mm = i * minorStep;
-            const pos = Math.round(originPx + mm * ppm) + 0.5;
+            // 刻度線對齊裝置像素，dpr 非整數時才不會糊
+            const pos = (Math.round((originPx + mm * ppm) * dpr) + 0.5) / dpr;
             const isLabel = mm % labelStep === 0;
             const isMid = !isLabel && (mm * 2) % labelStep === 0;
             const tick = isLabel ? thickness * 0.4 : isMid ? thickness * 0.28 : thickness * 0.18;
@@ -220,13 +225,21 @@ export function createWorkspaceView({ getPaperRollMm, onZoom }) {
         ctx.stroke();
 
         for (const { mm, pos } of labels) {
+            const text = String(mm);
+            const textW = ctx.measureText(text).width;
             if (orientation === "h") {
-                ctx.fillText(String(mm), pos + 2, 2);
+                // 靠近右緣放不下時改靠刻度左側
+                const flip = pos + 2 + textW > w;
+                ctx.textAlign = flip ? "right" : "left";
+                ctx.fillText(text, flip ? pos - 2 : pos + 2, 2);
             } else {
+                // 文字旋轉後朝上排；靠近上緣放不下時改朝下排
+                const flip = pos - 2 - textW < 0;
                 ctx.save();
-                ctx.translate(2, pos - 2);
+                ctx.translate(2, flip ? pos + 2 : pos - 2);
                 ctx.rotate(-Math.PI / 2);
-                ctx.fillText(String(mm), 0, 0);
+                ctx.textAlign = flip ? "right" : "left";
+                ctx.fillText(text, 0, 0);
                 ctx.restore();
             }
         }

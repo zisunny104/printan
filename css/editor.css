@@ -681,9 +681,9 @@ body {
     box-shadow: 0 1px 3px rgba(0, 0, 0, .15), 0 0 0 1px light-dark(rgba(0, 0, 0, .14), rgba(255, 255, 255, .28));
     padding: 0 var(--paper-margin, 12px);
     border-radius: 2px;
-    /* 版面還沒加任何元素時，畫布實際內容高度只有幾個 px，紙張看起來像一條裂縫、
-       容易被誤會成渲染壞掉。給一個最小高度，撐出看得出「這是一張紙」的空間。 */
-    min-height: 160px;
+    /* 版面還沒加任何元素時，畫布實際內容高度只有幾個 px，紙張看起來像一條裂縫。
+       最小高度＝列印頭到切刀的距離（updatePaperFrame 依縮放寫入），即最短可切下的一張紙。 */
+    min-height: var(--paper-min-height, 160px);
 }
 
 /* 可列印範圍的四條 2px 虛線，畫在真正的邊界上（不再內縮成一個框）：左右＝可列印寬度的兩緣
