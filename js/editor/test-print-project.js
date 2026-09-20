@@ -93,12 +93,22 @@ function itemRow(name, qty, amount, style) {
     return row;
 }
 
-function buildReceiptElements(info, stripUrl, endBarUrl) {
+// 內容是這個專案自己的「收據」：品項是設計巧思與操作邏輯，金額都無價；
+// 底線／刪除線／斜體／粗體各排一列，順便驗證文字樣式。
+const PROJECT_NAME = "Printan 單仔";
+const PROJECT_URL = "https://toka.dev/koilisu/printan";
+const FALLBACK_MODEL = "TM-T82II";
+
+function buildReceiptElements(info, model, stripUrl, endBarUrl) {
     const items = [
-        itemRow("蘋果汁 底線", "2", "80", { underline: true }),
-        itemRow("鮮奶茶 刪除線", "1", "55", { strikethrough: true }),
-        itemRow("Latte 斜體", "1", "95", { italic: true }),
-        itemRow("蛋糕 粗體", "3", "270", { bold: true }),
+        itemRow("復原樹　不丟歷史", "1", "無價", { underline: true }),
+        itemRow("Ctrl+滾輪連續縮放", "1", "無價", { italic: true }),
+        itemRow("所見即所得", "1", "無價", { bold: true }),
+        itemRow("尺規對齊白底", "1", "無價"),
+        itemRow("拖曳大綱換層", "1", "無價"),
+        itemRow("Claude 的 token", "很多", "算不完"),
+        itemRow("Claude 思考時間", "好久", "算不完"),
+        itemRow("一次講完的需求", "0", "不存在", { strikethrough: true }),
     ];
 
     const infoRows = info.map(([k, v]) => {
@@ -109,22 +119,22 @@ function buildReceiptElements(info, stripUrl, endBarUrl) {
     });
 
     return [
-        text("小Ｐ商店", { fontSize: 32, bold: true, align: "center" }),
-        text("台北市測試路 1 號", { align: "center" }),
+        text(PROJECT_NAME, { fontSize: 32, bold: true, align: "center" }),
+        text("所見即所印的收據設計工具", { align: "center" }),
         line(new Date().toLocaleString("zh-TW", { hour12: false, dateStyle: "short", timeStyle: "short" }), "#0001"),
         createDividerElement({ style: "dashed" }),
         ...items,
         createDividerElement(),
-        line("小計", "400"),
-        line("稅額 5%", "20"),
-        line({ text: "合計", bold: true, fontSize: 32 }, { text: "420", bold: true, fontSize: 32 }),
+        line("設計巧思", "無價"),
+        line("優惠　一點點……耐心", "無價"),
+        line({ text: "合計", bold: true, fontSize: 32 }, { text: "無價", bold: true, fontSize: 32 }),
         createSpacerElement({ heightDots: 8 }),
         text("　已付款 / TEST　", { align: "center", inverse: true }),
         text([{ text: "會員 " }, { text: " ★ VIP ★ ", inverse: true }, { text: " 優惠" }], { align: "center" }),
         text("中文 English ＡＢＣ１２３ 0123456789"),
         createSpacerElement({ heightDots: 8 }),
-        createBarcodeElement({ format: "code128", value: "PRINTAN0001", heightDots: 64, showText: true }),
-        createBarcodeElement({ format: "qrcode", value: "PRINTAN TEST", heightDots: 112 }),
+        createBarcodeElement({ format: "code128", value: model, heightDots: 64, showText: true }),
+        createBarcodeElement({ format: "qrcode", value: PROJECT_URL, heightDots: 174 }),
         text("謝謝光臨", { fontSize: 32, align: "center" }),
         createDividerElement({ style: "dotted" }),
         ...infoRows,
@@ -160,8 +170,11 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
     ];
 
     const project = createEmptyProject({ name: "測試列印", printerProfileId: baseProfile.id, paperWidthId: widthId });
+    // 條碼放機型（Code128 只收半形可見字元，取不到就用預設機型）
+    const model = /^[ -~]+$/.test(baseProfile.model ?? "") ? baseProfile.model : FALLBACK_MODEL;
     project.template.elements = buildReceiptElements(
         info,
+        model,
         buildCalibratedStrip(paper.printableWidthDots, dpi),
         buildEndBar(paper.printableWidthDots),
     );
