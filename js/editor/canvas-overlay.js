@@ -2,9 +2,8 @@ import { MAX_ROW_COLUMNS, childArrays, findContainerOf, findElementById, mergeRo
 import { splitDotsByRatio } from "../core/units.js";
 import { els, rt, state } from "./context.js";
 import { iconButton } from "./inspector-widgets.js";
-import {
-    getSelectedIds, inlineEditor, moveElementTo, onModelChange, revealPendingElement, schedulePreviewLive, selectElementById,
-} from "./editor.js";
+import { inlineEditor, onModelChange, schedulePreviewLive } from "./editor.js";
+import { getSelectedIds, moveElementTo, revealPendingElement, selectElementById } from "./element-actions.js";
 
 // ---- 編輯模式畫布疊層：虛線外框、拖曳排序、拖曳縮放 ----
 // 疊層座標直接沿用 renderer.js 排版產出的 items 樹（跟畫面上的 canvas 完全同一份排版結果），

@@ -4,7 +4,7 @@ import { BARCODE_FORMATS } from "../core/barcode.js";
 import { els, state } from "./context.js";
 import { iconButton } from "./inspector-widgets.js";
 import { renderInspector } from "./inspector.js";
-import { deleteElement, duplicateElement, getSelectedIds, moveElement, moveElementToContainer, openAddMenu, selectElementById } from "./editor.js";
+import { deleteElement, duplicateElement, getSelectedIds, moveElement, moveElementToContainer, openAddMenu, selectElementById } from "./element-actions.js";
 
 // ---- 版面結構大綱 ----
 

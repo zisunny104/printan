@@ -13,10 +13,8 @@ import {
     checkboxInput, emptyState, field, fieldRow, iconButton, iconToggleButton, mkButton, sectionDivider,
     sectionHeader, selectInput, sliderField, textInput,
 } from "./inspector-widgets.js";
-import {
-    deleteElement, deleteElements, duplicateElement, duplicateElements, inlineEditor, onModelChange, textSel,
-    ungroupElements,
-} from "./editor.js";
+import { inlineEditor, onModelChange, textSel } from "./editor.js";
+import { deleteElement, deleteElements, duplicateElement, duplicateElements, ungroupElements } from "./element-actions.js";
 import { els, rt, state } from "./context.js";
 
 export function renderInspector() {

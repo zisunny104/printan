@@ -3,7 +3,8 @@ import { resolveTargetArray, findElementById, findContainerOf, flattenElements, 
 import { els, state } from "./context.js";
 import { renderInspector } from "./inspector.js";
 import { containerToTarget, renderOutline } from "./outline.js";
-import { deleteElements, duplicateElements, getSelectedIds, groupElements, highlightSelectedBlock, moveElements, onModelChange, pruneSelection, selectElementById, setSelection, ungroupElements } from "./editor.js";
+import { onModelChange } from "./editor.js";
+import { deleteElements, duplicateElements, getSelectedIds, groupElements, highlightSelectedBlock, moveElements, pruneSelection, selectElementById, setSelection, ungroupElements } from "./element-actions.js";
 
 // ---- 復原／重做：版面元素樹的快照歷史 ----
 // 每次 onModelChange 記一份快照；連續變動（拖曳、打字）在 HISTORY_MERGE_MS 內併成同一筆。
