@@ -36,7 +36,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                     <div class="ts-header is-heavy is-large is-start-icon">
                         <span class="ts-icon is-receipt-icon" aria-hidden="true"></span>
                         Printan 單仔
-                        <span style="font-size:0.875rem;color:var(--ts-gray-500);font-weight:normal;margin-left:0.5rem;">v<?= htmlspecialchars($appVersion) ?></span>
+                        <span class="app-version">v<?= htmlspecialchars($appVersion) ?></span>
                     </div>
                     <div class="ts-text is-description">熱感紙收據／標籤設計與預覽工具，所見即所印。</div>
                 </div>
@@ -77,7 +77,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                      （ESC/POS 也沒有標準指令能讀回印表機目前的紙寬，不做自動偵測）。
                      印表機型號不開放使用者選，內部固定用預設規格（見 printer-profiles.js）。 -->
                 <div class="ts-selection is-small" id="paper-width-tabs" role="radiogroup" aria-label="紙寬"></div>
-                <div class="ts-divider is-vertical" style="height:1.4em"></div>
+                <div class="ts-divider is-vertical toolbar-divider"></div>
                 <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-settings"
                     data-tooltip="列印設定（印表機連線、走紙／切紙、可列印點數、測試列印）" aria-label="列印設定">
                     <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
@@ -360,7 +360,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                             aria-haspopup="menu" aria-expanded="false">
                             <span class="ts-icon is-plus-icon" aria-hidden="true"></span> 新增
                         </button>
-                        <div class="ts-divider is-vertical" style="height:1.4em"></div>
+                        <div class="ts-divider is-vertical toolbar-divider"></div>
                         <button class="ts-button is-icon" id="btn-add-text" data-tooltip="新增文字"
                             aria-label="新增文字" data-collapse-priority="6">
                             <span class="ts-icon is-font-icon" aria-hidden="true"></span>
@@ -381,7 +381,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                             aria-label="新增條碼／QR Code" data-collapse-priority="3">
                             <span class="ts-icon is-qrcode-icon" aria-hidden="true"></span>
                         </button>
-                        <div class="ts-divider is-vertical" style="height:1.4em" data-collapse-priority="1"></div>
+                        <div class="ts-divider is-vertical toolbar-divider" data-collapse-priority="1"></div>
                         <button type="button" class="ts-button is-icon" data-dropdown="row-ratio-dropdown"
                             data-tooltip="多欄" aria-label="多欄" aria-haspopup="true" data-collapse-priority="1">
                             <span class="ts-icon is-table-columns-icon" aria-hidden="true"></span>
@@ -505,7 +505,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                             </div>
 
                             <div id="batch-preview-nav" class="pane-toolbar has-top-spaced-small" hidden>
-                                <div class="ts-divider has-bottom-spaced-small" style="width:100%"></div>
+                                <div class="ts-divider has-bottom-spaced-small batch-nav-divider"></div>
                                 <button type="button" class="ts-button is-icon is-small is-ghost" id="btn-batch-prev" aria-label="上一筆">
                                     <span class="ts-icon is-chevron-left-icon" aria-hidden="true"></span>
                                 </button>
@@ -627,14 +627,13 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
             <div class="ts-grid">
                 <div class="column is-fluid">
                     <div class="ts-text is-description">
-                        <a href="/koilisu/" style="color:inherit;text-decoration:none;">KoiLiSu 開利手</a> -
+                        <a href="/koilisu/" class="footer-plain-link">KoiLiSu 開利手</a> -
                         讓工具使用更順手的開放專案 | prjToka
                     </div>
                     <div class="ts-text is-description">
                         Built with ❤️ using Tocas UI |
-                        <a href="https://github.com/zisunny104/printan" target="_blank" rel="noopener noreferrer"
-                            style="display:inline-block;padding:2px 8px;background:#24292f;color:white;text-decoration:none;border-radius:6px;font-size:0.85em;font-weight:500;margin-left:4px;">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style="vertical-align:text-bottom;margin-right:4px;">
+                        <a href="https://github.com/zisunny104/printan" target="_blank" rel="noopener noreferrer" class="footer-github-badge">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
                             </svg>
                             View on GitHub<span class="sr-only"> (在新視窗開啟)</span>

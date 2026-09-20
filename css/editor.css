@@ -442,6 +442,9 @@ body {
     cursor: pointer;
     font-size: .85rem;
     border: 1px solid transparent;
+    position: relative;
+    box-sizing: border-box;
+    height: 2.25rem;
 }
 
 .outline-row:hover {
@@ -506,14 +509,9 @@ body {
     white-space: nowrap;
 }
 
-/* 操作按鈕疊在列的右側，不佔名稱的寬度；只在選取列、hover、鍵盤聚焦的列顯示。
-   用 opacity 隱藏（visibility／display 會讓鍵盤 Tab 跳過），隱藏時 pointer-events 關掉，
-   避免看不見的按鈕擋住點擊。 */
-.outline-row {
-    position: relative;
-    box-sizing: border-box;
-    height: 2.25rem;
-}
+/* 操作按鈕疊在列的右側，不佔名稱的寬度；只在滑鼠所在列或鍵盤聚焦的列顯示（多選時其餘
+   選取列只留底色）。用 opacity 隱藏（visibility／display 會讓鍵盤 Tab 跳過），隱藏時
+   pointer-events 關掉，避免看不見的按鈕擋住點擊。 */
 
 .outline-row .outline-actions {
     position: absolute;
@@ -530,8 +528,7 @@ body {
 }
 
 .outline-row:hover .outline-actions,
-.outline-row:focus-within .outline-actions,
-.outline-row.is-selected .outline-actions {
+.outline-row:focus-within .outline-actions {
     opacity: 1;
     pointer-events: auto;
 }
@@ -964,4 +961,43 @@ body {
     pointer-events: none;
     border: 1px solid var(--ts-primary-500, #3b82f6);
     background: color-mix(in srgb, var(--ts-primary-500, #3b82f6) 12%, transparent);
+}
+
+/* ---- 由 view.php 抽出的 inline style ---- */
+
+.toolbar-divider {
+    height: 1.4em;
+}
+
+.app-version {
+    font-size: .875rem;
+    color: var(--ts-gray-500);
+    font-weight: normal;
+    margin-left: .5rem;
+}
+
+.footer-plain-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.footer-github-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #24292f;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: .85em;
+    font-weight: 500;
+    margin-left: 4px;
+}
+
+.footer-github-badge svg {
+    vertical-align: text-bottom;
+    margin-right: 4px;
+}
+
+.batch-nav-divider {
+    width: 100%;
 }
