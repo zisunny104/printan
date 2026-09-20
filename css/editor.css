@@ -1151,3 +1151,31 @@ body {
         pointer-events: auto;
     }
 }
+
+/* 鍵盤焦點：Tocas 的按鈕與表單欄位聚焦時幾乎沒有外框，統一補一圈；個別元件（大綱列、分頁、把手）有自己的規則，
+   選擇器特異性較高，不受影響。 */
+:is(button, select, input, textarea, summary, a[href]):focus-visible {
+    outline: 2px solid light-dark(#1d4ed8, #93c5fd);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* 對比度：Tocas 的 gray-500 在淺色底（#fafafa 的面板、頁尾）只有 4.35:1，略低於 4.5:1；
+   紅色外框按鈕的紅在白底 4.08:1。只加深淺色模式，深色維持原值。 */
+.info-icon,
+.app-version,
+#app-footer .ts-text.is-description {
+    color: light-dark(#595959, var(--ts-gray-500));
+}
+
+.ts-button.is-negative.is-outlined {
+    color: light-dark(#cf1322, #f5222d);
+}
