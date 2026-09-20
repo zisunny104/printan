@@ -42,6 +42,38 @@ body {
     outline-offset: -1px;
 }
 
+/* ⓘ 說明圖示（js/editor/ui-helpers.js createInfoIcon）：灰色小圖示，hover／聚焦時顯示 tooltip */
+.info-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-left: .25rem;
+    color: var(--ts-gray-500, #888);
+    cursor: help;
+    font-size: .875em;
+    vertical-align: middle;
+}
+
+.info-icon:hover,
+.info-icon:focus-visible {
+    color: var(--ts-primary-500, #3b82f6);
+}
+
+/* 使用說明 modal */
+.help-tabs {
+    flex-wrap: wrap;
+    margin: 0 1rem;
+}
+
+.help-body {
+    min-height: 12rem;
+}
+
+.help-list {
+    margin: 0;
+    padding-left: 1.25rem;
+    line-height: 1.7;
+}
+
 .field-label-row {
     display: flex;
     justify-content: space-between;

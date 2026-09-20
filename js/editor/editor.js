@@ -32,6 +32,7 @@ import {
 import { wireResizableColumns } from "./resizable-columns.js";
 import { createInlineTextEditor } from "./inline-text-editor.js";
 import { createWorkspaceView } from "./workspace-view.js";
+import { wireHelpDialog } from "./ui-helpers.js";
 
 const LAST_DRAFT_KEY = "printan:lastDraftId";
 
@@ -84,6 +85,7 @@ async function init() {
     wireResizableColumns();
     wireToolbarOverflow();
     workspace.mount();
+    wireHelpDialog();
     onModelChange({ skipInspector: false });
     onWebFontStatusChange(() => renderInspector()); // 字體載入失敗／恢復時，選單上的標示要跟著更新
     restoreLocalFontsIfGranted().then((restored) => { if (restored) renderInspector(); });

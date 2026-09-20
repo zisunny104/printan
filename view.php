@@ -43,6 +43,12 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <div class="column">
                     <span id="save-status" class="ts-text is-description is-small"></span>
                 </div>
+                <div class="column">
+                    <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-help"
+                        data-tooltip="使用說明" aria-label="使用說明">
+                        <span class="ts-icon is-circle-question-icon" aria-hidden="true"></span>
+                    </button>
+                </div>
             </div>
 
             <div class="ts-divider has-vertically-spaced"></div>
@@ -495,6 +501,88 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
             </div>
         </div>
     </div>
+
+    <!-- 使用說明：完整說明集中在這裡，頁面上其他地方只留欄位名稱＋必要時的 ⓘ 短提示。
+         分頁切換見 ui-helpers.js wireHelpDialog()。 -->
+    <dialog id="help-dialog" class="ts-modal is-large">
+        <div class="content">
+            <div class="ts-content">
+                <div class="ts-header is-start-icon">
+                    <span class="ts-icon is-circle-question-icon" aria-hidden="true"></span>
+                    使用說明
+                </div>
+            </div>
+            <div class="ts-tab is-dense is-segmented help-tabs" role="tablist">
+                <a class="item" role="tab" data-help-tab="basic">基本操作</a>
+                <a class="item" role="tab" data-help-tab="layout">版面元素</a>
+                <a class="item" role="tab" data-help-tab="variables">文字與變數</a>
+                <a class="item" role="tab" data-help-tab="fonts">字體</a>
+                <a class="item" role="tab" data-help-tab="barcode">條碼</a>
+                <a class="item" role="tab" data-help-tab="print">列印與校正</a>
+                <a class="item" role="tab" data-help-tab="shortcuts">快捷鍵</a>
+            </div>
+            <div class="ts-content help-body">
+                <div data-help-panel="basic">
+                    <ul class="help-list">
+                        <li>用工作區下方的工具列，或左側「版面結構」的「＋」新增元素；點選元素後到右側「元素設定」調整。</li>
+                        <li>在工作區拖曳元素外框可調整順序；拖曳間隔、圖片、條碼的下緣調整高度，拖曳欄與欄之間的把手調整欄寬。</li>
+                        <li>已選取的文字再點一次，可直接在紙上編輯。</li>
+                        <li>工作區標題列可縮放與開關尺規；「1:1」是實際大小。虛線標出可列印範圍與切刀安全線。</li>
+                        <li>版型自動存在這台電腦的瀏覽器；「匯出」可存成 .ptan 檔或 PDF。</li>
+                    </ul>
+                </div>
+                <div data-help-panel="layout" hidden>
+                    <ul class="help-list">
+                        <li>「版面結構」列出所有元素。「最上層」與「第 N 欄」是容器，點選後新元素會加到那裡。</li>
+                        <li>元素有文字、圖片、間隔（空白高度）、分隔線、條碼、多欄。</li>
+                        <li>多欄可選 1/1、2/1、1/2、1/1/1 的欄寬比例，欄內可再放任何元素。</li>
+                        <li>同層元素可用列上的上移／下移，或在工作區拖曳排序。</li>
+                    </ul>
+                </div>
+                <div data-help-panel="variables" hidden>
+                    <ul class="help-list">
+                        <li>文字、圖片來源、條碼內容可寫 <code>{{名稱}}</code>，列印時換成實際資料。</li>
+                        <li>「變數與預覽資料」會列出用到的變數，填入測試值即可在工作區預覽。</li>
+                        <li>「批次資料」貼上 JSON 陣列，每筆資料輸出一頁 PDF（Mail Merge）。</li>
+                    </ul>
+                </div>
+                <div data-help-panel="fonts" hidden>
+                    <ul class="help-list">
+                        <li>文字可選內建字體、等寬字體，或授權後使用本機字體。</li>
+                        <li>.ptan 只記錄字體名稱，不包含字體檔；換電腦時該字體需自行安裝。</li>
+                        <li>網頁字體沒載入成功時，預覽與列印會改用系統字體，並在工作區上方提示。</li>
+                    </ul>
+                </div>
+                <div data-help-panel="barcode" hidden>
+                    <ul class="help-list">
+                        <li>支援 QR Code、Code128、EAN-13；內容可含 <code>{{變數}}</code>。</li>
+                        <li>一維條碼可切換是否顯示明碼。</li>
+                        <li>內容格式不符時會在「元素設定」提示；含變數的內容要套用資料後才會檢查。</li>
+                    </ul>
+                </div>
+                <div data-help-panel="print" hidden>
+                    <ul class="help-list">
+                        <li>「列印設定」可連接印表機（USB 或序列埠，需 Chrome／Edge），並設定走紙、切紙、可列印點數、邊距校正。</li>
+                        <li>未連接印表機時，「列印」會走瀏覽器的系統列印對話框。</li>
+                        <li>熱感圖示切換為 1-bit 抖動預覽，接近實際列印效果。</li>
+                        <li>切紙前走紙不夠，切刀會切到剛印完的內容；測試列印可確認邊距與切紙位置。</li>
+                    </ul>
+                </div>
+                <div data-help-panel="shortcuts" hidden>
+                    <ul class="help-list">
+                        <li><kbd>Esc</kbd>：關閉選單，或結束紙上的文字編輯。</li>
+                        <li>欄寬拉桿：方向鍵微調，雙擊重設。</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="ts-divider"></div>
+            <div class="ts-content">
+                <div class="ts-wrap is-end-aligned">
+                    <button type="button" class="ts-button" id="btn-help-close">關閉</button>
+                </div>
+            </div>
+        </div>
+    </dialog>
 
     <!-- 開利手底部 -->
     <div id="app-footer" class="ts-content is-secondary is-vertically-padded">
