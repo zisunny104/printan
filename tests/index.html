@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Printan tests</title>
+<style>
+body { font: 14px/1.6 system-ui, sans-serif; margin: 16px; }
+li { list-style: none; }
+.pass { color: #1a7f37; }
+.fail { color: #cf222e; }
+pre { margin: 0 0 0 24px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1 id="summary">執行中…</h1>
+<ul id="list"></ul>
+<script type="module">
+import {
+    createTextElement, createSpacerElement, createDividerElement, createRowElement, createGroupElement,
+    createBarcodeElement, createElement, cloneElementWithNewIds, walkElements, extractPlaceholders,
+    normalizeTextElement,
+} from "../js/core/document-model.js";
+import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
+import { readPtanFile } from "../js/core/ptan-file.js";
+
+const cases = [];
+const test = (name, fn) => cases.push({ name, fn });
+function assert(cond, msg = "assert failed") { if (!cond) throw new Error(msg); }
+function eq(actual, expected, msg = "") {
+    const a = JSON.stringify(actual), b = JSON.stringify(expected);
+    if (a !== b) throw new Error(`${msg}\n預期 ${b}\n實際 ${a}`);
+}
+const ids = (els) => els.map((e) => e.id);
+const allIds = (els) => { const out = []; walkElements(els, (e) => out.push(e.id)); return out; };
+
+function sampleProject(elements) {
+    const p = createEmptyProject({ name: "t", printerProfileId: "epson-tm-t82ii", paperWidthId: "80mm" });
+    p.template.elements = elements;
+    return p;
+}
+function plainElements() {
+    const row = createRowElement([1, 2]);
+    row.columns[0].push(createTextElement());
+    row.columns[1].push(createBarcodeElement());
+    return [createTextElement({ runs: [{ text: "哈囉 {{name}}", bold: true }] }), createSpacerElement(), row, createDividerElement()];
+}
+const shape = (els) => JSON.stringify(els, (k, v) => (k === "id" ? undefined : v));
+
+// ---- schema / ptan-file ----
+test("v1 匯出再匯入結果一致", () => {
+    const p = sampleProject(plainElements());
+    const out = loadProject(serializeProject(p));
+    assert(out.ok, out.error);
+    eq(out.project.template.elements, p.template.elements);
+    eq(out.project.meta.name, "t");
+    eq(out.project.paper, p.paper);
+});
+test("沒用到群組與內嵌字體時寫 v1", () => {
+    eq(JSON.parse(serializeProject(sampleProject(plainElements()))).version, 1);
+});
+test("有群組時寫 v2（含巢狀在 row 內的群組）", () => {
+    const row = createRowElement([1]);
+    row.columns[0].push(createGroupElement([createTextElement()]));
+    eq(JSON.parse(serializeProject(sampleProject([row]))).version, PTAN_VERSION);
+});
+test("有內嵌字體時寫 v2，空陣列仍寫 v1", () => {
+    const p = sampleProject(plainElements());
+    eq(JSON.parse(serializeProject({ ...p, embeddedFonts: [{ family: "F", weight: 400, unicodeRange: "U+0-7F", data: "AA==" }] })).version, 2);
+    eq(JSON.parse(serializeProject({ ...p, embeddedFonts: [] })).version, 1);
+});
+test("v1 與 v2 匯入後結構等價", () => {
+    const els = plainElements();
+    const v1 = loadProject(serializeProject(sampleProject(els)));
+    const v2raw = JSON.parse(serializeProject(sampleProject(els)));
+    v2raw.version = 2;
+    const v2 = loadProject(v2raw);
+    assert(v1.ok && v2.ok);
+    eq(v2.project.template, v1.project.template);
+});
+test("群組專案來回一致", () => {
+    const g = createGroupElement([createTextElement(), createSpacerElement()]);
+    const p = sampleProject([g, createDividerElement()]);
+    const out = loadProject(serializeProject(p));
+    assert(out.ok, out.error);
+    eq(out.project.template.elements, p.template.elements);
+});
+test("舊版扁平 text 欄位匯入時轉成 runs（含群組內）", () => {
+    const raw = { format: "ptan", version: 1, template: { elements: [
+        { id: "a", type: "text", text: "舊" },
+        { id: "g", type: "group", children: [{ id: "b", type: "text", text: "群" }] },
+    ] } };
+    const out = loadProject(raw);
+    assert(out.ok, out.error);
+    eq(out.project.template.elements[0].runs, [{ text: "舊" }]);
+    eq(out.project.template.elements[1].children[0].runs, [{ text: "群" }]);
+});
+test("缺欄位時補預設值", () => {
+    const out = loadProject({ format: "ptan", version: 1 });
+    assert(out.ok, out.error);
+    eq(out.project.template.elements, []);
+    eq(out.project.variables, []);
+    eq(out.project.assets, []);
+});
+test("壞檔與未知版本回傳錯誤而非丟例外", () => {
+    assert(!loadProject("{壞掉").ok, "壞 JSON");
+    assert(!loadProject("null").ok, "null");
+    assert(!loadProject("123").ok, "數字");
+    assert(!loadProject({ format: "other", version: 1 }).ok, "format 不符");
+    assert(!loadProject({ format: "ptan" }).ok, "缺版本");
+    assert(!loadProject({ format: "ptan", version: "1" }).ok, "版本非數字");
+    const future = loadProject({ format: "ptan", version: PTAN_VERSION + 1 });
+    assert(!future.ok && /更新/.test(future.error), "新版本");
+});
+test("embeddedFonts 欄位寫出後可讀回", () => {
+    const fonts = [{ family: "Noto Sans TC", weight: 400, unicodeRange: "U+4E00-9FFF", data: "AAEC" }];
+    const out = loadProject(serializeProject({ ...sampleProject(plainElements()), embeddedFonts: fonts }));
+    assert(out.ok, out.error);
+    eq(out.project.embeddedFonts, fonts);
+});
+test("readPtanFile：讀入後 embeddedFonts 被移出專案（未知字體不註冊也不出錯）", async () => {
+    const fonts = [{ family: "不存在的字體", weight: 400, unicodeRange: "U+0-7F", data: "AAEC" }];
+    const text = serializeProject({ ...sampleProject(plainElements()), embeddedFonts: fonts });
+    const out = await readPtanFile(new File([text], "a.ptan"));
+    assert(out.ok, out.error);
+    assert(!("embeddedFonts" in out.project), "embeddedFonts 應被移除");
+    eq(out.project.template.elements.length, 4);
+});
+test("readPtanFile：壞檔回傳 ok:false", async () => {
+    const out = await readPtanFile(new File(["not json"], "a.ptan"));
+    assert(!out.ok && out.error);
+});
+
+// ---- document-model ----
+test("createElement 依類型建立、未知類型丟錯", () => {
+    for (const t of ["text", "image", "spacer", "divider", "row", "barcode", "group"]) eq(createElement(t).type, t);
+    let threw = false;
+    try { createElement("nope"); } catch { threw = true; }
+    assert(threw);
+});
+test("新增元素的 id 不重複", () => {
+    const list = Array.from({ length: 200 }, () => createSpacerElement());
+    eq(new Set(ids(list)).size, 200);
+});
+test("row 的 columns 數量與 ratio 一致且各欄獨立", () => {
+    const r = createRowElement([1, 1, 2]);
+    eq(r.columns.length, 3);
+    r.columns[0].push(createSpacerElement());
+    eq(r.columns[1].length, 0);
+});
+test("刪除元素（陣列 splice）不影響其他元素順序與 id", () => {
+    const els = [createSpacerElement(), createTextElement(), createDividerElement()];
+    const before = ids(els);
+    els.splice(1, 1);
+    eq(ids(els), [before[0], before[2]]);
+});
+test("複製元素：新 id、內容相同、不共用參考", () => {
+    const t = createTextElement({ runs: [{ text: "a", bold: true }] });
+    const c = cloneElementWithNewIds(t);
+    assert(c.id !== t.id);
+    eq(c.runs, t.runs);
+    assert(c.runs !== t.runs && c.runs[0] !== t.runs[0], "runs 不應共用");
+    c.runs[0].text = "改";
+    eq(t.runs[0].text, "a");
+});
+test("複製 row／群組：所有後代都換新 id，結構不變", () => {
+    const row = createRowElement([1, 1]);
+    row.columns[0].push(createGroupElement([createTextElement(), createSpacerElement()]));
+    row.columns[1].push(createBarcodeElement());
+    const c = cloneElementWithNewIds(row);
+    const oldIds = allIds([row]), newIds = allIds([c]);
+    eq(newIds.length, oldIds.length);
+    assert(newIds.every((id) => !oldIds.includes(id)), "有 id 沿用舊值");
+    eq(new Set(newIds).size, newIds.length);
+    eq(shape([c]), shape([row]));
+});
+test("walkElements 走訪 row 各欄與群組後代，順序為前序", () => {
+    const g = createGroupElement([createTextElement(), createSpacerElement()]);
+    const row = createRowElement([1, 1]);
+    row.columns[0].push(g);
+    row.columns[1].push(createDividerElement());
+    const seen = [];
+    walkElements([row], (e) => seen.push(e.type));
+    eq(seen, ["row", "group", "text", "spacer", "divider"]);
+});
+test("群組：包起來再取出，子元素順序與 id 不變", () => {
+    const list = [createTextElement(), createSpacerElement(), createDividerElement(), createTextElement()];
+    const before = ids(list);
+    const picked = list.splice(1, 2);
+    const g = createGroupElement(picked);
+    list.splice(1, 0, g);
+    eq(ids(g.children), before.slice(1, 3));
+    eq(ids(list).length, 3);
+    list.splice(1, 1, ...g.children);
+    eq(ids(list), before);
+});
+test("群組可以巢狀，複製後各層 id 皆為新值", () => {
+    const inner = createGroupElement([createTextElement()]);
+    const outer = createGroupElement([inner, createSpacerElement()]);
+    const c = cloneElementWithNewIds(outer);
+    assert(c.children[0].type === "group" && c.children[0].id !== inner.id);
+    assert(c.children[0].children[0].id !== inner.children[0].id);
+});
+test("undo 用的 JSON snapshot 還原後不與現況共用參考", () => {
+    const els = plainElements();
+    const snap = JSON.stringify(els);
+    const restored = JSON.parse(snap);
+    restored[0].runs[0].text = "被改";
+    restored[2].columns[0].push(createSpacerElement());
+    eq(JSON.stringify(els), snap);
+    const again = JSON.parse(snap);
+    assert(again[0] !== els[0] && again[2].columns !== els[2].columns);
+});
+test("多選批次編輯：對每個被選元素套用同一欄位，其餘元素不動", () => {
+    const list = [createTextElement({ fontSize: 24 }), createTextElement({ fontSize: 24 }), createTextElement({ fontSize: 24 })];
+    const selected = new Set([list[0].id, list[2].id]);
+    for (const el of list) if (selected.has(el.id)) el.fontSize = 40;
+    eq(list.map((e) => e.fontSize), [40, 24, 40]);
+});
+test("extractPlaceholders 掃過 row 與群組內的文字、圖片、條碼", () => {
+    const g = createGroupElement([
+        createTextElement({ runs: [{ text: "{{a}} 與 {{ b }}" }] }),
+        createBarcodeElement({ value: "{{c}}" }),
+    ]);
+    const row = createRowElement([1]);
+    row.columns[0].push(g);
+    row.columns[0].push({ id: "i", type: "image", assetId: "{{d}}" });
+    eq(extractPlaceholders([row]).sort(), ["a", "b", "c", "d"]);
+});
+test("normalizeTextElement 對已有 runs 的元素原樣回傳", () => {
+    const t = createTextElement();
+    assert(normalizeTextElement(t) === t);
+});
+
+// ---- 執行 ----
+const list = document.getElementById("list");
+let failed = 0;
+for (const c of cases) {
+    const li = document.createElement("li");
+    try {
+        await c.fn();
+        li.className = "pass";
+        li.textContent = "PASS  " + c.name;
+    } catch (err) {
+        failed += 1;
+        li.className = "fail";
+        li.textContent = "FAIL  " + c.name;
+        const pre = document.createElement("pre");
+        pre.textContent = err.message;
+        li.append(pre);
+    }
+    list.append(li);
+}
+const summary = document.getElementById("summary");
+summary.textContent = failed ? `${failed} / ${cases.length} 失敗` : `全部通過（${cases.length}）`;
+summary.className = failed ? "fail" : "pass";
+document.title = (failed ? "FAIL " : "PASS ") + summary.textContent;
+</script>
+</body>
+</html>
