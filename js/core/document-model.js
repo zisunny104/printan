@@ -216,6 +216,26 @@ export function createImageElement(overrides = {}) {
     };
 }
 
+/**
+ * 圖文段落：一張浮動圖片（靠左或靠右）加一段文字，文字繞著圖片排。
+ * 文字欄位同 text，圖片欄位同 image（只支援自動高度）；圖片與文字的間距固定 FLOAT_GAP_DOTS。
+ */
+export const FLOAT_GAP_DOTS = 8;
+
+export function createFloatBlockElement(overrides = {}) {
+    return {
+        ...createTextElement(),
+        ...createImageElement({ align: "left" }),
+        id: nextId("float"),
+        type: "float-block",
+        imageSide: "left", // left | right
+        widthPercent: 40, // 圖片寬度佔欄寬 %，1-100
+        heightDots: 0,
+        fit: "auto",
+        ...overrides,
+    };
+}
+
 export function createSpacerElement(overrides = {}) {
     return {
         id: nextId("spacer"),
@@ -273,6 +293,7 @@ export function createElement(type, ...args) {
     switch (type) {
         case "text": return createTextElement(...args);
         case "image": return createImageElement(...args);
+        case "float-block": return createFloatBlockElement(...args);
         case "spacer": return createSpacerElement(...args);
         case "divider": return createDividerElement(...args);
         case "row": return createRowElement(...args);
@@ -317,10 +338,10 @@ export function extractPlaceholdersFromText(text) {
 export function extractPlaceholders(elements) {
     const names = new Set();
     walkElements(elements, (el) => {
-        if (el.type === "text") {
+        if (el.type === "text" || el.type === "float-block") {
             for (const n of extractPlaceholdersFromText(getTextContent(el))) names.add(n);
         }
-        if (el.type === "image" && typeof el.assetId === "string") {
+        if ((el.type === "image" || el.type === "float-block") && typeof el.assetId === "string") {
             for (const n of extractPlaceholdersFromText(el.assetId)) names.add(n);
         }
         if (el.type === "barcode" && typeof el.value === "string") {

@@ -99,7 +99,7 @@ function collectUsage(elements, defaultFamily) {
     const visit = (node) => {
         if (Array.isArray(node)) return node.forEach(visit);
         if (!node || typeof node !== "object") return;
-        if (node.type === "text") {
+        if (node.type === "text" || node.type === "float-block") {
             for (const run of node.runs || []) {
                 add(run.fontFamily || node.fontFamily || defaultFamily, run.bold ?? node.bold, run.text);
             }

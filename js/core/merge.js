@@ -21,10 +21,10 @@ function substitute(text, data) {
 export function applyDataToElements(elements, data = {}) {
     const cloned = JSON.parse(JSON.stringify(elements));
     walkElements(cloned, (el) => {
-        if (el.type === "text" && Array.isArray(el.runs)) {
+        if ((el.type === "text" || el.type === "float-block") && Array.isArray(el.runs)) {
             for (const run of el.runs) run.text = substitute(run.text, data);
         }
-        if (el.type === "image" && typeof el.assetId === "string") {
+        if ((el.type === "image" || el.type === "float-block") && typeof el.assetId === "string") {
             el.assetId = substitute(el.assetId, data);
         }
         if (el.type === "barcode" && typeof el.value === "string") {
