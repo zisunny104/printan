@@ -112,6 +112,24 @@ body {
         overflow-y: auto;
     }
 
+    /* 側欄撐滿全高：卡片沿欄位高度拉長（內容少時底色與外框仍貫穿到底，提示文字留在卡片上半部），
+       內容超出時由欄位本身捲動。右欄由「元素設定」卡吃掉剩餘高度，其餘卡片維持內容高度。 */
+    .editor-list,
+    .editor-dock {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .editor-list > *,
+    .editor-dock > * {
+        flex: none;
+    }
+
+    .editor-list > .ts-box,
+    .editor-dock > .ts-box:has(> #inspector) {
+        flex: 1 0 auto;
+    }
+
     .editor-list {
         flex: 0 0 var(--printan-list-width);
         width: var(--printan-list-width);
