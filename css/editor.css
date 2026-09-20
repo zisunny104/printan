@@ -395,11 +395,12 @@ body {
     border-color: light-dark(rgba(139, 92, 246, .35), rgba(167, 139, 250, .6));
 }
 
+/* 選取（含多選）：整圈 2px 亮藍外框。深色模式下各型別底色本來就很亮（alpha .28），
+   只換底色分不出選取與否，所以靠外框區分；底色維持型別色，不另外蓋一層。 */
 .outline-row.is-selected {
-    background: light-dark(rgba(37, 99, 235, .1), rgba(96, 165, 250, .14));
-    border-color: light-dark(rgba(37, 99, 235, .55), rgba(96, 165, 250, .55));
-    outline: 1px solid light-dark(rgba(37, 99, 235, .55), rgba(96, 165, 250, .55));
-    outline-offset: -2px;
+    border-color: light-dark(#1d4ed8, #93c5fd);
+    outline: 2px solid light-dark(#1d4ed8, #93c5fd);
+    outline-offset: -3px;
 }
 
 .outline-row.is-target {
@@ -1082,13 +1083,19 @@ body {
 /* ==== 觸控裝置（深色模式一律以 light-dark() 寫在各規則內） ==== */
 
 @media (hover: none), (pointer: coarse) {
-    .outline-row .ts-button.is-icon {
-        width: 2rem;
-        height: 2rem;
+    /* 觸控目標至少 40px：列尾按鈕 40×40、列高 2.75rem 容得下 */
+    .outline-row {
+        height: 2.75rem;
     }
 
-    /* 沒有 hover，選取列固定顯示操作 */
-    .outline-row.is-selected .outline-actions {
+    .outline-row .ts-button.is-icon {
+        width: 40px;
+        height: 40px;
+    }
+
+    /* 沒有 hover，只有「唯一選取」的那一列固定顯示操作；多選時全部收起，避免每列都疊按鈕
+       （大綱是扁平的兄弟列，「前面有選取列、後面又有選取列」就是多選）。 */
+    .outline-list:not(:has(.outline-row.is-selected ~ .outline-row.is-selected)) .outline-row.is-selected .outline-actions {
         opacity: 1;
         pointer-events: auto;
     }
