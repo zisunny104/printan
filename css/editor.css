@@ -267,42 +267,69 @@ body {
     display: none;
 }
 
-/* 畫布區自己是直向 flex 容器（紙張預覽＋下方浮動工具列），跟外層 .editor-shell
-   排欄／堆疊無關，任何寬度都需要，所以不放進 desktop+ 的 media query 裡。
-   浮動工具列改用 position:fixed 後不再佔用文件流高度，這裡補一段底部留白，
-   避免捲到紙張最底端時內容一直被固定在視窗下緣的工具列蓋住。 */
+/* 畫布區：直向 flex 容器（紙張預覽卡片＋錨定在卡片下緣的浮動工具列），
+   position:relative 讓浮動工具列相對這一欄定位，欄寬拖曳或斷點堆疊都不用另外量測。 */
 .editor-canvas-pane {
+    position: relative;
     display: flex;
     flex-direction: column;
-    padding-bottom: 4.5rem;
 }
 
 @media (min-width: 1024px) {
+    /* 桌面版三欄鎖在一個視窗高度內（比照 koilisu/apps/pitrace）：標題、工具列、三欄一起
+       剛好一個 100vh，各欄自己在內部捲動，工作區永遠佔滿剩餘高度；頁尾在 100vh 之外，
+       捲動整頁才看得到。min-height 是視窗太矮時的下限，避免三欄被壓成一條縫。 */
+    .main-content {
+        flex: none;
+        height: 100vh;
+        min-height: 36rem;
+    }
+
+    .main-content > .ts-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        box-sizing: border-box;
+    }
+
+    .main-content > .ts-container > * {
+        flex-shrink: 0;
+    }
+
     .editor-shell {
+        flex: 1 1 0;
+        min-height: 0;
         flex-direction: row;
-        /* flex-start，不是 stretch：三欄的內容高度天生不一樣（中間紙張預覽通常比
-           右側一堆卡片堆疊矮很多），stretch 會硬把矮的欄位撐到跟最高欄位一樣高，
-           撐出來的空間沒有東西可以填、看起來就是版面下半截一大片空白。拖曳分隔線
-           另外用 align-self: stretch 蓋回來，才能維持貫穿整列的視覺分隔。 */
-        align-items: flex-start;
+        align-items: stretch;
         gap: 0;
+    }
+
+    .editor-list,
+    .editor-dock {
+        min-width: 0;
+        min-height: 0;
+        overflow-y: auto;
     }
 
     .editor-list {
         flex: 0 0 var(--printan-list-width);
         width: var(--printan-list-width);
-        min-width: 0;
     }
 
     .editor-canvas-pane {
         flex: 1 1 auto;
         min-width: 0;
+        min-height: 0;
+    }
+
+    .editor-canvas-pane > .paper-viewport {
+        flex: 1 1 0;
+        min-height: 0;
     }
 
     .editor-dock {
         flex: 0 0 var(--printan-dock-width);
         width: var(--printan-dock-width);
-        min-width: 0;
     }
 
     /* 寬度 1rem 接手原本 gap 讓出的視覺間距；中間的 grip 圖示純裝飾用 aria-hidden，
@@ -445,13 +472,29 @@ body {
     flex-direction: column;
 }
 
+/* 紙張本體是工作區內部的捲動容器：長紙張在這裡捲動，不撐高整頁。桌面版高度由 flex 給定
+   （見上面 desktop+ 規則），堆疊版面（<1024px）沒有 flex 高度，改用 max-height 給一個
+   有界高度，才不會一張長紙把其他面板擠到很遠的地方。下方留白讓捲到底時內容不被
+   浮動工具列蓋住。紙張用 auto margin 置中（放大到比容器寬時不會被左側裁掉）。 */
 .paper-viewport-body {
     display: flex;
-    justify-content: center;
-    padding: 1.5rem 0;
+    align-items: flex-start;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: min(75vh, 44rem);
+    overflow: auto;
+    padding: 1.5rem 1rem 4.5rem;
+}
+
+@media (min-width: 1024px) {
+    .paper-viewport-body {
+        max-height: none;
+    }
 }
 
 .paper-shadow {
+    flex: none;
+    margin: 0 auto;
     position: relative;
     /* 紙捲兩側是印表機印不到的實體邊距（rollWidthMm 跟 printableWidthMm 的差），
        跟中間可列印的畫布區分開來；畫布本身另外鋪白底（見 .canvas-host）。
@@ -495,22 +538,19 @@ body {
     display: none;
 }
 
-/* ---- 畫布下方置中的浮動工具列（快速新增元素），比照 koilisu/apps/pitrace 的
-   .canvas-floating-toolbar pill 樣式。pitrace 的畫布區是固定 100vh、內部自己捲動，
-   工具列用 position:absolute 錨定在那個有界的容器裡；printan 的紙張預覽走一般文件流
-   （紙張可能很長，靠整頁捲動），本來想用 position:sticky 比照「捲動時仍浮在視窗下緣」，
-   但實測發現 Tocas UI 在 <body> 設了 overflow-x:hidden，CSS 規範會連帶把 overflow-y
-   提升成 auto，使 <body> 變成一個 sticky 的捲動容器基準，可是 <body> 自己的 scrollTop
-   永遠是 0（實際捲動是瀏覽器視窗在捲）──sticky 因此完全失效，這是整個 Tocas 系列頁面
-   共通的限制，不是這個功能獨有的問題。改用 position:fixed 直接錨定視窗底部置中，
-   水平置中則由 editor.js 量測 .editor-canvas-pane 目前的中心點寫回 left（見
-   positionFloatingToolbar），這樣完全不受欄寬拖曳（.col-resizer）或斷點堆疊影響，
-   也完全不用把畫布區改成固定高度容器。left:50%/transform 只是 JS 尚未量測前的預設值。 ---- */
+/* ---- 工作區下緣置中的浮動工具列（快速新增元素），比照 koilisu/apps/pitrace 的
+   .canvas-floating-toolbar pill 樣式：position:absolute 錨定在 .editor-canvas-pane，
+   浮在工作區裡、不是整個視窗。left/right:0＋auto margin＋max-content 置中——不用
+   left:50%＋translate，因為 absolute 元素的 shrink-to-fit 寬度上限是「剩下的空間」，
+   left:50% 會把工具列壓成半個欄寬。max-width 相對這一欄，欄寬被拖窄時
+   wireToolbarOverflow 會依實際寬度把按鈕收進「更多工具」。 ---- */
 .canvas-floating-toolbar {
-    position: fixed;
-    left: 50%;
+    position: absolute;
+    left: 0;
+    right: 0;
     bottom: 1rem;
-    transform: translateX(-50%);
+    margin: 0 auto;
+    width: max-content;
     z-index: 10;
     max-width: calc(100% - 2rem);
     overflow-x: auto;
@@ -519,14 +559,6 @@ body {
     border-radius: 12px;
     padding: .35rem .4rem;
     box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
-    transition: opacity .15s ease;
-}
-
-/* 頁尾捲進視窗範圍時讓開（見 editor.js wireFloatingToolbarFooterAvoidance），
-   避免 position:fixed 的工具列疊在頁尾文字／連結上面 */
-.canvas-floating-toolbar.is-yielding {
-    opacity: 0;
-    pointer-events: none;
 }
 
 .canvas-floating-toolbar.pane-toolbar {

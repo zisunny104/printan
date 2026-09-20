@@ -81,8 +81,6 @@ async function init() {
     bindBatchPanel();
     bindPrinterSettings();
     wireResizableColumns();
-    wireFloatingToolbarPosition();
-    wireFloatingToolbarFooterAvoidance();
     wireToolbarOverflow();
     onModelChange({ skipInspector: false });
     onWebFontStatusChange(() => renderInspector()); // 字體載入失敗／恢復時，選單上的標示要跟著更新
@@ -179,51 +177,6 @@ function populatePaperWidthTabs() {
         label.appendChild(text);
         wrap.appendChild(label);
     }
-}
-
-// .canvas-floating-toolbar 用 position:fixed 錨定視窗底部（見 editor.css 註解：
-// Tocas UI 在 <body> 設 overflow-x:hidden 會連帶讓 overflow-y 被規範提升成 auto，
-// 使 sticky 的捲動基準變成永遠 scrollTop=0 的 <body>，因此失效，改用 fixed）。
-// 水平置中量測的是 .editor-canvas-pane 而不是整個視窗，用 ResizeObserver 盯著這個
-// pane 本身的 box，欄寬拖曳（.col-resizer）、桌面/手機斷點造成的堆疊都會自動反映。
-// 但 ResizeObserver 只在 pane 自己的「尺寸」變動時觸發——外層 .ts-container 有
-// max-width:1400px，視窗超過這個寬度後再變寬，容器只是靠 margin:auto 整塊往右挪，
-// pane 的寬度完全沒變、ResizeObserver 不會發火，toolbar.style.left 卻是視窗絕對座標，
-// 於是寬螢幕下 toolbar 會停在舊位置，相對畫面越看越偏左（使用者回報「偏左」的根因）。
-// 額外掛 window resize 補這個「位置變了但尺寸沒變」的情況。
-//
-// max-width 同理：CSS 預設 calc(100% - 2rem) 在 position:fixed 底下是相對「視窗」寬度
-// 算的（fixed 元素的 % 一律相對 initial containing block），跟 pane 實際寬度無關——
-// 欄寬拉桿（.col-resizer）把 pane 拖窄時，工具列的寬度上限完全不會跟著變小，直接拿
-// pane 的 rect.width 覆寫成 px 值，才能讓 wireToolbarOverflow() 的「容器變窄→收合」
-// 判斷（量 bar.scrollWidth vs bar.clientWidth）正確反映拉桿拖曳，不是只反映視窗尺寸。
-function wireFloatingToolbarPosition() {
-    const pane = document.getElementById("canvasPane");
-    const toolbar = document.querySelector(".canvas-floating-toolbar");
-    if (!pane || !toolbar) return;
-    function reposition() {
-        const rect = pane.getBoundingClientRect();
-        toolbar.style.left = `${rect.left + rect.width / 2}px`;
-        const remPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-        toolbar.style.maxWidth = `${Math.max(0, rect.width - remPx * 2)}px`;
-    }
-    new ResizeObserver(reposition).observe(pane);
-    window.addEventListener("resize", reposition);
-    reposition();
-}
-
-// 頁面內容短的時候，position:fixed 的浮動工具列會整條疊在頁尾（開利手底部／GitHub
-// 連結／主題切換）上面，兩種「固定在畫面上」的元素互相打架，就是回報裡「底部怪怪的」
-// 的實際成因。頁尾進入視窗範圍時先把工具列淡出、讓開，離開視窗（往上捲回編輯區）再淡入。
-function wireFloatingToolbarFooterAvoidance() {
-    const toolbar = document.querySelector(".canvas-floating-toolbar");
-    const footer = document.getElementById("app-footer");
-    if (!toolbar || !footer || !("IntersectionObserver" in window)) return;
-    const observer = new IntersectionObserver(
-        ([entry]) => toolbar.classList.toggle("is-yielding", entry.isIntersecting),
-        { rootMargin: "0px" }
-    );
-    observer.observe(footer);
 }
 
 // 通用下拉選單開關：開／關／切換，碰撞感知（下方空間不夠時翻到上面顯示），點擊選單外
@@ -367,10 +320,9 @@ function wireToolbarOverflow() {
         }
     }
 
-    // 觀察的不是 bar 自己，是它 position:fixed 水平置中所依據的父層 #canvasPane（見
-    // wireFloatingToolbarPosition）。bar 本身沒有明確 width，收合到只剩內容需要的寬度後，
-    // 即使父層之後變寬，bar 自己的 border-box 也不會再變——因為它已經小於新的 max-width
-    // 上限，不再被撐開。只盯著 bar 會導致容器變寬後收合狀態永遠無法還原。
+    // 觀察的不是 bar 自己，是它錨定的父層 #canvasPane：bar 是 width:max-content、
+    // max-width 相對父層，收合到只剩內容需要的寬度後，父層之後變寬 bar 也不會再變，
+    // 只盯著 bar 會導致容器變寬後收合狀態永遠無法還原。
     new ResizeObserver(applyCollapse).observe(bar.parentElement);
     applyCollapse();
 }

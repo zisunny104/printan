@@ -29,7 +29,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
 
 <body class="is-rounded">
     <div class="main-content">
-        <div class="ts-container has-vertically-padded" style="max-width:1400px">
+        <div class="ts-container is-fluid has-vertically-padded">
 
             <div class="ts-grid is-middle-aligned">
                 <div class="column is-fluid">
@@ -466,7 +466,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
 
     <!-- 開利手底部 -->
     <div id="app-footer" class="ts-content is-secondary is-vertically-padded">
-        <div class="ts-container" style="max-width:1400px">
+        <div class="ts-container is-fluid">
             <div class="ts-grid">
                 <div class="column is-fluid">
                     <div class="ts-text is-description">
