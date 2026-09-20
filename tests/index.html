@@ -20,6 +20,7 @@ import {
     createBarcodeElement, createElement, cloneElementWithNewIds, walkElements, extractPlaceholders,
     normalizeTextElement,
 } from "../js/core/document-model.js";
+import * as tree from "../js/core/element-tree.js";
 import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
 import { readPtanFile } from "../js/core/ptan-file.js";
 
@@ -182,16 +183,105 @@ test("walkElements 走訪 row 各欄與群組後代，順序為前序", () => {
     walkElements([row], (e) => seen.push(e.type));
     eq(seen, ["row", "group", "text", "spacer", "divider"]);
 });
-test("群組：包起來再取出，子元素順序與 id 不變", () => {
-    const list = [createTextElement(), createSpacerElement(), createDividerElement(), createTextElement()];
-    const before = ids(list);
-    const picked = list.splice(1, 2);
-    const g = createGroupElement(picked);
-    list.splice(1, 0, g);
-    eq(ids(g.children), before.slice(1, 3));
-    eq(ids(list).length, 3);
-    list.splice(1, 1, ...g.children);
-    eq(ids(list), before);
+test("groupElementsIn／ungroupElementsIn：順序與 id 不變", () => {
+    const root = [createTextElement(), createSpacerElement(), createDividerElement(), createTextElement()];
+    const before = ids(root);
+    const g = tree.groupElementsIn(root, [before[2], before[1]]);
+    eq(g.type, "group");
+    eq(ids(root), [before[0], g.id, before[3]]);
+    eq(ids(g.children), [before[1], before[2]]);
+    const freed = tree.ungroupElementsIn(root, [g.id]);
+    eq(ids(root), before);
+    eq(freed, [before[1], before[2]]);
+});
+test("groupElementsIn：跨層或找不到時不動作", () => {
+    const row = createRowElement([1, 1]);
+    const inner = createTextElement();
+    row.columns[0].push(inner);
+    const outer = createSpacerElement();
+    const root = [row, outer];
+    const snap = tree.snapshotElements(root);
+    eq(tree.groupElementsIn(root, [inner.id, outer.id]), null);
+    eq(tree.groupElementsIn(root, ["nope"]), null);
+    eq(tree.snapshotElements(root), snap);
+});
+test("ungroupElementsIn 只處理群組，其他元素略過", () => {
+    const t = createTextElement();
+    const root = [t];
+    eq(tree.ungroupElementsIn(root, [t.id]), []);
+    eq(ids(root), [t.id]);
+});
+test("findElementById／findContainerOf／resolveTargetArray 走進 row 與群組", () => {
+    const leaf = createTextElement();
+    const g = createGroupElement([leaf]);
+    const row = createRowElement([1, 1]);
+    row.columns[1].push(g);
+    const root = [row];
+    assert(tree.findElementById(root, leaf.id) === leaf);
+    assert(tree.findElementById(root, "nope") === null);
+    const c = tree.findContainerOf(root, leaf.id);
+    assert(c.array === g.children && c.index === 0);
+    assert(tree.resolveTargetArray(root, { rowId: g.id, colIndex: 0 }) === g.children);
+    assert(tree.resolveTargetArray(root, { rowId: row.id, colIndex: 1 }) === row.columns[1]);
+    assert(tree.resolveTargetArray(root, null) === root);
+    assert(tree.resolveTargetArray(root, { rowId: "nope", colIndex: 0 }) === root);
+    eq(tree.containerToTarget(root, g.children), { rowId: g.id, colIndex: 0 });
+    assert(tree.containerToTarget(root, root) === null);
+});
+test("duplicateElementsIn：複製放在原本之後，id 為新值", () => {
+    const a = createTextElement(), b = createSpacerElement();
+    const root = [a, b];
+    const clones = tree.duplicateElementsIn(root, [a.id]);
+    eq(root.length, 3);
+    eq(root[1].id, clones[0]);
+    assert(root[1].id !== a.id && root[1] !== a);
+});
+test("removeElements 刪除巢狀元素並回傳實際刪掉的 id", () => {
+    const leaf = createTextElement();
+    const g = createGroupElement([leaf, createSpacerElement()]);
+    const root = [g];
+    eq(tree.removeElements(root, [leaf.id, "nope"]), [leaf.id]);
+    eq(g.children.length, 1);
+});
+test("moveElementBy／moveElementsBy／moveElementToIndex", () => {
+    const [a, b, c, d] = [1, 2, 3, 4].map(() => createSpacerElement());
+    const root = [a, b, c, d];
+    assert(!tree.moveElementBy(root, a.id, -1), "邊界不動");
+    assert(tree.moveElementBy(root, a.id, 1));
+    eq(ids(root), [b.id, a.id, c.id, d.id]);
+    tree.moveElementsBy(root, [b.id, a.id], -1);
+    eq(ids(root), [b.id, a.id, c.id, d.id]);
+    tree.moveElementsBy(root, [c.id, d.id], -1);
+    eq(ids(root), [b.id, c.id, d.id, a.id]);
+    const r2 = [a, b, c, d];
+    assert(tree.moveElementToIndex(r2, a.id, 3));
+    eq(ids(r2), [b.id, c.id, a.id, d.id]);
+    assert(!tree.moveElementToIndex(r2, a.id, 3), "位置相同不動");
+});
+test("moveElementToContainerIn：跨容器搬移，不能搬進自己底下", () => {
+    const leaf = createTextElement();
+    const g = createGroupElement([leaf]);
+    const spacer = createSpacerElement();
+    const root = [g, spacer];
+    let r = tree.moveElementToContainerIn(root, spacer.id, g.children, 0);
+    eq(r, { moved: true, crossed: true });
+    eq(ids(g.children), [spacer.id, leaf.id]);
+    r = tree.moveElementToContainerIn(root, g.id, g.children, 0);
+    eq(r, { moved: false, crossed: false });
+    eq(ids(root), [g.id]);
+});
+test("選取：selectionToIds／idsToSelection／pruneSelectionIn", () => {
+    eq(tree.idsToSelection(["a", "b"]), { selectedId: "b", multi: ["a", "b"] });
+    eq(tree.idsToSelection(["a"]), { selectedId: "a", multi: [] });
+    eq(tree.idsToSelection([]), { selectedId: null, multi: [] });
+    eq(tree.selectionToIds({ selectedId: "a", multi: [] }), ["a"]);
+    eq(tree.selectionToIds({ selectedId: null, multi: [] }), []);
+    const a = createSpacerElement(), b = createSpacerElement(), c = createSpacerElement();
+    const root = [a, b, c];
+    eq(tree.pruneSelectionIn(root, { selectedId: c.id, multi: [a.id, b.id, c.id] }), { selectedId: c.id, multi: [a.id, b.id, c.id] });
+    tree.removeElements(root, [b.id, c.id]);
+    eq(tree.pruneSelectionIn(root, { selectedId: c.id, multi: [a.id, b.id, c.id] }), { selectedId: a.id, multi: [] });
+    eq(tree.pruneSelectionIn(root, { selectedId: "gone", multi: [] }), { selectedId: null, multi: [] });
 });
 test("群組可以巢狀，複製後各層 id 皆為新值", () => {
     const inner = createGroupElement([createTextElement()]);
@@ -200,21 +290,25 @@ test("群組可以巢狀，複製後各層 id 皆為新值", () => {
     assert(c.children[0].type === "group" && c.children[0].id !== inner.id);
     assert(c.children[0].children[0].id !== inner.children[0].id);
 });
-test("undo 用的 JSON snapshot 還原後不與現況共用參考", () => {
+test("undo snapshot：還原後不與現況共用參考，內容一致", () => {
     const els = plainElements();
-    const snap = JSON.stringify(els);
-    const restored = JSON.parse(snap);
+    const snap = tree.snapshotElements(els);
+    const restored = tree.restoreElements(snap);
+    eq(restored, els);
     restored[0].runs[0].text = "被改";
     restored[2].columns[0].push(createSpacerElement());
-    eq(JSON.stringify(els), snap);
-    const again = JSON.parse(snap);
-    assert(again[0] !== els[0] && again[2].columns !== els[2].columns);
+    eq(tree.snapshotElements(els), snap);
+    assert(restored[0] !== els[0] && restored[2].columns !== els[2].columns);
+    assert(tree.restoreElements(snap)[0] !== restored[0], "每次還原都是新物件");
 });
-test("多選批次編輯：對每個被選元素套用同一欄位，其餘元素不動", () => {
-    const list = [createTextElement({ fontSize: 24 }), createTextElement({ fontSize: 24 }), createTextElement({ fontSize: 24 })];
-    const selected = new Set([list[0].id, list[2].id]);
-    for (const el of list) if (selected.has(el.id)) el.fontSize = 40;
+test("多選批次編輯 applyFieldToElements：只改被選元素，runField 會清掉片段覆寫", () => {
+    const list = [createTextElement({ fontSize: 24, runs: [{ text: "a", fontSize: 10 }] }), createTextElement({ fontSize: 24 }), createTextElement({ fontSize: 24, runs: [{ text: "c", fontSize: 12 }] })];
+    tree.applyFieldToElements([list[0], list[2]], "fontSize", 40, { runField: true });
     eq(list.map((e) => e.fontSize), [40, 24, 40]);
+    assert(!("fontSize" in list[0].runs[0]) && !("fontSize" in list[2].runs[0]));
+    tree.applyFieldToElements([list[1]], "align", "center");
+    eq(list[1].align, "center");
+    eq(list[0].align, "left");
 });
 test("extractPlaceholders 掃過 row 與群組內的文字、圖片、條碼", () => {
     const g = createGroupElement([

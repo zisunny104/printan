@@ -11,9 +11,15 @@ import {
 } from "../core/printer-profiles.js";
 import {
     createTextElement, createImageElement, createSpacerElement, createDividerElement,
-    createRowElement, createBarcodeElement, createGroupElement, cloneElementWithNewIds, extractPlaceholders, getTextContent,
+    createRowElement, createBarcodeElement, cloneElementWithNewIds, extractPlaceholders, getTextContent,
     getRangeStyle, applyStyleToRange, replaceFullText, MIXED,
 } from "../core/document-model.js";
+import {
+    childArrays, resolveTargetArray, findElementById, findContainerOf, isSameTarget, flattenElements, setRowRatio,
+    removeElements, groupElementsIn, ungroupElementsIn, duplicateElementsIn, moveElementBy, moveElementsBy,
+    moveElementToIndex, moveElementToContainerIn, containerToTarget as containerToTargetIn, selectionToIds,
+    idsToSelection, pruneSelectionIn, applyFieldToElements, snapshotElements, restoreElements,
+} from "../core/element-tree.js";
 import { renderTemplate, renderBatch } from "../core/renderer.js";
 import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
 import { splitDotsByRatio } from "../core/units.js";
@@ -705,67 +711,12 @@ function wireAddMenu() {
     toolbarAdd.addEventListener("click", () => openAddMenu(toolbarAdd, state.insertionTarget));
 }
 
-function resolveTargetArray(rootElements, target) {
-    if (!target) return rootElements;
-    const row = findElementById(rootElements, target.rowId);
-    if (!row) return rootElements;
-    return childArrays(row)[target.colIndex] || rootElements;
-}
-
-// 有子元素的容器：多欄的每一欄、群組的 children（容器目標 { rowId, colIndex } 對群組固定 colIndex 0）
-function childArrays(el) {
-    if (el.type === "row") return el.columns;
-    if (el.type === "group") return [el.children];
-    return [];
-}
-
-function findElementById(elements, id) {
-    for (const el of elements) {
-        if (el.id === id) return el;
-        for (const col of childArrays(el)) {
-            const found = findElementById(col, id);
-            if (found) return found;
-        }
-    }
-    return null;
-}
-
-function findContainerOf(elements, id) {
-    for (let i = 0; i < elements.length; i++) {
-        if (elements[i].id === id) return { array: elements, index: i };
-        for (const col of childArrays(elements[i])) {
-            const found = findContainerOf(col, id);
-            if (found) return found;
-        }
-    }
-    return null;
-}
-
-function isSameTarget(a, b) {
-    if (!a && !b) return true;
-    if (!a || !b) return false;
-    return a.rowId === b.rowId && a.colIndex === b.colIndex;
-}
-
-function setRowRatio(rowEl, newRatio) {
-    const newColumns = newRatio.map(() => []);
-    rowEl.columns.forEach((col, i) => {
-        const idx = Math.min(i, newColumns.length - 1);
-        newColumns[idx].push(...col);
-    });
-    rowEl.ratio = newRatio;
-    rowEl.columns = newColumns;
-}
-
 function deleteElement(id) {
     deleteElements([id]);
 }
 
 function deleteElements(ids) {
-    for (const id of ids) {
-        const found = findContainerOf(state.project.template.elements, id);
-        if (!found) continue;
-        found.array.splice(found.index, 1);
+    for (const id of removeElements(state.project.template.elements, ids)) {
         if (state.insertionTarget && state.insertionTarget.rowId === id) state.insertionTarget = null;
     }
     pruneSelection();
@@ -774,29 +725,14 @@ function deleteElements(ids) {
 
 // 建立群組：把同一層的選取元素收進一個新群組（放在最前面那個的位置）；解散則把子元素放回原位
 function groupElements(ids) {
-    const root = state.project.template.elements;
-    const found = ids.map((id) => findContainerOf(root, id)).filter(Boolean);
-    if (!found.length || found.some((f) => f.array !== found[0].array)) return;
-    const array = found[0].array;
-    const members = found.sort((a, b) => a.index - b.index).map((f) => f.array[f.index]);
-    const at = found[0].index;
-    const group = createGroupElement(members);
-    for (const m of members) array.splice(array.indexOf(m), 1);
-    array.splice(at, 0, group);
+    const group = groupElementsIn(state.project.template.elements, ids);
+    if (!group) return;
     setSelection([group.id]);
     onModelChange();
 }
 
 function ungroupElements(ids) {
-    const root = state.project.template.elements;
-    const freed = [];
-    for (const id of ids) {
-        const found = findContainerOf(root, id);
-        const group = found?.array[found.index];
-        if (!group || group.type !== "group") continue;
-        found.array.splice(found.index, 1, ...group.children);
-        freed.push(...group.children.map((c) => c.id));
-    }
+    const freed = ungroupElementsIn(state.project.template.elements, ids);
     if (!freed.length) return;
     setSelection(freed);
     onModelChange();
@@ -807,14 +743,7 @@ function duplicateElement(id) {
 }
 
 function duplicateElements(ids) {
-    const clones = [];
-    for (const id of ids) {
-        const found = findContainerOf(state.project.template.elements, id);
-        if (!found) continue;
-        const clone = cloneElementWithNewIds(found.array[found.index]);
-        found.array.splice(found.index + 1, 0, clone);
-        clones.push(clone.id);
-    }
+    const clones = duplicateElementsIn(state.project.template.elements, ids);
     if (!clones.length) return;
     setSelection(clones);
     onModelChange();
@@ -822,82 +751,38 @@ function duplicateElements(ids) {
 
 // 元素被刪掉（刪除、復原）之後，把選取範圍裡已經不存在的 id 拿掉
 function pruneSelection() {
-    const exists = (id) => findElementById(state.project.template.elements, id);
-    state.multi = state.multi.filter(exists);
-    if (state.multi.length < 2) {
-        if (state.multi.length === 1) state.selectedId = state.multi[0];
-        state.multi = [];
-    } else if (!state.multi.includes(state.selectedId)) {
-        state.selectedId = state.multi[state.multi.length - 1];
-    }
-    if (state.selectedId && !exists(state.selectedId)) state.selectedId = null;
+    Object.assign(state, pruneSelectionIn(state.project.template.elements, state));
 }
 
 function getSelectedIds() {
-    if (state.multi.length > 1) return state.multi;
-    return state.selectedId ? [state.selectedId] : [];
+    return selectionToIds(state);
 }
 
 function setSelection(ids) {
-    state.selectedId = ids[ids.length - 1] ?? null;
-    state.multi = ids.length > 1 ? ids : [];
+    Object.assign(state, idsToSelection(ids));
 }
 
 function moveElement(id, direction) {
-    const found = findContainerOf(state.project.template.elements, id);
-    if (!found) return;
-    const newIndex = found.index + direction;
-    if (newIndex < 0 || newIndex >= found.array.length) return;
-    const [item] = found.array.splice(found.index, 1);
-    found.array.splice(newIndex, 0, item);
-    onModelChange();
+    if (moveElementBy(state.project.template.elements, id, direction)) onModelChange();
 }
 
 /** 多選整批上移／下移：同一層內，遇到邊界或前一個也是選取中的就不動，其餘保持相對順序。 */
 function moveElements(ids, direction) {
-    const found = findContainerOf(state.project.template.elements, ids[0]);
-    if (!found) return;
-    const arr = found.array;
-    const set = new Set(ids);
-    const swap = (i, j) => { [arr[i], arr[j]] = [arr[j], arr[i]]; };
-    if (direction < 0) {
-        for (let i = 1; i < arr.length; i++) if (set.has(arr[i].id) && !set.has(arr[i - 1].id)) swap(i, i - 1);
-    } else {
-        for (let i = arr.length - 2; i >= 0; i--) if (set.has(arr[i].id) && !set.has(arr[i + 1].id)) swap(i, i + 1);
-    }
-    onModelChange();
+    if (moveElementsBy(state.project.template.elements, ids, direction)) onModelChange();
 }
 
 /** 拖曳排序用：把元素移到「同一個容器內、目前索引為 newIndex 的元素之前」。 */
 function moveElementTo(id, newIndex) {
-    const found = findContainerOf(state.project.template.elements, id);
-    if (!found) return;
-    const { array, index } = found;
-    let target = newIndex;
-    if (target > index) target -= 1;
-    target = Math.max(0, Math.min(target, array.length - 1));
-    if (target === index) return;
-    const [item] = array.splice(index, 1);
-    array.splice(target, 0, item);
-    onModelChange();
+    if (moveElementToIndex(state.project.template.elements, id, newIndex)) onModelChange();
 }
 
 /** 跨容器拖曳：把元素搬到另一個容器陣列的 index 位置（同容器時等同 moveElementTo）。
  *  不能把多欄元素搬進自己底下的欄位（會形成迴圈）。 */
 function moveElementToContainer(id, targetArray, index) {
-    const found = findContainerOf(state.project.template.elements, id);
-    if (!found) return;
-    if (found.array === targetArray) return moveElementTo(id, index);
-    const item = found.array[found.index];
-    if (childArrays(item).some((col) => col === targetArray || containsArray(col, targetArray))) return;
-    found.array.splice(found.index, 1);
-    targetArray.splice(Math.max(0, Math.min(index, targetArray.length)), 0, item);
-    state.insertionTarget = containerToTarget(targetArray);
+    const { moved, crossed } = moveElementToContainerIn(state.project.template.elements, id, targetArray, index);
+    if (!moved) return;
+    if (crossed) state.insertionTarget = containerToTarget(targetArray);
     onModelChange();
-}
-
-function containsArray(elements, array) {
-    return elements.some((el) => childArrays(el).some((col) => col === array || containsArray(col, array)));
 }
 
 /** 選取元素：outline 清單點擊、畫布疊層點擊共用同一套邏輯。 */
@@ -1149,18 +1034,7 @@ function buildElementRow(el, depth, parentKey) {
 }
 
 function containerToTarget(array) {
-    if (array === state.project.template.elements) return null;
-    // 找出這個 array 屬於哪個 row 的哪一欄
-    let result = null;
-    (function walk(elements) {
-        for (const el of elements) {
-            childArrays(el).forEach((col, i) => {
-                if (col === array) result = { rowId: el.id, colIndex: i };
-                walk(col);
-            });
-        }
-    })(state.project.template.elements);
-    return result;
+    return containerToTargetIn(state.project.template.elements, array);
 }
 
 function iconButton(icon, label, onClick) {
@@ -1224,10 +1098,7 @@ function buildMultiInspector(panel, ids) {
     const selected = ids.map((id) => findElementById(state.project.template.elements, id)).filter(Boolean);
     panel.appendChild(sectionHeader("shapes", `已選 ${selected.length} 個元素`));
     const apply = (spec, value) => {
-        for (const el of selected) {
-            el[spec.key] = value;
-            if (spec.runField) for (const run of el.runs || []) delete run[spec.key]; // 片段自己的覆寫要一併清掉才看得到效果
-        }
+        applyFieldToElements(selected, spec.key, value, { runField: spec.runField }); // 片段自己的覆寫要一併清掉才看得到效果
         onModelChange({ skipInspector: true });
     };
     let shown = 0;
@@ -3062,7 +2933,7 @@ function resetHistory() {
 
 function recordHistory() {
     if (history.restoring) return;
-    const snapshot = JSON.stringify(state.project.template.elements);
+    const snapshot = snapshotElements(state.project.template.elements);
     if (snapshot === history.stack[history.index]) return;
     const now = Date.now();
     history.stack.length = history.index + 1;
@@ -3081,7 +2952,7 @@ function stepHistory(direction) {
     if (next < 0 || next >= history.stack.length) return;
     history.index = next;
     history.at = 0;
-    state.project.template.elements = JSON.parse(history.stack[next]);
+    state.project.template.elements = restoreElements(history.stack[next]);
     pruneSelection();
     if (state.insertionTarget && !findElementById(state.project.template.elements, state.insertionTarget.rowId)) state.insertionTarget = null;
     history.restoring = true;
@@ -3096,14 +2967,6 @@ function stepHistory(direction) {
 // 焦點在輸入框、文字編輯區或對話框時一律交給瀏覽器（輸入框自己的復原、Delete 刪字）。
 
 let clipboardElements = [];
-
-function flattenElements(elements, out = []) {
-    for (const el of elements) {
-        out.push(el);
-        childArrays(el).forEach((col) => flattenElements(col, out));
-    }
-    return out;
-}
 
 function deselectElement() {
     if (!getSelectedIds().length) return;
