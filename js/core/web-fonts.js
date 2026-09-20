@@ -28,6 +28,7 @@ export const WEB_FONTS = [
     },
 ];
 
+const embeddedKeys = new Set(); // "family|weight"：來自 .ptan 內嵌字體，不必再連網載入
 const state = new Map(); // id → { failedAt: number|null }
 const sheetPromises = new Map(); // css 網址 → Promise（同一份只插一次 <link>）
 const sheetLinks = new Map(); // css 網址 → <link>，失敗時拔掉，下次重試才會重新建立字體物件
@@ -124,6 +125,8 @@ async function loadFont(font, byWeight) {
 export async function ensureWebFonts(elements, defaultFamily) {
     const failedLabels = [];
     await Promise.all([...collectUsage(elements, defaultFamily)].map(async ([font, byWeight]) => {
+        for (const weight of [...byWeight.keys()]) if (embeddedKeys.has(`${font.family}|${weight}`)) byWeight.delete(weight);
+        if (!byWeight.size) return;
         const failedAt = state.get(font.id)?.failedAt;
         if (failedAt != null && Date.now() - failedAt < RETRY_AFTER_MS) {
             failedLabels.push(font.label);
@@ -140,4 +143,74 @@ export async function ensureWebFonts(elements, defaultFamily) {
         }
     }));
     return failedLabels;
+}
+
+// ---- .ptan 內嵌字體：只帶「用到字元」所在的 woff2 分片（Sarasa 本來就依字元切片；JetBrains 只有 Latin 一片），不做另外的 subset ----
+
+const SAFE_ASCII = Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)).join(""); // {{變數}} 的英數內容預留
+
+function parseUnicodeRange(text) {
+    return String(text || "").split(",").map((t) => {
+        const m = /^U\+([0-9A-F]+)(?:-([0-9A-F]+))?$/i.exec(t.trim());
+        return m ? [parseInt(m[1], 16), parseInt(m[2] || m[1], 16)] : null;
+    }).filter(Boolean);
+}
+
+function bytesToBase64(bytes) {
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+}
+
+/**
+ * 匯出用：回傳 { fonts: [{ family, weight, unicodeRange, data(base64 woff2) }], failed: [label] }。
+ * 只處理專案內自帶的開源網頁字體；本機字體不在 WEB_FONTS 裡，自然不會被帶入。
+ */
+export async function buildEmbeddedFonts(elements, defaultFamily) {
+    const fonts = [];
+    const failed = [];
+    for (const [font, byWeight] of collectUsage(elements, defaultFamily)) {
+        try {
+            for (const [weight, text] of byWeight) {
+                const sheetUrl = new URL(font.sheets[weight], location.href).href;
+                const css = await (await fetch(sheetUrl)).text();
+                const codes = [...new Set(text + SAFE_ASCII)].map((c) => c.codePointAt(0));
+                for (const block of css.match(/@font-face\s*\{[^}]*\}/g) || []) {
+                    const url = /url\(([^)]+)\)/.exec(block)?.[1].replace(/^["']|["']$/g, "");
+                    const rangeText = /unicode-range:\s*([^;}]+)/.exec(block)?.[1];
+                    if (!url || !rangeText) continue;
+                    const ranges = parseUnicodeRange(rangeText);
+                    if (!codes.some((c) => ranges.some(([a, b]) => c >= a && c <= b))) continue;
+                    const res = await fetch(new URL(url, sheetUrl).href);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    fonts.push({ family: font.family, weight, unicodeRange: rangeText.trim(), data: bytesToBase64(new Uint8Array(await res.arrayBuffer())) });
+                }
+            }
+        } catch (err) {
+            console.warn(`內嵌字體失敗：${font.label}`, err);
+            failed.push(font.label);
+        }
+    }
+    return { fonts, failed };
+}
+
+/** 匯入用：把 .ptan 內嵌的字體註冊成 FontFace。只接受已知的網頁字體家族，回傳成功註冊的片數。 */
+export async function registerEmbeddedFonts(list) {
+    if (!Array.isArray(list)) return 0;
+    let count = 0;
+    for (const item of list) {
+        if (!item || !WEB_FONTS.some((f) => f.family === item.family) || typeof item.data !== "string") continue;
+        const weight = item.weight === 700 ? 700 : 400;
+        try {
+            const bytes = Uint8Array.from(atob(item.data), (c) => c.charCodeAt(0));
+            const face = new FontFace(item.family, bytes, { weight: String(weight), unicodeRange: String(item.unicodeRange || "U+0-10FFFF") });
+            await face.load();
+            document.fonts.add(face);
+            embeddedKeys.add(`${item.family}|${weight}`);
+            count += 1;
+        } catch (err) {
+            console.warn("內嵌字體載入失敗", err);
+        }
+    }
+    return count;
 }

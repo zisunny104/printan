@@ -113,6 +113,13 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <a class="item" id="btn-save-ptan">
                     <span class="ts-icon is-download-icon" aria-hidden="true"></span> 匯出 .ptan
                 </a>
+                <div class="item" id="export-embed-fonts-row">
+                    <label class="ts-checkbox is-small">
+                        <input type="checkbox" id="export-embed-fonts">
+                        <div class="text">內嵌字體</div>
+                    </label>
+                    <span class="info-icon" tabindex="0" role="img" aria-label="僅開源字體，檔案會變大" data-tooltip="僅開源字體，檔案會變大"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span>
+                </div>
                 <a class="item" id="btn-export-pdf">
                     <span class="ts-icon is-file-pdf-icon" aria-hidden="true"></span> 匯出 PDF
                 </a>
@@ -571,7 +578,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <div data-help-panel="fonts" hidden>
                     <ul class="help-list">
                         <li>文字可選內建字體、等寬字體，或授權後使用本機字體。</li>
-                        <li>.ptan 只記錄字體名稱，不包含字體檔；換電腦時該字體需自行安裝。</li>
+                        <li>.ptan 預設只記錄字體名稱；匯出時勾選「內嵌字體」，會帶入用到的等寬開源字體（只含用到的字，檔案會變大），換電腦也能照樣顯示。本機字體因授權不會內嵌，換電腦需自行安裝。</li>
                         <li>網頁字體沒載入成功時，預覽與列印會改用系統字體，並在工作區上方提示。</li>
                     </ul>
                 </div>

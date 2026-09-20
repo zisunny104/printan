@@ -115,7 +115,7 @@ function cacheDom() {
         "btn-printer-test-print", "btn-printer-query-status", "printer-status-result",
         "btn-printer-forget", "printer-dots-list", "btn-printer-dots-reset", "printer-margin-list", "btn-printer-margin-reset", "btn-printer-margin-sheet",
         "printer-info-device", "printer-info-firmware", "printer-info-spec", "printer-info-dpi",
-        "printer-info-paper", "printer-info-printable", "printer-info-blade",
+        "printer-info-paper", "printer-info-printable", "printer-info-blade", "export-embed-fonts", "export-embed-fonts-row",
     ].forEach((id) => (els[id] = document.getElementById(id)));
 }
 
@@ -369,8 +369,10 @@ function bindToolbar() {
 
     els["btn-new-ptan"].addEventListener("click", startNewProject);
     els["open-project-from-file"].addEventListener("click", () => els["ptan-file-input"].click());
-    els["btn-save-ptan"].addEventListener("click", () => {
-        downloadPtan(state.project, state.project.meta.name || "printan");
+    els["export-embed-fonts-row"].addEventListener("click", (e) => e.stopPropagation()); // 勾選時不收起匯出選單
+    els["btn-save-ptan"].addEventListener("click", async () => {
+        const failed = await downloadPtan(state.project, state.project.meta.name || "printan", { embedFonts: els["export-embed-fonts"].checked });
+        if (failed.length) alert(`已匯出，但這些字體沒能內嵌（可能離線）：${failed.join("、")}`);
     });
 
     els["btn-export-pdf"].addEventListener("click", exportSinglePdf);

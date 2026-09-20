@@ -26,6 +26,7 @@ export const PTAN_VERSION = 2;
  *   columns?: Element[][]   // 僅 row 使用：每欄是一個子 element 陣列
  *   ratio?: number[]        // 僅 row 使用：各欄相對比例，例如 [1,1] 或 [2,1]
  *   children?: Element[]    // 僅 group 使用（version 2）
+ * 專案層級選用欄位 embeddedFonts?: [{ family, weight, unicodeRange, data }]（version 2；匯出時勾選才有）
  * }
  */
 
@@ -106,7 +107,8 @@ function migrateElements(elements) {
 
 export function serializeProject(project) {
     // 沒用到群組就仍寫 v1，舊版 Printan 也能開；有群組才寫 v2
-    let usesGroup = false;
+    // （內嵌字體 embeddedFonts 同理：有才寫 v2）
+    let usesGroup = Array.isArray(project.embeddedFonts) && project.embeddedFonts.length > 0;
     walkElements(project.template?.elements || [], (el) => { if (el.type === "group") usesGroup = true; });
     return JSON.stringify({ ...project, version: usesGroup ? PTAN_VERSION : 1, format: PTAN_FORMAT }, null, 2);
 }
