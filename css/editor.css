@@ -1,6 +1,8 @@
 /* Printan Editor 版面樣式。Tocas UI 沒有現成元件的地方（工具列排列、卡片標題列、
    紙張視覺化、大綱樹狀縮排）才補自訂樣式，其餘一律交給 Tocas 的 class／間距工具類。 */
 
+/* ==== 基礎 ==== */
+
 /* Tocas 的 .ts-button／.ts-buttons 等元件會直接設定 display，跟瀏覽器原生
    [hidden] 屬性同樣是 0 specificity、但屬於 author stylesheet，蓋掉瀏覽器內建
    UA stylesheet 的 [hidden]{display:none}，導致加了 hidden 屬性的 Tocas 元件
@@ -23,309 +25,25 @@ body {
     flex: 1;
 }
 
-/* ---- 工具列（沿用 KoiLiSu 家族慣例：pane-toolbar / pane-card-header） ---- */
+/* ---- 無障礙：僅供螢幕閱讀器讀出的文字（沿用 KoiLiSu common/header.php 慣例） ---- */
 
-.pane-toolbar {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    flex-wrap: wrap;
-}
-
-.toolbar-spacer {
-    flex: 1 1 auto;
-}
-
-/* 富文字選取範圍跨越多種樣式時的「混合」狀態：整圈外框，不用單邊色條標示。 */
-.ts-button.is-icon.is-mixed {
-    outline: 1px dashed var(--ts-gray-500);
-    outline-offset: -1px;
-}
-
-/* ⓘ 說明圖示（js/editor/ui-helpers.js createInfoIcon）：灰色小圖示，hover／聚焦時顯示 tooltip */
-.info-icon {
-    display: inline-flex;
-    align-items: center;
-    margin-left: .25rem;
-    color: var(--ts-gray-500, #888);
-    cursor: help;
-    font-size: .875em;
-    vertical-align: middle;
-}
-
-.info-icon:hover,
-.info-icon:focus-visible {
-    color: var(--ts-primary-500, #3b82f6);
-}
-
-/* 使用說明 modal */
-.help-tabs {
-    flex-wrap: wrap;
-    margin: 0 1rem;
-}
-
-.help-body {
-    min-height: 12rem;
-}
-
-.help-list {
-    margin: 0;
-    padding-left: 1.25rem;
-    line-height: 1.7;
-}
-
-.field-label-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-}
-
-.pane-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: .5rem;
-    min-height: 1.75rem;
-    padding: .2rem .6rem;
-    font-size: .8125rem;
-    font-weight: 600;
-    color: var(--ts-gray-600, #666);
-    background: var(--ts-gray-100, #f2f2f2);
-    border-bottom: 1px solid var(--ts-gray-300, #ddd);
-    box-sizing: border-box;
-    border-radius: var(--ts-radius, .5rem) var(--ts-radius, .5rem) 0 0;
-}
-
-.pane-card-header-title {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    min-width: 0;
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
     overflow: hidden;
-    text-overflow: ellipsis;
+    clip: rect(0, 0, 0, 0);
     white-space: nowrap;
+    border: 0;
 }
 
-/* 卡片標題列內嵌的小型圖示按鈕（沿用 pitrace 慣例），避免跟標題文字擠成兩種高度 */
-.pane-card-header .ts-button.is-icon {
-    --height: 1.5rem;
-    --icon-size: 1rem;
-    flex: 0 0 auto;
-}
+/* ==== 版面（三欄） ==== */
 
-/* 顯示模式切換鈕群組：各自獨立的開關，不用 .ts-buttons（那個會把兩顆鈕合併成
-   膠囊、中間夾一條分隔線），改用純間距排列，開啟狀態靠下面的 .is-active 填色表示 */
-.pane-header-toggle-buttons {
-    display: flex;
-    align-items: center;
-    gap: .25rem;
-}
-
-/* 工作區標題列：標題＋縮放＋開關鈕，欄位窄時換行而不是把按鈕擠出卡片 */
-.paper-viewport .pane-card-header {
-    flex-wrap: wrap;
-}
-
-.pane-zoom-value {
-    box-sizing: border-box;
-    width: 3.25rem;
-    height: 1.5rem;
-    padding: 0 .25rem;
-    border: 1px solid transparent;
-    border-radius: .3rem;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    font-weight: 400;
-    font-variant-numeric: tabular-nums;
-    text-align: right;
-}
-
-.pane-zoom-value:hover {
-    border-color: var(--ts-gray-300);
-}
-
-.pane-zoom-value:focus-visible {
-    outline: 2px solid light-dark(#1d4ed8, #93c5fd);
-    outline-offset: -1px;
-}
-
-.pane-zoom-controls .ts-button.is-small {
-    --height: 1.5rem;
-    flex: 0 0 auto;
-}
-
-/* 開啟狀態比照紙寬切換（.ts-selection 選中項目）的填色風格，而不是分隔線 */
-.pane-card-header .ts-button.is-icon.is-active {
-    background: var(--ts-primary-700, #0050b3);
-    color: #fff;
-}
-
-.pane-zoom-controls .ts-button[aria-pressed="true"] {
-    background: var(--ts-primary-700, #0050b3);
-    color: #fff;
-}
-
-.pane-zoom-controls .ts-button[aria-pressed="true"]:hover {
-    background: var(--ts-primary-800, #003a8c);
-    color: #fff;
-}
-
-.pane-card-header .ts-button.is-icon.is-active:hover {
-    background: var(--ts-primary-800, #003a8c);
-    color: #fff;
-}
-
-/* 印表機連線狀態燈：modal 標題旁的 badge 跟工具列「印表機設定」鈕內的小圓點共用同一個
-   元件。都是排在文字流裡的一般行內元素，不用絕對定位貼角——貼角圓點會被按鈕邊框吃掉一半，
-   看起來像「有問題」的角標。亮起（.is-on）用綠色加一圈光暈，熄滅是灰色。 */
-.printer-conn-dot {
-    display: inline-block;
-    width: .5rem;
-    height: .5rem;
-    margin-right: .35rem;
-    border-radius: 50%;
-    vertical-align: middle;
-    background: var(--ts-gray-400, #bfbfbf);
-}
-
-.printer-conn-dot[hidden] {
-    display: none;
-}
-
-.printer-conn-dot.is-on {
-    background: var(--ts-positive-500, #52c41a);
-    box-shadow: 0 0 0 2px light-dark(rgba(82, 196, 26, .28), rgba(115, 209, 61, .35)), 0 0 6px var(--ts-positive-500, #52c41a);
-}
-
-#btn-printer-settings .printer-conn-dot {
-    margin: 0 0 0 .4rem;
-}
-
-/* 未連接時 badge 是紅底（is-negative），燈用白色才看得到；已連接是綠燈外框（is-outlined）。 */
-.ts-badge.is-negative .printer-conn-dot {
-    background: rgba(255, 255, 255, .9);
-}
-
-#printer-conn-badge {
-    font-size: 1.05rem;
-    padding-inline: .9rem;
-}
-
-#printer-conn-badge.is-outlined {
-    --accent-color: light-dark(var(--ts-positive-700, #237804), var(--ts-positive-400, #95de64));
-}
-
-/* 列印設定 modal 的「值的來源」badge（editor.js sourceBadge）：機器提供＝綠、已覆寫＝藍、
-   預設＝中性灰。外框跟文字同色（Tocas outlined 預設是灰框），三種都是整圈外框，不用色條。 */
-.src-badge {
-    margin-left: .5rem;
-    vertical-align: middle;
-    border-color: currentColor;
-}
-
-.src-badge.src-machine {
-    --accent-color: light-dark(var(--ts-positive-700, #237804), var(--ts-positive-400, #95de64));
-}
-
-.src-badge.src-override {
-    --accent-color: light-dark(var(--ts-primary-700, #0050b3), var(--ts-primary-300, #91caff));
-}
-
-.src-badge.src-default {
-    --accent-color: light-dark(var(--ts-gray-600, #595959), var(--ts-gray-400, #bfbfbf));
-}
-
-/* 印表機資訊表：窄 modal 裡標題欄會被壓成兩行（「連接的／印表機」），不換行、讓值欄吃剩下的寬度 */
-#printer-info-table td:first-child {
-    white-space: nowrap;
-}
-
-/* 可列印點數：每個紙寬一列（標籤／輸入框／換算 mm／來源 badge） */
-.printer-dots-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .5rem;
-    margin-bottom: .5rem;
-}
-
-.printer-dots-label {
-    min-width: 3.5rem;
-}
-
-.printer-dots-input {
-    width: 6.5rem;
-}
-
-.printer-dots-row .src-badge {
-    margin-left: 0;
-}
-
-.pane-collapse-toggle .ts-icon {
-    transition: transform .15s ease;
-}
-
-.pane-collapse-toggle[aria-expanded="true"] .ts-icon {
-    transform: rotate(180deg);
-}
-
-/* 「開啟」下拉選單裡的「最近編輯」清單：每一列要塞名稱＋時間＋刪除鈕，
-   Tocas 預設 .item 是純文字排版，這裡另外排成一行 flex，刪除鈕固定在最右邊。 */
-#open-project-dropdown {
-    min-width: 260px;
-    max-width: 320px;
-}
-
-.recent-draft-item {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-}
-
-.recent-draft-info {
-    flex: 1 1 auto;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.recent-draft-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.recent-draft-time {
-    white-space: nowrap;
-}
-
-.recent-draft-delete {
-    flex: 0 0 auto;
-}
-
-.recent-draft-empty {
-    padding: .5rem 1rem;
-}
-
-.pane-empty-state-static {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: .5rem;
-    text-align: center;
-    padding: 1.5rem 1rem;
-}
-
-/* Tocas 的 is-heading 圖示尺寸是給整頁級別的空狀態設計的，塞進側邊卡片內顯得過大 */
-.pane-empty-state-static .ts-icon.is-heading {
-    font-size: 1.75rem;
-}
-
-/* ---- 三欄可拖曳調整寬度（比照 koilisu/apps/pitrace 的 resizable-columns 作法）。
+/* 三欄可拖曳調整寬度（比照 koilisu/apps/pitrace 的 resizable-columns 作法）。
    Tocas 的 ts-grid 固定 4/8/4 在 tablet 寬度（768-1023px）會擠壓大綱標籤／卡片標題／
-   textarea，改用 flex + CSS 變數，desktop+（≥1024px）才拆三欄，以下維持堆疊。 ---- */
+   textarea，改用 flex + CSS 變數，desktop+（≥1024px）才拆三欄，以下維持堆疊。 */
 
 :root {
     --printan-list-width: 290px;
@@ -442,7 +160,167 @@ body {
     }
 }
 
-/* ---- 版面結構大綱 ---- */
+/* ==== 工具列與卡片標題列（沿用 KoiLiSu 家族慣例：pane-toolbar / pane-card-header） ==== */
+
+.pane-toolbar {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+}
+
+.toolbar-spacer {
+    flex: 1 1 auto;
+}
+
+.toolbar-divider {
+    height: 1.4em;
+}
+
+/* 富文字選取範圍跨越多種樣式時的「混合」狀態：整圈外框，不用單邊色條標示。 */
+.ts-button.is-icon.is-mixed {
+    outline: 1px dashed var(--ts-gray-500);
+    outline-offset: -1px;
+}
+
+/* ⓘ 說明圖示（js/editor/ui-helpers.js createInfoIcon）：灰色小圖示，hover／聚焦時顯示 tooltip */
+.info-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-left: .25rem;
+    color: var(--ts-gray-500, #888);
+    cursor: help;
+    font-size: .875em;
+    vertical-align: middle;
+}
+
+.info-icon:hover,
+.info-icon:focus-visible {
+    color: var(--ts-primary-500, #3b82f6);
+}
+
+.pane-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    min-height: 1.75rem;
+    padding: .2rem .6rem;
+    font-size: .8125rem;
+    font-weight: 600;
+    color: var(--ts-gray-600, #666);
+    background: var(--ts-gray-100, #f2f2f2);
+    border-bottom: 1px solid var(--ts-gray-300, #ddd);
+    box-sizing: border-box;
+    border-radius: var(--ts-radius, .5rem) var(--ts-radius, .5rem) 0 0;
+}
+
+.pane-card-header-title {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 卡片標題列內嵌的小型圖示按鈕（沿用 pitrace 慣例），避免跟標題文字擠成兩種高度 */
+.pane-card-header .ts-button.is-icon {
+    --height: 1.5rem;
+    --icon-size: 1rem;
+    flex: 0 0 auto;
+}
+
+/* 顯示模式切換鈕群組：各自獨立的開關，不用 .ts-buttons（那個會把兩顆鈕合併成
+   膠囊、中間夾一條分隔線），改用純間距排列，開啟狀態靠下面的 .is-active 填色表示 */
+.pane-header-toggle-buttons {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+}
+
+.pane-zoom-value {
+    box-sizing: border-box;
+    width: 3.25rem;
+    height: 1.5rem;
+    padding: 0 .25rem;
+    border: 1px solid transparent;
+    border-radius: .3rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.pane-zoom-value:hover {
+    border-color: var(--ts-gray-300);
+}
+
+.pane-zoom-value:focus-visible {
+    outline: 2px solid light-dark(#1d4ed8, #93c5fd);
+    outline-offset: -1px;
+}
+
+.pane-zoom-controls .ts-button.is-small {
+    --height: 1.5rem;
+    flex: 0 0 auto;
+}
+
+/* 開啟狀態比照紙寬切換（.ts-selection 選中項目）的填色風格，而不是分隔線 */
+.pane-card-header .ts-button.is-icon.is-active,
+.pane-zoom-controls .ts-button[aria-pressed="true"] {
+    background: var(--ts-primary-700, #0050b3);
+    color: #fff;
+}
+
+.pane-card-header .ts-button.is-icon.is-active:hover,
+.pane-zoom-controls .ts-button[aria-pressed="true"]:hover {
+    background: var(--ts-primary-800, #003a8c);
+    color: #fff;
+}
+
+/* 「開啟」下拉選單裡的「最近編輯」清單：每一列要塞名稱＋時間＋刪除鈕，
+   Tocas 預設 .item 是純文字排版，這裡另外排成一行 flex，刪除鈕固定在最右邊。 */
+#open-project-dropdown {
+    min-width: 260px;
+    max-width: 320px;
+}
+
+.recent-draft-item {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.recent-draft-info {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.recent-draft-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recent-draft-time {
+    white-space: nowrap;
+}
+
+.recent-draft-delete {
+    flex: 0 0 auto;
+}
+
+.recent-draft-empty {
+    padding: .5rem 1rem;
+}
+
+/* ==== 版面結構大綱 ==== */
 
 .outline-list {
     display: flex;
@@ -556,19 +434,6 @@ body {
     flex: none;
 }
 
-@media (hover: none), (pointer: coarse) {
-    .outline-row .ts-button.is-icon {
-        width: 2rem;
-        height: 2rem;
-    }
-
-    /* 沒有 hover，選取列固定顯示操作 */
-    .outline-row.is-selected .outline-actions {
-        opacity: 1;
-        pointer-events: auto;
-    }
-}
-
 .add-menu-more {
     margin-left: auto;
 }
@@ -600,6 +465,8 @@ body {
 .outline-indent-2 { margin-left: 2rem; }
 .outline-indent-3 { margin-left: 3rem; }
 
+/* ==== 畫布與尺規 ==== */
+
 /* ---- 紙張預覽：陰影表示整捲紙寬，虛線表示可列印範圍與安全區 ---- */
 
 /* .paper-viewport 現在是外層 ts-box（比照 pitrace #scanPaneBox），直向排列
@@ -608,6 +475,11 @@ body {
 .paper-viewport {
     display: flex;
     flex-direction: column;
+}
+
+/* 工作區標題列：標題＋縮放＋開關鈕，欄位窄時換行而不是把按鈕擠出卡片 */
+.paper-viewport .pane-card-header {
+    flex-wrap: wrap;
 }
 
 /* 紙張本體是工作區內部的捲動容器：長紙張在這裡捲動，不撐高整頁。桌面版高度由 flex 給定
@@ -621,16 +493,15 @@ body {
     align-items: flex-start;
     min-width: 0;
     min-height: 0;
-    max-height: min(75vh, 44rem);
     overflow: auto;
     /* 兩側都預留捲軸位置：長紙張出現垂直捲軸時不會縮窄可用寬度而擠出水平捲軸，紙張也維持置中 */
     scrollbar-gutter: stable both-edges;
     padding: 1.5rem 1rem 4.5rem;
 }
 
-@media (min-width: 1024px) {
+@media (width < 1024px) {
     .paper-viewport-body {
-        max-height: none;
+        max-height: min(75vh, 44rem);
     }
 }
 
@@ -640,13 +511,13 @@ body {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
 }
 
-@media (min-width: 1024px) {
+@media (width < 1024px) {
     .paper-viewport-stage {
-        flex: 1 1 0;
+        flex: 1 1 auto;
     }
 }
 
@@ -861,10 +732,6 @@ body {
     outline-offset: 0;
 }
 
-.inline-text-editor[hidden] {
-    display: none;
-}
-
 .edit-resize-handle {
     position: absolute;
     pointer-events: auto;
@@ -915,6 +782,57 @@ body {
     pointer-events: none;
 }
 
+/* 框選矩形 */
+.marquee-box {
+    position: fixed;
+    z-index: 30;
+    pointer-events: none;
+    border: 1px solid var(--ts-primary-500, #3b82f6);
+    background: color-mix(in srgb, var(--ts-primary-500, #3b82f6) 12%, transparent);
+}
+
+/* ==== 檢查器（元素設定與批次資料） ==== */
+
+.pane-empty-state-static {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    text-align: center;
+    padding: 1.5rem 1rem;
+}
+
+/* Tocas 的 is-heading 圖示尺寸是給整頁級別的空狀態設計的，塞進側邊卡片內顯得過大 */
+.pane-empty-state-static .ts-icon.is-heading {
+    font-size: 1.75rem;
+}
+
+.field-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.pane-collapse-toggle .ts-icon {
+    transition: transform .15s ease;
+}
+
+.pane-collapse-toggle[aria-expanded="true"] .ts-icon {
+    transform: rotate(180deg);
+}
+
+/* ---- 變數清單：批次資料文字框固定使用等寬字型，方便檢查 JSON 格式 ---- */
+
+.batch-data-textarea {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .78rem;
+}
+
+.batch-nav-divider {
+    width: 100%;
+}
+
 /* ---- 圖片元素 inspector：裁切工具（canvas 顯示旋轉後的圖片，疊一層可拖曳/縮放的裁切框） ---- */
 
 .image-crop-tool {
@@ -958,41 +876,107 @@ body {
 .image-crop-handle.is-sw { top: 100%; left: 0; cursor: nesw-resize; }
 .image-crop-handle.is-se { top: 100%; left: 100%; cursor: nwse-resize; }
 
-/* ---- 無障礙：僅供螢幕閱讀器讀出的文字（沿用 KoiLiSu common/header.php 慣例） ---- */
+/* ==== Modal（使用說明、列印設定） ==== */
 
-.sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
+/* 使用說明 modal */
+.help-tabs {
+    flex-wrap: wrap;
+    margin: 0 1rem;
+}
+
+.help-body {
+    min-height: 12rem;
+}
+
+.help-list {
+    margin: 0;
+    padding-left: 1.25rem;
+    line-height: 1.7;
+}
+
+/* 印表機連線狀態燈：modal 標題旁的 badge 跟工具列「印表機設定」鈕內的小圓點共用同一個
+   元件。都是排在文字流裡的一般行內元素，不用絕對定位貼角——貼角圓點會被按鈕邊框吃掉一半，
+   看起來像「有問題」的角標。亮起（.is-on）用綠色加一圈光暈，熄滅是灰色。 */
+.printer-conn-dot {
+    display: inline-block;
+    width: .5rem;
+    height: .5rem;
+    margin-right: .35rem;
+    border-radius: 50%;
+    vertical-align: middle;
+    background: var(--ts-gray-400, #bfbfbf);
+}
+
+.printer-conn-dot.is-on {
+    background: var(--ts-positive-500, #52c41a);
+    box-shadow: 0 0 0 2px light-dark(rgba(82, 196, 26, .28), rgba(115, 209, 61, .35)), 0 0 6px var(--ts-positive-500, #52c41a);
+}
+
+#btn-printer-settings .printer-conn-dot {
+    margin: 0 0 0 .4rem;
+}
+
+/* 未連接時 badge 是紅底（is-negative），燈用白色才看得到；已連接是綠燈外框（is-outlined）。 */
+.ts-badge.is-negative .printer-conn-dot {
+    background: rgba(255, 255, 255, .9);
+}
+
+#printer-conn-badge {
+    font-size: 1.05rem;
+    padding-inline: .9rem;
+}
+
+#printer-conn-badge.is-outlined {
+    --accent-color: light-dark(var(--ts-positive-700, #237804), var(--ts-positive-400, #95de64));
+}
+
+/* 列印設定 modal 的「值的來源」badge（editor.js sourceBadge）：機器提供＝綠、已覆寫＝藍、
+   預設＝中性灰。外框跟文字同色（Tocas outlined 預設是灰框），三種都是整圈外框，不用色條。 */
+.src-badge {
+    margin-left: .5rem;
+    vertical-align: middle;
+    border-color: currentColor;
+}
+
+.src-badge.src-machine {
+    --accent-color: light-dark(var(--ts-positive-700, #237804), var(--ts-positive-400, #95de64));
+}
+
+.src-badge.src-override {
+    --accent-color: light-dark(var(--ts-primary-700, #0050b3), var(--ts-primary-300, #91caff));
+}
+
+.src-badge.src-default {
+    --accent-color: light-dark(var(--ts-gray-600, #595959), var(--ts-gray-400, #bfbfbf));
+}
+
+/* 印表機資訊表：窄 modal 裡標題欄會被壓成兩行（「連接的／印表機」），不換行、讓值欄吃剩下的寬度 */
+#printer-info-table td:first-child {
     white-space: nowrap;
-    border: 0;
 }
 
-/* ---- 變數清單：批次資料文字框固定使用等寬字型，方便檢查 JSON 格式 ---- */
-
-.batch-data-textarea {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: .78rem;
+/* 可列印點數：每個紙寬一列（標籤／輸入框／換算 mm／來源 badge） */
+.printer-dots-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .5rem;
 }
 
-/* 框選矩形 */
-.marquee-box {
-    position: fixed;
-    z-index: 30;
-    pointer-events: none;
-    border: 1px solid var(--ts-primary-500, #3b82f6);
-    background: color-mix(in srgb, var(--ts-primary-500, #3b82f6) 12%, transparent);
+.printer-dots-label {
+    min-width: 3.5rem;
 }
 
-/* ---- 由 view.php 抽出的 inline style ---- */
-
-.toolbar-divider {
-    height: 1.4em;
+.printer-dots-input {
+    width: 6.5rem;
 }
+
+.printer-dots-row .src-badge {
+    margin-left: 0;
+}
+
+/* ==== 頁首與頁尾 ==== */
 
 .app-version {
     font-size: .875rem;
@@ -1023,6 +1007,17 @@ body {
     margin-right: 4px;
 }
 
-.batch-nav-divider {
-    width: 100%;
+/* ==== 觸控裝置（深色模式一律以 light-dark() 寫在各規則內） ==== */
+
+@media (hover: none), (pointer: coarse) {
+    .outline-row .ts-button.is-icon {
+        width: 2rem;
+        height: 2rem;
+    }
+
+    /* 沒有 hover，選取列固定顯示操作 */
+    .outline-row.is-selected .outline-actions {
+        opacity: 1;
+        pointer-events: auto;
+    }
 }
