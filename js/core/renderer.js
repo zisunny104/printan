@@ -139,8 +139,8 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap, show
     let y = 0;
     for (const el of elements) {
         if (el.type === "text") {
-            const { lines, totalHeight } = layoutText(el, widthDots, ctx, fontFamily);
-            items.push({ el, y, height: totalHeight, widthDots, lines });
+            const { lines, totalHeight, vertical } = layoutText(el, widthDots, ctx, fontFamily);
+            items.push({ el, y, height: totalHeight, widthDots, lines, vertical });
             y += totalHeight;
         } else if (el.type === "spacer") {
             items.push({ el, y, height: el.heightDots, widthDots });
@@ -281,6 +281,7 @@ function truncateGlyphLine(glyphs, maxWidth, ctx, fallbackStyle) {
 }
 
 function layoutText(el, widthDots, ctx, fallbackFontFamily) {
+    if (el.writingMode === "vertical") return layoutVerticalText(el, ctx, fallbackFontFamily);
     if ("letterSpacing" in ctx) ctx.letterSpacing = `${el.letterSpacing || 0}px`;
 
     const paragraphs = buildParagraphs(el, fallbackFontFamily);
@@ -312,6 +313,126 @@ function layoutText(el, widthDots, ctx, fallbackFontFamily) {
 
     const totalHeight = lines.reduce((sum, line) => sum + line.lineHeightDots, 0);
     return { lines, totalHeight };
+}
+
+// ---- 直書：字元由上而下、行由右而左 ----
+// 每個段落（換行字元分隔）就是一直行，不自動換行（沒有高度上限可以換）。
+// 西文／數字：連續 3 個以上的 ASCII 當一整塊順時針轉 90°（單字、網址、金額都維持可讀且不佔太多行高），
+// 1–2 個字元則維持正立疊放（避免「5」「A」這類單字被轉倒）。全形標點在台灣直排習慣置中，不另外位移；
+// 括號、破折號、刪節號、長音符轉 90° 才會呈現直書字形（不依賴字型有沒有 vert／直排標點碼位）。
+const VERTICAL_ROTATED_CHARS = new Set("「」『』（）()｛｝{}［］[]【】《》〈〉〔〕—―─…‥～〜ー");
+
+function isAsciiInk(ch) {
+    return ch > " " && ch <= "~";
+}
+
+function buildVerticalCells(glyphs, ctx, letterSpacing) {
+    const cells = [];
+    let i = 0;
+    while (i < glyphs.length) {
+        const { ch, style } = glyphs[i];
+        ctx.font = fontString(style);
+        if (isAsciiInk(ch)) {
+            let j = i;
+            while (j < glyphs.length && isAsciiInk(glyphs[j].ch) && stylesEqual(glyphs[j].style, style)) j++;
+            const run = glyphs.slice(i, j);
+            if (run.length >= 3) {
+                const text = run.map((g) => g.ch).join("");
+                cells.push({ text, style, rotated: true, advance: ctx.measureText(text).width + letterSpacing * run.length });
+            } else {
+                for (const g of run) cells.push({ text: g.ch, style, rotated: false, advance: Math.max(ctx.measureText(g.ch).width, style.fontSize * 0.55) + letterSpacing });
+            }
+            i = j;
+        } else if (ch === " ") {
+            cells.push({ text: "", style, rotated: false, advance: style.fontSize * 0.5 + letterSpacing });
+            i++;
+        } else {
+            cells.push({ text: ch, style, rotated: VERTICAL_ROTATED_CHARS.has(ch), advance: style.fontSize + letterSpacing });
+            i++;
+        }
+    }
+    return cells;
+}
+
+function layoutVerticalText(el, ctx, fallbackFontFamily) {
+    if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
+    const spacing = el.letterSpacing || 0;
+    const columns = buildParagraphs(el, fallbackFontFamily).map((glyphs) => {
+        const cells = buildVerticalCells(glyphs, ctx, spacing);
+        let maxFontSize = el.fontSize;
+        for (const g of glyphs) maxFontSize = Math.max(maxFontSize, g.style.fontSize);
+        return {
+            cells,
+            width: Math.round(maxFontSize * (el.lineHeight || 1.3)),
+            height: Math.round(cells.reduce((sum, c) => sum + c.advance, 0)),
+        };
+    });
+    const minHeight = Math.round(el.fontSize * (el.lineHeight || 1.3));
+    const totalHeight = Math.max(minHeight, ...columns.map((c) => c.height));
+    return { lines: [], totalHeight, vertical: { columns } };
+}
+
+function paintVerticalText(ctx, item, x, y) {
+    const { el, widthDots, height, vertical } = item;
+    const total = vertical.columns.reduce((sum, c) => sum + c.width, 0);
+    const right = el.align === "right" ? x + widthDots : el.align === "center" ? x + (widthDots + total) / 2 : x + total;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, widthDots, height);
+    ctx.clip();
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+    if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
+    if (el.inverse) {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(right - total, y, total, height);
+    }
+    let colRight = right;
+    for (const col of vertical.columns) {
+        const cx = colRight - col.width / 2;
+        let cellY = y;
+        for (const cell of col.cells) {
+            const { style } = cell;
+            const inverse = !!el.inverse !== style.inverse;
+            if (style.inverse) {
+                ctx.fillStyle = inverse ? "#000" : "#fff";
+                ctx.fillRect(cx - col.width / 2, cellY, col.width, cell.advance);
+            }
+            const ink = inverse ? "#fff" : "#000";
+            ctx.fillStyle = ink;
+            ctx.font = fontString(style);
+            if (cell.text) {
+                if (cell.rotated) {
+                    ctx.save();
+                    ctx.translate(cx + style.fontSize / 2, cellY);
+                    ctx.rotate(Math.PI / 2);
+                    ctx.fillText(cell.text, 0, 0);
+                    ctx.restore();
+                } else {
+                    ctx.textAlign = "center";
+                    ctx.fillText(cell.text, cx, cellY);
+                    ctx.textAlign = "left";
+                }
+            }
+            if (style.underline || style.strikethrough) {
+                ctx.strokeStyle = ink;
+                ctx.lineWidth = Math.max(1, Math.round(style.fontSize / 16));
+                ctx.beginPath();
+                if (style.underline) {
+                    ctx.moveTo(cx + style.fontSize * 0.5, cellY);
+                    ctx.lineTo(cx + style.fontSize * 0.5, cellY + cell.advance);
+                }
+                if (style.strikethrough) {
+                    ctx.moveTo(cx, cellY);
+                    ctx.lineTo(cx, cellY + cell.advance);
+                }
+                ctx.stroke();
+            }
+            cellY += cell.advance;
+        }
+        colRight -= col.width;
+    }
+    ctx.restore();
 }
 
 async function resolveImage(el, assetMap) {
@@ -348,6 +469,7 @@ function paint(items, ctx, xBase, yBase, fontFamily, mode) {
 }
 
 function paintText(ctx, item, x, y) {
+    if (item.vertical) return paintVerticalText(ctx, item, x, y);
     const { el, lines, widthDots } = item;
     ctx.save();
     ctx.fillStyle = "#000";
