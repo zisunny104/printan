@@ -6,7 +6,7 @@
 
 const STORAGE_KEY_LIST = "printan-list-width";
 const STORAGE_KEY_DOCK = "printan-dock-width";
-const DEFAULT_LIST = 260;
+const DEFAULT_LIST = 290;
 const DEFAULT_DOCK = 340;
 const MIN_LIST = 200;
 const MAX_LIST = 420;

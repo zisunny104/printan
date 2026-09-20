@@ -301,7 +301,7 @@ body {
    textarea，改用 flex + CSS 變數，desktop+（≥1024px）才拆三欄，以下維持堆疊。 ---- */
 
 :root {
-    --printan-list-width: 260px;
+    --printan-list-width: 290px;
     --printan-dock-width: 340px;
 }
 
@@ -496,21 +496,34 @@ body {
     white-space: nowrap;
 }
 
+/* 操作按鈕疊在列的右側，不佔名稱的寬度；只在選取列、hover、鍵盤聚焦的列顯示。
+   用 opacity 隱藏（visibility／display 會讓鍵盤 Tab 跳過），隱藏時 pointer-events 關掉，
+   避免看不見的按鈕擋住點擊。 */
+.outline-row {
+    position: relative;
+    box-sizing: border-box;
+    height: 2.25rem;
+}
+
 .outline-row .outline-actions {
+    position: absolute;
+    top: 50%;
+    right: .25rem;
+    transform: translateY(-50%);
     display: flex;
-    gap: .1rem;
-    visibility: hidden;
+    gap: .125rem;
+    padding: 0 .125rem;
+    border-radius: .3rem;
+    background: light-dark(#f1f2f4, #2b2d31);
+    opacity: 0;
+    pointer-events: none;
 }
 
 .outline-row:hover .outline-actions,
-.outline-row:focus-within .outline-actions {
-    visibility: visible;
-}
-
-/* 列高固定：操作按鈕（含容器列的「＋」）一律縮成小方塊，顯示／隱藏只切 visibility，列高不會跳動 */
-.outline-row {
-    box-sizing: border-box;
-    height: 2.25rem;
+.outline-row:focus-within .outline-actions,
+.outline-row.is-selected .outline-actions {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .outline-row .ts-button.is-icon {
@@ -519,6 +532,19 @@ body {
     min-height: 0;
     padding: 0;
     flex: none;
+}
+
+@media (hover: none), (pointer: coarse) {
+    .outline-row .ts-button.is-icon {
+        width: 2rem;
+        height: 2rem;
+    }
+}
+
+.outline-row:focus-visible,
+.outline-row .ts-button:focus-visible {
+    outline: 2px solid light-dark(#1d4ed8, #93c5fd);
+    outline-offset: -2px;
 }
 
 /* 大綱拖曳排序：整列可拖曳；拖曳中降低透明度；插入位置用上/下邊框標示 */

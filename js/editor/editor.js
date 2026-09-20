@@ -351,6 +351,7 @@ function bindToolbar() {
     });
 
     wireAddMenu();
+    wireOutlineKeyboard();
 
     els["btn-toggle-thermal"].addEventListener("click", () => {
         state.mode = state.mode === "screen" ? "thermal" : "screen";
@@ -863,6 +864,7 @@ function renderOutline() {
     const root = els["outline-list"];
     // 列被重建時觸發 tooltip 的按鈕會直接消失、收不到 mouseleave，Tocas 掛在 body 的 tooltip 會殘留在左上角
     document.querySelectorAll("body > .ts-tooltip").forEach((tip) => tip.remove());
+    const focusKey = root.contains(document.activeElement) ? document.activeElement.closest(".outline-row")?.dataset.rowKey : null;
     root.innerHTML = "";
     root.appendChild(buildTargetHeader("最上層", null, 0));
     root.appendChild(buildElementList(state.project.template.elements, 0, "root"));
@@ -876,6 +878,44 @@ function renderOutline() {
         empty.addEventListener("click", () => openAddMenu(empty, null));
         root.appendChild(empty);
     }
+    const rows = Array.from(root.querySelectorAll(".outline-row"));
+    const active = rows.find((r) => r.dataset.rowKey === focusKey) || root.querySelector(".outline-row.is-selected") || rows[0];
+    setOutlineRoving(active);
+    if (focusKey && active?.dataset.rowKey === focusKey) active.focus({ preventScroll: true });
+}
+
+// 大綱是 listbox，列用 roving tabindex（只有一列在 Tab 順序內），方向鍵在列之間移動焦點
+function setOutlineRoving(active) {
+    els["outline-list"].querySelectorAll(".outline-row").forEach((r) => { r.tabIndex = r === active ? 0 : -1; });
+}
+
+function wireOutlineKeyboard() {
+    const root = els["outline-list"];
+    root.setAttribute("role", "listbox");
+    root.setAttribute("aria-label", "版面結構");
+    root.addEventListener("focusin", (e) => {
+        const row = e.target.closest(".outline-row");
+        if (row && e.target === row) setOutlineRoving(row);
+    });
+    root.addEventListener("keydown", (e) => {
+        const row = e.target;
+        if (!row.classList?.contains("outline-row")) return;
+        const rows = Array.from(root.querySelectorAll(".outline-row"));
+        const i = rows.indexOf(row);
+        let next = null;
+        if (e.key === "ArrowDown") next = rows[Math.min(i + 1, rows.length - 1)];
+        else if (e.key === "ArrowUp") next = rows[Math.max(i - 1, 0)];
+        else if (e.key === "Home") next = rows[0];
+        else if (e.key === "End") next = rows[rows.length - 1];
+        else if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            row.click();
+            return;
+        } else return;
+        // 焦點在大綱時方向鍵只移動焦點，不要讓全域快捷鍵去選取／移動畫布上的元素
+        e.preventDefault();
+        next?.focus();
+    });
 }
 
 function buildElementList(elements, depth, parentKey) {
@@ -959,13 +999,19 @@ function wireOutlineRowDrag(row, el) {
 function buildTargetHeader(label, target, depth) {
     const row = document.createElement("div");
     row.className = `outline-row outline-target-row outline-indent-${depth}`;
-    if (isSameTarget(state.insertionTarget, target)) row.classList.add("is-target");
+    const isTarget = isSameTarget(state.insertionTarget, target);
+    if (isTarget) row.classList.add("is-target");
+    row.dataset.rowKey = target ? `t:${target.rowId}:${target.colIndex}` : "t:root";
+    row.setAttribute("role", "option");
+    row.setAttribute("aria-level", String(depth + 1));
+    row.setAttribute("aria-selected", String(isTarget));
     const icon = document.createElement("span");
     icon.className = `ts-icon is-${row.classList.contains("is-target") ? "folder-open" : "folder"}-icon`;
     icon.setAttribute("aria-hidden", "true");
     const span = document.createElement("span");
     span.className = "outline-label";
     span.textContent = label;
+    span.title = label;
     row.appendChild(icon);
     row.appendChild(span);
     const add = iconButton("plus", `新增到「${label}」`, () => openAddMenu(add, target));
@@ -1004,7 +1050,12 @@ function buildElementRow(el, depth, parentKey) {
     const row = document.createElement("div");
     row.className = `outline-row outline-indent-${depth}`;
     row.dataset.elType = el.type;
-    if (getSelectedIds().includes(el.id)) row.classList.add("is-selected");
+    row.dataset.rowKey = el.id;
+    row.setAttribute("role", "option");
+    row.setAttribute("aria-level", String(depth + 1));
+    const selected = getSelectedIds().includes(el.id);
+    row.setAttribute("aria-selected", String(selected));
+    if (selected) row.classList.add("is-selected");
 
     const icon = document.createElement("span");
     icon.className = `ts-icon is-${TYPE_ICON[el.type] || "shapes"}-icon`;
@@ -1012,13 +1063,14 @@ function buildElementRow(el, depth, parentKey) {
     const label = document.createElement("span");
     label.className = "outline-label";
     label.textContent = elementLabel(el);
+    label.title = label.textContent;
 
     const actions = document.createElement("span");
     actions.className = "outline-actions";
-    actions.appendChild(iconButton("arrow-up", "上移", () => moveElement(el.id, -1)));
-    actions.appendChild(iconButton("arrow-down", "下移", () => moveElement(el.id, 1)));
-    actions.appendChild(iconButton("copy", "複製", () => duplicateElement(el.id)));
-    actions.appendChild(iconButton("trash", "刪除", () => deleteElement(el.id)));
+    actions.appendChild(iconButton("arrow-up", `上移 ${label.textContent}`, () => moveElement(el.id, -1)));
+    actions.appendChild(iconButton("arrow-down", `下移 ${label.textContent}`, () => moveElement(el.id, 1)));
+    actions.appendChild(iconButton("copy", `複製 ${label.textContent}`, () => duplicateElement(el.id)));
+    actions.appendChild(iconButton("trash", `刪除 ${label.textContent}`, () => deleteElement(el.id)));
 
     row.appendChild(icon);
     row.appendChild(label);
