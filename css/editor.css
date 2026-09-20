@@ -327,11 +327,11 @@ body {
 @media (min-width: 1024px) {
     /* 桌面版三欄鎖在一個視窗高度內（比照 koilisu/apps/pitrace）：標題、工具列、三欄一起
        剛好一個 100vh，各欄自己在內部捲動，工作區永遠佔滿剩餘高度；頁尾在 100vh 之外，
-       捲動整頁才看得到。min-height 是視窗太矮時的下限，避免三欄被壓成一條縫。 */
+       捲動整頁才看得到。min-height 是視窗太矮時的下限（矮於此高度改成整頁捲動），避免三欄被壓成一條縫。 */
     .main-content {
         flex: none;
         height: 100vh;
-        min-height: 36rem;
+        min-height: 42rem;
     }
 
     .main-content > .ts-container {
@@ -343,6 +343,13 @@ body {
 
     .main-content > .ts-container > * {
         flex-shrink: 0;
+    }
+
+    /* 超寬螢幕：內容上限 1920px 並置中，避免三欄被拉到過寬 */
+    .main-content > .ts-container,
+    #app-footer > .ts-container {
+        max-width: 1920px;
+        margin-inline: auto;
     }
 
     .editor-shell {
