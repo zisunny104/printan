@@ -7,8 +7,8 @@ import {
     getPrinterProfile, getPaperWidth, getDefaultPrinterProfileId, withPrintableDotsOverrides,
     withMarginCalibration,
 } from "../core/printer-profiles.js";
-import { createTextElement, createImageElement, createSpacerElement, createDividerElement, createRowElement, createBarcodeElement, cloneElementWithNewIds, extractPlaceholders } from "../core/document-model.js";
-import { resolveTargetArray, findElementById, findContainerOf, flattenElements, removeElements, groupElementsIn, ungroupElementsIn, duplicateElementsIn, moveElementBy, moveElementsBy, moveElementToIndex, moveElementToContainerIn, selectionToIds, idsToSelection, pruneSelectionIn, snapshotElements, restoreElements } from "../core/element-tree.js";
+import { createTextElement, createImageElement, createSpacerElement, createDividerElement, createRowElement, createBarcodeElement, extractPlaceholders } from "../core/document-model.js";
+import { resolveTargetArray, findElementById, findContainerOf, removeElements, groupElementsIn, ungroupElementsIn, duplicateElementsIn, moveElementBy, moveElementsBy, moveElementToIndex, moveElementToContainerIn, selectionToIds, idsToSelection, pruneSelectionIn } from "../core/element-tree.js";
 import { renderTemplate } from "../core/renderer.js";
 
 import { restoreLocalFontsIfGranted } from "../core/fonts.js";
@@ -31,6 +31,7 @@ import { renderInspector } from "./inspector.js";
 import { renderEditOverlay } from "./canvas-overlay.js";
 import { containerToTarget, renderOutline, wireOutlineKeyboard } from "./outline.js";
 import { bindBatchPanel, endBatchPreview, exportBatchPdf, exportSinglePdf } from "./batch-export.js";
+import { bindEditorShortcuts, recordHistory, resetHistory } from "./history.js";
 
 async function init() {
     cacheDom();
@@ -685,7 +686,7 @@ export function deleteElements(ids) {
 }
 
 // 建立群組：把同一層的選取元素收進一個新群組（放在最前面那個的位置）；解散則把子元素放回原位
-function groupElements(ids) {
+export function groupElements(ids) {
     const group = groupElementsIn(state.project.template.elements, ids);
     if (!group) return;
     setSelection([group.id]);
@@ -711,7 +712,7 @@ export function duplicateElements(ids) {
 }
 
 // 元素被刪掉（刪除、復原）之後，把選取範圍裡已經不存在的 id 拿掉
-function pruneSelection() {
+export function pruneSelection() {
     Object.assign(state, pruneSelectionIn(state.project.template.elements, state));
 }
 
@@ -719,7 +720,7 @@ export function getSelectedIds() {
     return selectionToIds(state);
 }
 
-function setSelection(ids) {
+export function setSelection(ids) {
     Object.assign(state, idsToSelection(ids));
 }
 
@@ -728,7 +729,7 @@ export function moveElement(id, direction) {
 }
 
 /** 多選整批上移／下移：同一層內，遇到邊界或前一個也是選取中的就不動，其餘保持相對順序。 */
-function moveElements(ids, direction) {
+export function moveElements(ids, direction) {
     if (moveElementsBy(state.project.template.elements, ids, direction)) onModelChange();
 }
 
@@ -771,7 +772,7 @@ export function selectElementById(id, { toggle = false } = {}) {
     highlightSelectedBlock();
 }
 
-function highlightSelectedBlock() {
+export function highlightSelectedBlock() {
     const overlay = els["edit-overlay"];
     if (!overlay) return;
     overlay.querySelectorAll(".edit-block.is-selected").forEach((n) => n.classList.remove("is-selected"));
@@ -965,178 +966,6 @@ function scheduleSave() {
         const time = new Date().toLocaleTimeString("zh-TW", { hour12: false });
         els["save-status"].textContent = `已自動儲存 ${time}`;
     }, 500);
-}
-
-// ---- 復原／重做：版面元素樹的快照歷史 ----
-// 每次 onModelChange 記一份快照；連續變動（拖曳、打字）在 HISTORY_MERGE_MS 內併成同一筆。
-// 歷史第 0 筆是載入時的狀態，所以復原不會退到空白以前。
-
-const HISTORY_MERGE_MS = 600;
-const HISTORY_MAX = 100;
-const history = { stack: [], index: -1, at: 0, restoring: false };
-
-function resetHistory() {
-    history.stack = [];
-    history.index = -1;
-    history.at = 0;
-}
-
-function recordHistory() {
-    if (history.restoring) return;
-    const snapshot = snapshotElements(state.project.template.elements);
-    if (snapshot === history.stack[history.index]) return;
-    const now = Date.now();
-    history.stack.length = history.index + 1;
-    if (history.index > 0 && now - history.at < HISTORY_MERGE_MS) {
-        history.stack[history.index] = snapshot;
-    } else {
-        history.stack.push(snapshot);
-        if (history.stack.length > HISTORY_MAX) history.stack.shift();
-        history.index = history.stack.length - 1;
-    }
-    history.at = now;
-}
-
-function stepHistory(direction) {
-    const next = history.index + direction;
-    if (next < 0 || next >= history.stack.length) return;
-    history.index = next;
-    history.at = 0;
-    state.project.template.elements = restoreElements(history.stack[next]);
-    pruneSelection();
-    if (state.insertionTarget && !findElementById(state.project.template.elements, state.insertionTarget.rowId)) state.insertionTarget = null;
-    history.restoring = true;
-    try {
-        onModelChange();
-    } finally {
-        history.restoring = false;
-    }
-}
-
-// ---- 鍵盤快捷鍵與點空白取消選取 ----
-// 焦點在輸入框、文字編輯區或對話框時一律交給瀏覽器（輸入框自己的復原、Delete 刪字）。
-
-let clipboardElements = [];
-
-function deselectElement() {
-    if (!getSelectedIds().length) return;
-    state.selectedId = null;
-    state.multi = [];
-    renderOutline();
-    renderInspector();
-    highlightSelectedBlock();
-}
-
-function pasteElements() {
-    if (!clipboardElements.length) return;
-    const clones = clipboardElements.map((el) => cloneElementWithNewIds(el));
-    const ids = getSelectedIds();
-    const found = ids.length ? findContainerOf(state.project.template.elements, ids[ids.length - 1]) : null;
-    if (found) found.array.splice(found.index + 1, 0, ...clones);
-    else resolveTargetArray(state.project.template.elements, state.insertionTarget).push(...clones);
-    setSelection(clones.map((c) => c.id));
-    onModelChange();
-}
-
-function handleEditorShortcut(e) {
-    if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
-    if (e.target.closest?.("input, textarea, select, [contenteditable], [role=\"tab\"]") && e.key !== "Escape") return;
-    const mod = e.ctrlKey || e.metaKey;
-    const key = e.key.toLowerCase();
-    const ids = getSelectedIds();
-    const root = state.project.template.elements;
-
-    if (mod && key === "z") {
-        stepHistory(e.shiftKey ? 1 : -1);
-    } else if (mod && key === "y") {
-        stepHistory(1);
-    } else if (mod && key === "g" && ids.length) {
-        if (e.shiftKey) ungroupElements(ids);
-        else groupElements(ids);
-    } else if (mod && key === "d" && ids.length) {
-        duplicateElements(ids);
-    } else if (mod && key === "c" && ids.length && !window.getSelection().toString()) {
-        clipboardElements = ids.map((id) => JSON.parse(JSON.stringify(findElementById(root, id))));
-        return;
-    } else if (mod && key === "v" && clipboardElements.length) {
-        pasteElements();
-    } else if ((e.key === "Delete" || e.key === "Backspace") && ids.length && !mod) {
-        deleteElements(ids);
-    } else if (e.key === "Escape") {
-        deselectElement();
-        return;
-    } else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.shiftKey) {
-        const dir = e.key === "ArrowUp" ? -1 : 1;
-        if (e.altKey || mod) {
-            if (ids.length) moveElements(ids, dir);
-        } else {
-            const flat = flattenElements(root);
-            const anchor = ids.length ? flat.findIndex((el) => el.id === ids[dir < 0 ? 0 : ids.length - 1]) : -1;
-            const next = anchor >= 0 ? flat[anchor + dir] : flat[dir < 0 ? flat.length - 1 : 0];
-            if (next) selectElementById(next.id);
-        }
-    } else {
-        return;
-    }
-    e.preventDefault();
-}
-
-// 框選：在空白處拖出矩形，選到碰到矩形的元素；一次只選同一層（有最上層元素就以最上層為準）。沒拖動＝取消選取。
-function startMarquee(e) {
-    const startX = e.clientX;
-    const startY = e.clientY;
-    let box = null;
-    const rectOf = (ev) => ({
-        left: Math.min(startX, ev.clientX), top: Math.min(startY, ev.clientY),
-        right: Math.max(startX, ev.clientX), bottom: Math.max(startY, ev.clientY),
-    });
-    const onMove = (ev) => {
-        if (!box) {
-            if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 4) return;
-            box = document.createElement("div");
-            box.className = "marquee-box";
-            document.body.appendChild(box);
-        }
-        const r = rectOf(ev);
-        Object.assign(box.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.right - r.left}px`, height: `${r.bottom - r.top}px` });
-    };
-    const onUp = (ev) => {
-        document.removeEventListener("pointermove", onMove);
-        document.removeEventListener("pointerup", onUp);
-        if (!box) {
-            deselectElement();
-            return;
-        }
-        box.remove();
-        const r = rectOf(ev);
-        const root = state.project.template.elements;
-        const hits = [...els["edit-overlay"].querySelectorAll(".edit-block")].filter((n) => {
-            const b = n.getBoundingClientRect();
-            return b.left < r.right && b.right > r.left && b.top < r.bottom && b.bottom > r.top;
-        }).map((n) => n.dataset.id);
-        const arrayOf = (id) => findContainerOf(root, id)?.array;
-        const base = hits.find((id) => arrayOf(id) === root) ?? hits[0];
-        if (!base) {
-            deselectElement();
-            return;
-        }
-        setSelection(hits.filter((id) => arrayOf(id) === arrayOf(base)));
-        state.insertionTarget = containerToTarget(arrayOf(base));
-        renderOutline();
-        renderInspector();
-        highlightSelectedBlock();
-    };
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", onUp);
-}
-
-function bindEditorShortcuts() {
-    document.addEventListener("keydown", handleEditorShortcut);
-    els["paper-scroll"].addEventListener("pointerdown", (e) => {
-        if (e.button !== 0 || state.viewMode !== "edit") return;
-        const t = e.target;
-        if (t === els["paper-scroll"] || t === els["paper-shadow"] || t === els["canvas-host"] || t.tagName === "CANVAS") startMarquee(e);
-    });
 }
 
 init();
