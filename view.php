@@ -285,7 +285,25 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                                 <span class="ts-icon is-receipt-icon" aria-hidden="true"></span>
                                 <span>工作區</span>
                             </span>
+                            <div class="pane-header-toggle-buttons pane-zoom-controls" role="group" aria-label="縮放">
+                                <button class="ts-button is-icon is-ghost" id="btn-zoom-out"
+                                    data-tooltip="縮小" aria-label="縮小">
+                                    <span class="ts-icon is-minus-icon" aria-hidden="true"></span>
+                                </button>
+                                <span class="pane-zoom-value" id="zoom-value" aria-live="polite">100%</span>
+                                <button class="ts-button is-icon is-ghost" id="btn-zoom-in"
+                                    data-tooltip="放大" aria-label="放大">
+                                    <span class="ts-icon is-plus-icon" aria-hidden="true"></span>
+                                </button>
+                                <button class="ts-button is-small is-ghost" id="btn-zoom-fit">符合寬度</button>
+                                <button class="ts-button is-small is-ghost" id="btn-zoom-actual"
+                                    data-tooltip="實際大小">1:1</button>
+                            </div>
                             <div class="pane-header-toggle-buttons">
+                                <button class="ts-button is-icon is-ghost" id="btn-toggle-rulers"
+                                    data-tooltip="尺規" aria-label="尺規" aria-pressed="true">
+                                    <span class="ts-icon is-ruler-combined-icon" aria-hidden="true"></span>
+                                </button>
                                 <button class="ts-button is-icon is-ghost" id="btn-toggle-thermal"
                                     data-tooltip="切換熱感輸出預覽" aria-label="切換熱感輸出預覽" aria-pressed="false">
                                     <span class="ts-icon is-circle-half-stroke-icon" aria-hidden="true"></span>
@@ -296,10 +314,15 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                                 </button>
                             </div>
                         </div>
-                        <div class="paper-viewport-body">
-                            <div class="paper-shadow" id="paper-shadow">
-                                <div class="safe-area-guide" id="safe-area-guide"></div>
-                                <div id="canvas-host" class="canvas-host"></div>
+                        <div class="paper-viewport-stage">
+                            <div class="paper-ruler-corner" id="ruler-corner" aria-hidden="true"></div>
+                            <div class="paper-ruler is-horizontal" id="ruler-h" aria-hidden="true"><canvas></canvas></div>
+                            <div class="paper-ruler is-vertical" id="ruler-v" aria-hidden="true"><canvas></canvas></div>
+                            <div class="paper-viewport-body" id="paper-scroll">
+                                <div class="paper-shadow" id="paper-shadow">
+                                    <div class="safe-area-guide" id="safe-area-guide"></div>
+                                    <div id="canvas-host" class="canvas-host"></div>
+                                </div>
                             </div>
                         </div>
                     </div>

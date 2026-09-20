@@ -31,9 +31,9 @@ import {
 } from "../core/printer-adapter.js";
 import { wireResizableColumns } from "./resizable-columns.js";
 import { createInlineTextEditor } from "./inline-text-editor.js";
+import { createWorkspaceView } from "./workspace-view.js";
 
 const LAST_DRAFT_KEY = "printan:lastDraftId";
-const PX_PER_MM = 3.2;
 
 const state = {
     project: null,
@@ -83,6 +83,7 @@ async function init() {
     bindPrinterSettings();
     wireResizableColumns();
     wireToolbarOverflow();
+    workspace.mount();
     onModelChange({ skipInspector: false });
     onWebFontStatusChange(() => renderInspector()); // 字體載入失敗／恢復時，選單上的標示要跟著更新
     restoreLocalFontsIfGranted().then((restored) => { if (restored) renderInspector(); });
@@ -97,7 +98,7 @@ function cacheDom() {
         "btn-new-ptan", "btn-open-ptan", "open-project-from-file", "recent-drafts-list",
         "btn-save-ptan", "btn-export-pdf",
         "btn-export-batch-pdf", "btn-print", "outline-list", "inspector",
-        "variables-panel", "variables-card", "variables-card-spacer", "batch-data", "paper-viewport", "paper-shadow", "safe-area-guide",
+        "variables-panel", "variables-card", "variables-card-spacer", "batch-data", "paper-viewport", "paper-scroll", "paper-shadow", "safe-area-guide",
         "canvas-host", "image-file-input", "ptan-file-input",
         "batch-card", "batch-card-spacer", "batch-panel-toggle", "batch-panel-body", "btn-preview-batch", "batch-preview-nav",
         "btn-batch-prev", "btn-batch-next", "batch-preview-counter", "btn-batch-end-preview",
@@ -1506,6 +1507,15 @@ function renderVariables() {
 
 // ---- 紙張預覽 ----
 
+// 縮放與尺規（見 workspace-view.js）；縮放後紙張的 CSS 寬度變了，編輯疊層座標跟著重算
+const workspace = createWorkspaceView({
+    getPaperRollMm: () => getPaperWidth(getEffectiveProfile(), state.project.paper.widthId).rollWidthMm,
+    onZoom: () => {
+        updatePaperFrame();
+        renderEditOverlay();
+    },
+});
+
 function updatePaperFrame() {
     const profile = getEffectiveProfile();
     const paper = getPaperWidth(profile, state.project.paper.widthId);
@@ -1513,9 +1523,10 @@ function updatePaperFrame() {
     // 連續紙沒有實體「上邊界」，安全區上緣純粹是視覺留白；下緣則是切刀刀片跟列印頭的
     // 實際距離（bladeOffsetMm）——太靠下緣的內容，切紙時有被裁到的風險。
     const bladeOffsetMm = profile.autocutter?.bladeOffsetMm ?? 0;
-    els["paper-shadow"].style.setProperty("--paper-margin", `${marginMm * PX_PER_MM}px`);
-    els["paper-shadow"].style.setProperty("--paper-safe-bottom", `${bladeOffsetMm * PX_PER_MM}px`);
-    els["canvas-host"].style.width = `${paper.printableWidthMm * PX_PER_MM}px`;
+    const pxPerMm = workspace.pxPerMm();
+    els["paper-shadow"].style.setProperty("--paper-margin", `${marginMm * pxPerMm}px`);
+    els["paper-shadow"].style.setProperty("--paper-safe-bottom", `${bladeOffsetMm * pxPerMm}px`);
+    els["canvas-host"].style.width = `${paper.printableWidthMm * pxPerMm}px`;
     // 版面完全沒有元素時，安全區虛線框只是誤導（看起來像渲染壞掉），故不顯示
     const isEmpty = state.project.template.elements.length === 0;
     els["paper-viewport"].classList.toggle("is-empty", isEmpty);
@@ -1558,8 +1569,8 @@ function updateFontFallbackNotice(failedLabels) {
         notice = document.createElement("div");
         notice.className = "ts-notice is-negative";
         notice.appendChild(Object.assign(document.createElement("div"), { className: "content" }));
-        const body = els["paper-shadow"].parentElement;
-        body.parentElement.insertBefore(notice, body);
+        const stage = els["paper-shadow"].parentElement.parentElement;
+        stage.parentElement.insertBefore(notice, stage);
         els["font-fallback-notice"] = notice;
     }
     notice.hidden = false;
@@ -1652,24 +1663,57 @@ function attachBlockInteractions(div, elId) {
         if (e.target !== div || e.button !== 0) return;
         const startX = e.clientX;
         const startY = e.clientY;
+        const scroller = els["paper-scroll"];
+        const startScrollTop = scroller.scrollTop;
+        const startScrollLeft = scroller.scrollLeft;
+        let lastY = startY;
         let dragging = false;
         let siblings = null;
+        let scrollFrame = 0;
+
+        // 工作區是內部捲動容器：拖曳中捲動會讓元素框的螢幕位置移動，所以位移要補上捲動量，
+        // 同層元素的座標也每次重新量（捲動後 client 座標會變）
+        function updateDrag(clientX, clientY) {
+            const dx = clientX - startX + (scroller.scrollLeft - startScrollLeft);
+            const dy = clientY - startY + (scroller.scrollTop - startScrollTop);
+            div.style.transform = `translate(${dx}px, ${dy}px)`;
+            siblings = collectSiblingBoxes(elId);
+            if (siblings) showInsertionLine(findDropTarget(siblings, clientY).edgeY);
+        }
+        let lastX = startX;
+
+        // 游標靠近工作區上下緣時自動捲動，才拖得到目前畫面外的位置
+        function autoScroll() {
+            scrollFrame = 0;
+            if (!dragging) return;
+            const rect = scroller.getBoundingClientRect();
+            const zone = 40;
+            let speed = 0;
+            if (lastY < rect.top + zone) speed = -Math.ceil(18 * Math.min(1, (rect.top + zone - lastY) / zone));
+            else if (lastY > rect.bottom - zone) speed = Math.ceil(18 * Math.min(1, (lastY - (rect.bottom - zone)) / zone));
+            if (!speed) return;
+            const before = scroller.scrollTop;
+            scroller.scrollTop += speed;
+            if (scroller.scrollTop !== before) updateDrag(lastX, lastY);
+            scrollFrame = requestAnimationFrame(autoScroll);
+        }
 
         function onMove(ev) {
-            const dx = ev.clientX - startX;
-            const dy = ev.clientY - startY;
+            lastX = ev.clientX;
+            lastY = ev.clientY;
             if (!dragging) {
-                if (Math.hypot(dx, dy) < 4) return;
+                if (Math.hypot(lastX - startX, lastY - startY) < 4) return;
                 dragging = true;
                 div.classList.add("is-dragging");
-                siblings = collectSiblingBoxes(elId);
             }
-            div.style.transform = `translate(${dx}px, ${dy}px)`;
-            if (siblings) showInsertionLine(findDropTarget(siblings, ev.clientY).edgeY);
+            updateDrag(lastX, lastY);
+            if (!scrollFrame) scrollFrame = requestAnimationFrame(autoScroll);
         }
         function onUp(ev) {
             document.removeEventListener("pointermove", onMove);
             document.removeEventListener("pointerup", onUp);
+            cancelAnimationFrame(scrollFrame);
+            scrollFrame = 0;
             div.classList.remove("is-dragging");
             div.style.transform = "";
             clearInsertionLine();

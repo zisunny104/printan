@@ -89,6 +89,23 @@ body {
     gap: .25rem;
 }
 
+/* 工作區標題列：標題＋縮放＋開關鈕，欄位窄時換行而不是把按鈕擠出卡片 */
+.paper-viewport .pane-card-header {
+    flex-wrap: wrap;
+}
+
+.pane-zoom-value {
+    min-width: 2.75rem;
+    text-align: center;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+
+.pane-zoom-controls .ts-button.is-small {
+    --height: 1.5rem;
+    flex: 0 0 auto;
+}
+
 /* 開啟狀態比照紙寬切換（.ts-selection 選中項目）的填色風格，而不是分隔線 */
 .pane-card-header .ts-button.is-icon.is-active {
     background: var(--ts-primary-700, #0050b3);
@@ -477,9 +494,11 @@ body {
    有界高度，才不會一張長紙把其他面板擠到很遠的地方。下方留白讓捲到底時內容不被
    浮動工具列蓋住。紙張用 auto margin 置中（放大到比容器寬時不會被左側裁掉）。 */
 .paper-viewport-body {
+    grid-column: 2;
+    grid-row: 2;
     display: flex;
     align-items: flex-start;
-    flex: 1 1 auto;
+    min-width: 0;
     min-height: 0;
     max-height: min(75vh, 44rem);
     overflow: auto;
@@ -490,6 +509,63 @@ body {
     .paper-viewport-body {
         max-height: none;
     }
+}
+
+/* 尺規＋紙張捲動區的 2x2 格線：左上角落、水平尺規、垂直尺規、捲動區。
+   尺規關閉時（hidden）前兩個 auto 軌道收成 0，捲動區自然佔滿。 */
+.paper-viewport-stage {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+@media (min-width: 1024px) {
+    .paper-viewport-stage {
+        flex: 1 1 0;
+    }
+}
+
+.paper-ruler,
+.paper-ruler-corner {
+    box-sizing: border-box;
+    background: var(--ts-gray-100, #f2f2f2);
+    color: var(--ts-gray-600, #666);
+    border: 0 solid var(--ts-gray-300, #ddd);
+}
+
+.paper-ruler-corner {
+    grid-column: 1;
+    grid-row: 1;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-width: 0 1px 1px 0;
+}
+
+.paper-ruler {
+    position: relative;
+}
+
+.paper-ruler.is-horizontal {
+    grid-column: 2;
+    grid-row: 1;
+    height: 1.25rem;
+    border-bottom-width: 1px;
+}
+
+.paper-ruler.is-vertical {
+    grid-column: 1;
+    grid-row: 2;
+    width: 1.25rem;
+    border-right-width: 1px;
+}
+
+.paper-ruler canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
 }
 
 .paper-shadow {
