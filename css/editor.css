@@ -461,8 +461,10 @@ body {
 }
 
 .outline-row.is-selected {
-    background: var(--ts-primary-100, #e8f0fe);
-    border-color: var(--ts-primary-300, #a8c7fa);
+    background: light-dark(rgba(37, 99, 235, .1), rgba(96, 165, 250, .14));
+    border-color: light-dark(rgba(37, 99, 235, .55), rgba(96, 165, 250, .55));
+    outline: 1px solid light-dark(rgba(37, 99, 235, .55), rgba(96, 165, 250, .55));
+    outline-offset: -2px;
 }
 
 .outline-row.is-target {
@@ -565,6 +567,11 @@ body {
     }
 }
 
+/* 垂直尺規佔了左邊一欄，右邊補一欄同寬的空位，紙張才會維持在工作區水平置中、不因開關尺規而位移 */
+.paper-viewport-stage:has(#ruler-v:not([hidden])) {
+    grid-template-columns: auto minmax(0, 1fr) 1.25rem;
+}
+
 .paper-ruler,
 .paper-ruler-corner {
     box-sizing: border-box;
@@ -610,11 +617,9 @@ body {
     flex: none;
     margin: 0 auto;
     position: relative;
-    /* 紙捲兩側是印表機印不到的實體邊距（rollWidthMm 跟 printableWidthMm 的差），
-       跟中間可列印的畫布區分開來；畫布本身另外鋪白底（見 .canvas-host）。
-       用半透明疊加、不寫死一個灰色：亮色主題疊半透明黑、暗色主題疊半透明白，
-       不管背景卡片是什麼顏色，邊距都會比背景稍暗／稍亮，紙張範圍才分得出來。 */
-    background: light-dark(rgba(0, 0, 0, .09), rgba(255, 255, 255, .16));
+    /* 紙捲兩側是印表機印不到的實體邊距（rollWidthMm 跟 printableWidthMm 的差）；
+       不再鋪灰色遮罩，紙張範圍靠細框與可列印範圍的虛線表示，畫布本身鋪白底（見 .canvas-host）。 */
+    background: transparent;
     box-shadow: 0 1px 3px rgba(0, 0, 0, .15), 0 0 0 1px light-dark(rgba(0, 0, 0, .14), rgba(255, 255, 255, .28));
     padding: 0 var(--paper-margin, 12px);
     border-radius: 2px;
