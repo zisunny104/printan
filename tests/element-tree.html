@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Printan tests：多欄分割／合併</title>
+<style>
+body { font: 14px/1.6 system-ui, sans-serif; margin: 16px; }
+li { list-style: none; }
+.pass { color: #1a7f37; }
+.fail { color: #cf222e; }
+pre { margin: 0 0 0 24px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1 id="summary">執行中…</h1>
+<ul id="list"></ul>
+<script type="module">
+// splitRowColumn／mergeRowColumns 純函式測試，跟 tests/index.html 同一套跑法（標題顯示 PASS／FAIL）。
+import { splitRowColumn, mergeRowColumns, MAX_ROW_COLUMNS } from "../js/core/element-tree.js";
+
+const cases = [];
+const test = (name, fn) => cases.push({ name, fn });
+function assert(cond, msg = "assert failed") { if (!cond) throw new Error(msg); }
+function eq(actual, expected, msg = "") {
+    const a = JSON.stringify(actual), b = JSON.stringify(expected);
+    if (a !== b) throw new Error(`${msg}\n預期 ${b}\n實際 ${a}`);
+}
+const clone = (v) => JSON.parse(JSON.stringify(v));
+const txt = (id) => ({ id, type: "text" });
+const row = (ratio, columns) => ({ id: "r", type: "row", ratio, columns });
+
+test("分割：在指定欄後插入空欄，比例對半", () => {
+    const r = row([1, 2], [[txt("a")], [txt("b")]]);
+    assert(splitRowColumn(r, 1));
+    eq(r.ratio, [1, 1, 1]);
+    eq(r.columns, [[txt("a")], [txt("b")], []]);
+});
+test("分割：原欄內容留在左半，新欄在右邊", () => {
+    const r = row([2, 1], [[txt("a")], [txt("b")]]);
+    assert(splitRowColumn(r, 0));
+    eq(r.columns, [[txt("a")], [], [txt("b")]]);
+    eq(r.ratio, [1, 1, 1]);
+});
+test("分割：比例總和不變（含奇數與小數）", () => {
+    const r = row([3, 5], [[], []]);
+    splitRowColumn(r, 0);
+    eq(r.ratio.reduce((s, v) => s + v, 0), 8);
+    eq(r.ratio, [1.5, 1.5, 5]);
+});
+test("分割：單欄可分成兩欄", () => {
+    const r = row([1], [[txt("a")]]);
+    assert(splitRowColumn(r, 0));
+    eq(r.ratio, [0.5, 0.5]);
+    eq(r.columns.length, 2);
+});
+test("分割：欄數達上限或欄索引不存在時回傳 false 且不改動", () => {
+    const full = row(Array(MAX_ROW_COLUMNS).fill(1), Array.from({ length: MAX_ROW_COLUMNS }, () => []));
+    const before = clone(full);
+    assert(!splitRowColumn(full, 0));
+    eq(full, before);
+    const r = row([1, 1], [[], []]);
+    const snap = clone(r);
+    assert(!splitRowColumn(r, 2));
+    assert(!splitRowColumn(r, -1));
+    eq(r, snap);
+});
+test("分割：一路分到上限為止", () => {
+    const r = row([1], [[]]);
+    let n = 0;
+    while (splitRowColumn(r, 0)) n++;
+    eq(r.columns.length, MAX_ROW_COLUMNS);
+    eq(n, MAX_ROW_COLUMNS - 1);
+    eq(r.ratio.length, MAX_ROW_COLUMNS);
+});
+test("合併：右欄內容併入左欄尾端，比例相加", () => {
+    const r = row([1, 2, 3], [[txt("a")], [txt("b"), txt("c")], [txt("d")]]);
+    assert(mergeRowColumns(r, 0));
+    eq(r.columns, [[txt("a"), txt("b"), txt("c")], [txt("d")]]);
+    eq(r.ratio, [3, 3]);
+});
+test("合併：最後一條分隔線（合併最後兩欄）", () => {
+    const r = row([1, 1, 2], [[txt("a")], [], [txt("d")]]);
+    assert(mergeRowColumns(r, 1));
+    eq(r.columns, [[txt("a")], [txt("d")]]);
+    eq(r.ratio, [1, 3]);
+});
+test("分割後再合併：回到原本的欄位與內容", () => {
+    const r = row([1, 2], [[txt("a")], [txt("b")]]);
+    const before = clone(r);
+    splitRowColumn(r, 1);
+    assert(mergeRowColumns(r, 1));
+    eq(r, before);
+});
+test("分割後再合併：奇數比例也能還原", () => {
+    const r = row([3, 5], [[txt("a")], [txt("b")]]);
+    const before = clone(r);
+    splitRowColumn(r, 0);
+    mergeRowColumns(r, 0);
+    eq(r, before);
+});
+test("合併：只剩一欄時回傳 false 且不改動", () => {
+    const r = row([1], [[txt("a")]]);
+    const before = clone(r);
+    assert(!mergeRowColumns(r, 0));
+    eq(r, before);
+});
+test("合併：分隔線索引超出範圍回傳 false 且不改動", () => {
+    const r = row([1, 1], [[txt("a")], [txt("b")]]);
+    const before = clone(r);
+    assert(!mergeRowColumns(r, 1));
+    assert(!mergeRowColumns(r, 5));
+    eq(r, before);
+});
+test("合併：一路合併到只剩一欄後，再合併無效", () => {
+    const r = row([1, 1, 1], [[txt("a")], [txt("b")], [txt("c")]]);
+    assert(mergeRowColumns(r, 0));
+    assert(mergeRowColumns(r, 0));
+    eq(r.columns, [[txt("a"), txt("b"), txt("c")]]);
+    eq(r.ratio, [3]);
+    assert(!mergeRowColumns(r, 0));
+});
+test("合併：ratio 與 columns 長度始終一致", () => {
+    const r = row([1, 1], [[], []]);
+    for (const step of [() => splitRowColumn(r, 0), () => splitRowColumn(r, 2), () => mergeRowColumns(r, 1), () => mergeRowColumns(r, 0)]) {
+        step();
+        eq(r.ratio.length, r.columns.length);
+    }
+});
+
+const list = document.getElementById("list");
+let failed = 0;
+for (const c of cases) {
+    const li = document.createElement("li");
+    try {
+        await c.fn();
+        li.className = "pass";
+        li.textContent = "PASS  " + c.name;
+    } catch (err) {
+        failed += 1;
+        li.className = "fail";
+        li.textContent = "FAIL  " + c.name;
+        const pre = document.createElement("pre");
+        pre.textContent = err.message;
+        li.append(pre);
+    }
+    list.append(li);
+}
+const summary = document.getElementById("summary");
+summary.textContent = failed ? `${failed} / ${cases.length} 失敗` : `全部通過（${cases.length}）`;
+summary.className = failed ? "fail" : "pass";
+document.title = (failed ? "FAIL " : "PASS ") + summary.textContent;
+</script>
+</body>
+</html>
