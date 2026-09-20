@@ -585,16 +585,31 @@ body {
     min-height: 160px;
 }
 
-/* 上緣沒有實體邊界，純視覺留白 6px；下緣改用印表機 profile 的切刀刀片距離
-   （--paper-safe-bottom，updatePaperFrame() 算好寫進來），外加同一份 6px 視覺留白 */
+/* 可列印範圍的四條 2px 虛線，畫在真正的邊界上（不再內縮成一個框）：左右＝可列印寬度的兩緣
+   （--paper-margin 是左右實體邊距）、上＝內容起點、下＝切刀安全線（--paper-safe-bottom
+   ＝切刀刀片到列印頭的距離，超過這條線的內容切紙時有被裁到的風險）。兩個變數都由
+   updatePaperFrame() 依縮放算好寫進來。用背景漸層畫虛線，只有一個節點；疊在畫布上面（z-index），
+   半透明灰在白紙與紙邊的暗色底上都看得見又不搶眼。 */
 .safe-area-guide {
+    --guide-dash: repeating-linear-gradient(to bottom, var(--guide-color) 0 6px, transparent 6px 10px);
+    --guide-dash-h: repeating-linear-gradient(to right, var(--guide-color) 0 6px, transparent 6px 10px);
+    --guide-color: rgba(120, 120, 120, .55);
     position: absolute;
-    top: 6px;
-    bottom: calc(var(--paper-safe-bottom, 0px) + 6px);
-    left: calc(var(--paper-margin, 12px) + 6px);
-    right: calc(var(--paper-margin, 12px) + 6px);
-    border: 1px dashed var(--ts-gray-200, #e5e5e5);
+    inset: 0;
+    z-index: 1;
     pointer-events: none;
+    background-repeat: no-repeat;
+    background-image: var(--guide-dash), var(--guide-dash), var(--guide-dash-h), var(--guide-dash-h);
+    background-position:
+        left var(--paper-margin, 12px) top 0,
+        right var(--paper-margin, 12px) top 0,
+        left var(--paper-margin, 12px) top 0,
+        left var(--paper-margin, 12px) bottom var(--paper-safe-bottom, 0px);
+    background-size:
+        2px 100%,
+        2px 100%,
+        calc(100% - 2 * var(--paper-margin, 12px)) 2px,
+        calc(100% - 2 * var(--paper-margin, 12px)) 2px;
 }
 
 .canvas-host {
