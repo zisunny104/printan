@@ -102,12 +102,13 @@ export function fieldRow(fields) {
     return grid;
 }
 
-export function textInput(value, onInput, type = "text") {
+export function textInput(value, onInput, type = "text", placeholder = "") {
     const wrap = document.createElement("div");
     wrap.className = "ts-input is-small is-fluid";
     const input = document.createElement("input");
     input.type = type;
     input.value = value;
+    if (placeholder) input.placeholder = placeholder;
     input.addEventListener("input", () => onInput(type === "number" ? Number(input.value) : input.value));
     wrap.appendChild(input);
     return wrap;

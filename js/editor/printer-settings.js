@@ -140,7 +140,7 @@ function updatePrinterConnectionUi() {
     els["printer-toolbar-dot"].hidden = !connected;
     els["btn-printer-settings"].dataset.tooltip = connected
         ? `列印設定（已連接：${connectedLabel}）`
-        : "列印設定（印表機連線、走紙／切紙、可列印點數、測試列印）";
+        : "列印設定";
     els["btn-printer-settings"].setAttribute("aria-label", connected ? "列印設定（印表機已連接）" : "列印設定（印表機未連接）");
 
     // 識別資料只在連線期間有意義，斷線（含裝置被拔掉）就清掉，見 identifyConnectedPrinter()。
@@ -198,7 +198,7 @@ function updatePrinterInfo() {
         );
         if (identity.pending) setInfoCell("printer-info-spec", "比對中…");
         else if (!identity.queried) setInfoCell("printer-info-spec", `無法辨識（自動重連不查詢）`, "default");
-        else if (identity.profileId) setInfoCell("printer-info-spec", `${base.brand} ${base.model}（型號與機器回報相符）`, "machine");
+        else if (identity.profileId) setInfoCell("printer-info-spec", `${base.brand} ${base.model}`, "machine");
         else setInfoCell("printer-info-spec", `無法辨識，使用預設值（${base.brand} ${base.model}）`, "default");
     }
     setInfoCell("printer-info-dpi", `${base.dpi.x} × ${base.dpi.y} dpi`, "default");
@@ -454,7 +454,7 @@ async function queryPrinterStatus() {
         }
         els["printer-status-result"].textContent = parts.length > 0
             ? parts.join("；")
-            : "印表機沒有回應（可能不支援即時狀態查詢，或這個連線沒有讀取通道）";
+            : "印表機沒有回應";
     } catch (err) {
         els["printer-status-result"].textContent = `查詢失敗：${err.message}`;
     } finally {

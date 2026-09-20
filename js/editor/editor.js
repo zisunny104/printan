@@ -128,8 +128,8 @@ function updateFeedLinesHint() {
     const profile = getPrinterProfile(state.project.printerProfile.id);
     const bladeOffsetMm = profile.autocutter?.bladeOffsetMm;
     els["pref-feed-lines-hint"].textContent = bladeOffsetMm
-        ? `${profile.brand} ${profile.model} 的切刀跟列印頭之間有約 ${bladeOffsetMm}mm 的固定距離，走紙行數太少切刀會切到剛印完的內容尾端；預設 4 行通常足夠，如果切紙時還是會切到內容，請調高這個數字。`
-        : "這是切紙（或列印結束）前走紙的行數，走太少切刀可能會切到剛印完的內容尾端；如果切紙時切到內容，請調高這個數字。";
+        ? `${profile.brand} ${profile.model} 切刀距列印頭約 ${bladeOffsetMm}mm，切到內容請調高行數。`
+        : "切紙前的走紙行數，切到內容請調高。";
 }
 
 function populatePaperWidthTabs() {

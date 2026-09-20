@@ -104,10 +104,10 @@ function buildMultiInspector(panel, ids) {
 // 斜體/底線/刪除線則是「片段（run）」層級，同一個文字元素裡的每個片段可以各自
 // 覆寫；片段沒指定時繼承這份清單第一項以外的元素預設值（見 renderer.js resolveRunStyle）。
 const FONT_CHOICES = [
-    ['"Noto Sans TC", "Microsoft JhengHei", sans-serif', "思源黑體（無襯線）"],
-    ['"Noto Serif TC", PMingLiU, serif', "思源宋體（襯線）"],
+    ['"Noto Sans TC", "Microsoft JhengHei", sans-serif', "思源黑體"],
+    ['"Noto Serif TC", PMingLiU, serif', "思源宋體"],
     ['DFKai-SB, BiauKai, "Kaiti TC", serif', "標楷體"],
-    ["ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", "等寬（數字／條碼文字）"],
+    ["ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", "系統等寬"],
     ...WEB_FONTS.map((font) => [font.stack, font.label]),
 ];
 
@@ -141,7 +141,7 @@ function buildFontSelect({ value, leading, disabled = false, onChange }) {
 
     if (value && value !== MIXED && ![...select.options].some((o) => o.value === value)) {
         const name = primaryFamilyName(value);
-        addOption(select, value, isFontInstalled(name) ? `${name}（本機字體）` : `${name}（此電腦沒有，改用預設字體）`);
+        addOption(select, value, isFontInstalled(name) ? `${name}（本機字體）` : `${name}（此電腦沒有）`);
     }
     select.value = value === MIXED ? "__mixed__" : (value || "");
     select.addEventListener("change", () => onChange(select.value || null));
@@ -260,7 +260,7 @@ function buildTextInspector(panel, el) {
         toolbar.appendChild(rangeToggleButton("italic", "斜體", style.italic, hasRange, (v) => applyRangeStyle("italic", v)));
         toolbar.appendChild(rangeToggleButton("underline", "底線", style.underline, hasRange, (v) => applyRangeStyle("underline", v)));
         toolbar.appendChild(rangeToggleButton("strikethrough", "刪除線", style.strikethrough, hasRange, (v) => applyRangeStyle("strikethrough", v)));
-        toolbar.appendChild(rangeToggleButton("circle-half-stroke", "反白（黑底白字）", style.inverse, hasRange, (v) => applyRangeStyle("inverse", v)));
+        toolbar.appendChild(rangeToggleButton("circle-half-stroke", "反白", style.inverse, hasRange, (v) => applyRangeStyle("inverse", v)));
 
         styleRow.innerHTML = "";
         styleRow.appendChild(fieldRow([
@@ -305,10 +305,10 @@ function buildTextInspector(panel, el) {
     ]));
     panel.appendChild(fieldRow([
         ["對齊", selectInput([["left", "靠左"], ["center", "置中"], ["right", "靠右"]], el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })],
-        ["最多行數（0＝不限制）", textInput(el.maxLines, (v) => { el.maxLines = v; onModelChange({ skipInspector: true }); }, "number")],
+        ["最多行數", textInput(el.maxLines || "", (v) => { el.maxLines = v; onModelChange({ skipInspector: true }); }, "number", "不限")],
     ]));
     panel.appendChild(field(null, checkboxInput(el.bold, (v) => { el.bold = v; onModelChange({ skipInspector: true }); }, "預設粗體")));
-    panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange({ skipInspector: true }); }, "整行反白（黑底白字）")));
+    panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange({ skipInspector: true }); }, "整行反白")));
     panel.appendChild(field(null, checkboxInput(el.wrap, (v) => { el.wrap = v; onModelChange({ skipInspector: true }); }, "自動換行")));
 }
 
@@ -471,7 +471,7 @@ function buildImageInspector(panel, el) {
         el.cropRect = null; // 旋轉後舊裁切窗格的座標系不再對應原圖，重置避免裁到錯的地方
         onModelChange();
     }));
-    layoutRow.appendChild(iconToggleButton("arrows-up-down", "拉伸至指定高度（關閉＝依比例縮放）", el.fit === "stretch", () => {
+    layoutRow.appendChild(iconToggleButton("arrows-up-down", "拉伸至指定高度", el.fit === "stretch", () => {
         el.fit = el.fit === "stretch" ? "auto" : "stretch";
         onModelChange();
     }));
@@ -500,7 +500,7 @@ function buildImageInspector(panel, el) {
     panel.appendChild(sliderField("亮度", el.brightness ?? 0, -100, 100, (v) => { el.brightness = v; onModelChange({ skipInspector: true }); }));
     panel.appendChild(sliderField("對比", el.contrast ?? 0, -100, 100, (v) => { el.contrast = v; onModelChange({ skipInspector: true }); }));
     panel.appendChild(field(null, checkboxInput(!!el.invert, (v) => { el.invert = v; onModelChange({ skipInspector: true }); }, "反相")));
-    panel.appendChild(field("取樣方式（熱感輸出網點）", selectInput(
+    panel.appendChild(field("取樣方式", selectInput(
         [["floyd-steinberg", "誤差擴散"], ["ordered", "網點"], ["threshold", "純黑白"]],
         el.ditherMode || "floyd-steinberg",
         (v) => { el.ditherMode = v; onModelChange(); },
@@ -590,7 +590,7 @@ function buildBarcodeInspector(panel, el) {
         panel.appendChild(field(null, checkboxInput(el.showText !== false, (v) => {
             el.showText = v;
             onModelChange({ skipInspector: true });
-        }, "顯示明碼（條碼下方數字）")));
+        }, "顯示明碼")));
     }
 
     panel.appendChild(sectionDivider());
