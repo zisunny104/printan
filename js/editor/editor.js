@@ -40,6 +40,7 @@ const LAST_DRAFT_KEY = "printan:lastDraftId";
 const state = {
     project: null,
     selectedId: null,
+    multi: [], // 多選時的全部 id（同一層內，含 selectedId）；單選時是空陣列
     insertionTarget: null, // null = 根目錄；{ rowId, colIndex } = 某個 row 的某一欄
     previewData: {},
     mode: "screen", // "screen" | "thermal"
@@ -429,6 +430,7 @@ function bindFileInputs() {
 function loadProjectIntoEditor(project) {
     state.project = project;
     state.selectedId = null;
+    state.multi = [];
     state.insertionTarget = null;
     state.previewData = {};
     resetHistory();
@@ -539,6 +541,7 @@ function insertElement(element) {
     const target = resolveTargetArray(state.project.template.elements, state.insertionTarget);
     target.push(element);
     state.selectedId = element.id;
+    state.multi = [];
     pendingReveal = { id: element.id, edit: element.type === "text" };
     onModelChange();
     els["outline-list"].querySelector(".outline-row.is-selected")?.scrollIntoView({ block: "nearest" });
@@ -673,21 +676,59 @@ function setRowRatio(rowEl, newRatio) {
 }
 
 function deleteElement(id) {
-    const found = findContainerOf(state.project.template.elements, id);
-    if (!found) return;
-    found.array.splice(found.index, 1);
-    if (state.selectedId === id) state.selectedId = null;
-    if (state.insertionTarget && state.insertionTarget.rowId === id) state.insertionTarget = null;
+    deleteElements([id]);
+}
+
+function deleteElements(ids) {
+    for (const id of ids) {
+        const found = findContainerOf(state.project.template.elements, id);
+        if (!found) continue;
+        found.array.splice(found.index, 1);
+        if (state.insertionTarget && state.insertionTarget.rowId === id) state.insertionTarget = null;
+    }
+    pruneSelection();
     onModelChange();
 }
 
 function duplicateElement(id) {
-    const found = findContainerOf(state.project.template.elements, id);
-    if (!found) return;
-    const clone = cloneElementWithNewIds(found.array[found.index]);
-    found.array.splice(found.index + 1, 0, clone);
-    state.selectedId = clone.id;
+    duplicateElements([id]);
+}
+
+function duplicateElements(ids) {
+    const clones = [];
+    for (const id of ids) {
+        const found = findContainerOf(state.project.template.elements, id);
+        if (!found) continue;
+        const clone = cloneElementWithNewIds(found.array[found.index]);
+        found.array.splice(found.index + 1, 0, clone);
+        clones.push(clone.id);
+    }
+    if (!clones.length) return;
+    setSelection(clones);
     onModelChange();
+}
+
+// 元素被刪掉（刪除、復原）之後，把選取範圍裡已經不存在的 id 拿掉
+function pruneSelection() {
+    const exists = (id) => findElementById(state.project.template.elements, id);
+    state.multi = state.multi.filter(exists);
+    if (state.multi.length < 2) {
+        if (state.multi.length === 1) state.selectedId = state.multi[0];
+        state.multi = [];
+    } else if (!state.multi.includes(state.selectedId)) {
+        state.selectedId = state.multi[state.multi.length - 1];
+    }
+    if (state.selectedId && !exists(state.selectedId)) state.selectedId = null;
+}
+
+function getSelectedIds() {
+    if (state.multi.length > 1) return state.multi;
+    return state.selectedId ? [state.selectedId] : [];
+}
+
+function setSelection(ids) {
+    state.selectedId = ids[ids.length - 1] ?? null;
+    state.multi = ids.length > 1 ? ids : [];
 }
 
 function moveElement(id, direction) {
@@ -697,6 +738,21 @@ function moveElement(id, direction) {
     if (newIndex < 0 || newIndex >= found.array.length) return;
     const [item] = found.array.splice(found.index, 1);
     found.array.splice(newIndex, 0, item);
+    onModelChange();
+}
+
+/** 多選整批上移／下移：同一層內，遇到邊界或前一個也是選取中的就不動，其餘保持相對順序。 */
+function moveElements(ids, direction) {
+    const found = findContainerOf(state.project.template.elements, ids[0]);
+    if (!found) return;
+    const arr = found.array;
+    const set = new Set(ids);
+    const swap = (i, j) => { [arr[i], arr[j]] = [arr[j], arr[i]]; };
+    if (direction < 0) {
+        for (let i = 1; i < arr.length; i++) if (set.has(arr[i].id) && !set.has(arr[i - 1].id)) swap(i, i - 1);
+    } else {
+        for (let i = arr.length - 2; i >= 0; i--) if (set.has(arr[i].id) && !set.has(arr[i + 1].id)) swap(i, i + 1);
+    }
     onModelChange();
 }
 
@@ -733,8 +789,20 @@ function containsArray(elements, array) {
 }
 
 /** 選取元素：outline 清單點擊、畫布疊層點擊共用同一套邏輯。 */
-function selectElementById(id) {
-    state.selectedId = id;
+function selectElementById(id, { toggle = false } = {}) {
+    if (toggle) {
+        // Shift／Ctrl 點選：在同一層內加入或移出選取，跨層就改成單選
+        const current = getSelectedIds();
+        const arrayOf = (x) => findContainerOf(state.project.template.elements, x)?.array;
+        if (current.length && arrayOf(current[0]) === arrayOf(id)) {
+            setSelection(current.includes(id) ? current.filter((x) => x !== id) : [...current, id]);
+            renderOutline();
+            renderInspector();
+            highlightSelectedBlock();
+            return;
+        }
+    }
+    setSelection([id]);
     const el = findElementById(state.project.template.elements, id);
     if (el && el.type !== "row") {
         const found = findContainerOf(state.project.template.elements, id);
@@ -749,8 +817,8 @@ function highlightSelectedBlock() {
     const overlay = els["edit-overlay"];
     if (!overlay) return;
     overlay.querySelectorAll(".edit-block.is-selected").forEach((n) => n.classList.remove("is-selected"));
-    if (state.selectedId) {
-        overlay.querySelector(`.edit-block[data-id="${state.selectedId}"]`)?.classList.add("is-selected");
+    for (const id of getSelectedIds()) {
+        overlay.querySelector(`.edit-block[data-id="${id}"]`)?.classList.add("is-selected");
     }
 }
 
@@ -871,6 +939,7 @@ function buildTargetHeader(label, target, depth) {
     row.addEventListener("click", () => {
         state.insertionTarget = target;
         state.selectedId = null;
+        state.multi = [];
         renderOutline();
         renderInspector();
     });
@@ -897,7 +966,7 @@ function buildElementRow(el, depth, parentKey) {
     const row = document.createElement("div");
     row.className = `outline-row outline-indent-${depth}`;
     row.dataset.elType = el.type;
-    if (state.selectedId === el.id) row.classList.add("is-selected");
+    if (getSelectedIds().includes(el.id)) row.classList.add("is-selected");
 
     const icon = document.createElement("span");
     icon.className = `ts-icon is-${TYPE_ICON[el.type] || "shapes"}-icon`;
@@ -917,7 +986,7 @@ function buildElementRow(el, depth, parentKey) {
     row.appendChild(label);
     row.appendChild(actions);
 
-    row.addEventListener("click", () => selectElementById(el.id));
+    row.addEventListener("click", (e) => selectElementById(el.id, { toggle: e.shiftKey || e.ctrlKey || e.metaKey }));
     wireOutlineRowDrag(row, el, parentKey);
 
     return row;
@@ -959,6 +1028,10 @@ function iconButton(icon, label, onClick) {
 function renderInspector() {
     const panel = els.inspector;
     panel.innerHTML = "";
+    if (state.multi.length > 1) {
+        buildMultiInspector(panel, state.multi);
+        return;
+    }
     const el = state.selectedId ? findElementById(state.project.template.elements, state.selectedId) : null;
     if (!el) {
         panel.appendChild(emptyState("sliders", "尚未選取元素"));
@@ -974,6 +1047,65 @@ function renderInspector() {
     const dupBtn = mkButton("複製", "copy", () => duplicateElement(el.id));
     const delBtn = mkButton("刪除", "trash", () => deleteElement(el.id), { negative: true });
     actions.append(dupBtn, delBtn);
+    panel.appendChild(actions);
+}
+
+// 多選：只列出「所有選取元素都有」的欄位，值不同時顯示「混合」，改了就套用到全部。
+const MULTI_FIELDS = [
+    { key: "fontSize", label: "字級", kind: "number", types: ["text"], runField: true },
+    { key: "bold", label: "粗體", kind: "bool", types: ["text"], runField: true },
+    { key: "inverse", label: "整行反白", kind: "bool", types: ["text"] },
+    { key: "lineHeight", label: "行高", kind: "number", types: ["text"] },
+    { key: "letterSpacing", label: "字距", kind: "number", types: ["text"] },
+    { key: "align", label: "對齊", kind: "select", options: [["left", "靠左"], ["center", "置中"], ["right", "靠右"]], types: ["text", "image", "barcode"] },
+    { key: "heightDots", label: "高度", kind: "number", types: ["spacer", "barcode"] },
+    { key: "widthPercent", label: "寬度 %", kind: "number", types: ["image"] },
+    { key: "style", label: "樣式", kind: "select", options: [["solid", "實線"], ["dashed", "虛線"], ["dotted", "點線"]], types: ["divider"] },
+    { key: "thicknessDots", label: "粗細", kind: "number", types: ["divider"] },
+    { key: "marginTopDots", label: "上邊距", kind: "number", types: ["divider"] },
+    { key: "marginBottomDots", label: "下邊距", kind: "number", types: ["divider"] },
+];
+
+function buildMultiInspector(panel, ids) {
+    const selected = ids.map((id) => findElementById(state.project.template.elements, id)).filter(Boolean);
+    panel.appendChild(sectionHeader("shapes", `已選 ${selected.length} 個元素`));
+    const apply = (spec, value) => {
+        for (const el of selected) {
+            el[spec.key] = value;
+            if (spec.runField) for (const run of el.runs || []) delete run[spec.key]; // 片段自己的覆寫要一併清掉才看得到效果
+        }
+        onModelChange({ skipInspector: true });
+    };
+    let shown = 0;
+    for (const spec of MULTI_FIELDS) {
+        if (!selected.every((el) => spec.types.includes(el.type))) continue;
+        shown++;
+        const values = selected.map((el) => el[spec.key]);
+        const mixed = values.some((v) => v !== values[0]);
+        let input;
+        if (spec.kind === "number") {
+            input = textInput(mixed ? "" : values[0], () => {}, "number");
+            const box = input.querySelector("input");
+            box.placeholder = mixed ? "混合" : "";
+            box.addEventListener("input", () => { if (box.value !== "") apply(spec, Number(box.value)); });
+        } else {
+            const options = spec.kind === "bool" ? [["1", "是"], ["0", "否"]] : spec.options;
+            const current = spec.kind === "bool" ? (values[0] ? "1" : "0") : values[0];
+            input = selectInput(mixed ? [["__mixed", "混合"], ...options] : options, mixed ? "__mixed" : current, (v) => {
+                if (v !== "__mixed") apply(spec, spec.kind === "bool" ? v === "1" : v);
+            });
+        }
+        panel.appendChild(field(spec.label, input));
+    }
+    if (!shown) panel.appendChild(emptyState("sliders", "沒有共同欄位"));
+
+    panel.appendChild(sectionDivider());
+    const actions = document.createElement("div");
+    actions.className = "ts-wrap is-compact";
+    actions.append(
+        mkButton("複製", "copy", () => duplicateElements(ids)),
+        mkButton("刪除", "trash", () => deleteElements(ids), { negative: true }),
+    );
     panel.appendChild(actions);
 }
 
@@ -1813,7 +1945,7 @@ function buildEditBlock(box, scale) {
     div.style.top = `${box.y * scale}px`;
     div.style.width = `${box.width * scale}px`;
     div.style.height = `${Math.max(box.height, 1) * scale}px`;
-    if (state.selectedId === box.el.id) div.classList.add("is-selected");
+    if (getSelectedIds().includes(box.el.id)) div.classList.add("is-selected");
     attachBlockInteractions(div, box.el.id);
     return div;
 }
@@ -1882,8 +2014,9 @@ function attachBlockInteractions(div, elId) {
                 moveElementTo(elId, findDropTarget(siblings, ev.clientY).index);
             } else if (!dragging) {
                 // 已選取的文字元素再點一下＝在預覽區直接編輯，插入點落在點擊位置
-                const editText = state.selectedId === elId && findElementById(state.project.template.elements, elId)?.type === "text";
-                selectElementById(elId);
+                const toggle = ev.shiftKey || ev.ctrlKey || ev.metaKey;
+                const editText = !toggle && state.selectedId === elId && !state.multi.length && findElementById(state.project.template.elements, elId)?.type === "text";
+                selectElementById(elId, { toggle });
                 if (editText) inlineEditor.open(elId, { x: ev.clientX, y: ev.clientY });
             }
         }
@@ -2759,7 +2892,7 @@ function stepHistory(direction) {
     history.index = next;
     history.at = 0;
     state.project.template.elements = JSON.parse(history.stack[next]);
-    if (state.selectedId && !findElementById(state.project.template.elements, state.selectedId)) state.selectedId = null;
+    pruneSelection();
     if (state.insertionTarget && !findElementById(state.project.template.elements, state.insertionTarget.rowId)) state.insertionTarget = null;
     history.restoring = true;
     try {
@@ -2772,7 +2905,7 @@ function stepHistory(direction) {
 // ---- 鍵盤快捷鍵與點空白取消選取 ----
 // 焦點在輸入框、文字編輯區或對話框時一律交給瀏覽器（輸入框自己的復原、Delete 刪字）。
 
-let clipboardElement = null;
+let clipboardElements = [];
 
 function flattenElements(elements, out = []) {
     for (const el of elements) {
@@ -2783,20 +2916,22 @@ function flattenElements(elements, out = []) {
 }
 
 function deselectElement() {
-    if (!state.selectedId) return;
+    if (!getSelectedIds().length) return;
     state.selectedId = null;
+    state.multi = [];
     renderOutline();
     renderInspector();
     highlightSelectedBlock();
 }
 
-function pasteElement() {
-    if (!clipboardElement) return;
-    const clone = cloneElementWithNewIds(clipboardElement);
-    const found = state.selectedId ? findContainerOf(state.project.template.elements, state.selectedId) : null;
-    if (found) found.array.splice(found.index + 1, 0, clone);
-    else resolveTargetArray(state.project.template.elements, state.insertionTarget).push(clone);
-    state.selectedId = clone.id;
+function pasteElements() {
+    if (!clipboardElements.length) return;
+    const clones = clipboardElements.map((el) => cloneElementWithNewIds(el));
+    const ids = getSelectedIds();
+    const found = ids.length ? findContainerOf(state.project.template.elements, ids[ids.length - 1]) : null;
+    if (found) found.array.splice(found.index + 1, 0, ...clones);
+    else resolveTargetArray(state.project.template.elements, state.insertionTarget).push(...clones);
+    setSelection(clones.map((c) => c.id));
     onModelChange();
 }
 
@@ -2805,31 +2940,33 @@ function handleEditorShortcut(e) {
     if (e.target.closest?.("input, textarea, select, [contenteditable], [role=\"tab\"]") && e.key !== "Escape") return;
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
-    const id = state.selectedId;
+    const ids = getSelectedIds();
+    const root = state.project.template.elements;
 
     if (mod && key === "z") {
         stepHistory(e.shiftKey ? 1 : -1);
     } else if (mod && key === "y") {
         stepHistory(1);
-    } else if (mod && key === "d" && id) {
-        duplicateElement(id);
-    } else if (mod && key === "c" && id && !window.getSelection().toString()) {
-        clipboardElement = JSON.parse(JSON.stringify(findElementById(state.project.template.elements, id)));
+    } else if (mod && key === "d" && ids.length) {
+        duplicateElements(ids);
+    } else if (mod && key === "c" && ids.length && !window.getSelection().toString()) {
+        clipboardElements = ids.map((id) => JSON.parse(JSON.stringify(findElementById(root, id))));
         return;
-    } else if (mod && key === "v" && clipboardElement) {
-        pasteElement();
-    } else if ((e.key === "Delete" || e.key === "Backspace") && id && !mod) {
-        deleteElement(id);
+    } else if (mod && key === "v" && clipboardElements.length) {
+        pasteElements();
+    } else if ((e.key === "Delete" || e.key === "Backspace") && ids.length && !mod) {
+        deleteElements(ids);
     } else if (e.key === "Escape") {
         deselectElement();
         return;
     } else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.shiftKey) {
         const dir = e.key === "ArrowUp" ? -1 : 1;
         if (e.altKey || mod) {
-            if (id) moveElement(id, dir);
+            if (ids.length) moveElements(ids, dir);
         } else {
-            const flat = flattenElements(state.project.template.elements);
-            const next = flat[flat.findIndex((el) => el.id === id) + dir] || (id ? null : flat[dir < 0 ? flat.length - 1 : 0]);
+            const flat = flattenElements(root);
+            const anchor = ids.length ? flat.findIndex((el) => el.id === ids[dir < 0 ? 0 : ids.length - 1]) : -1;
+            const next = anchor >= 0 ? flat[anchor + dir] : flat[dir < 0 ? flat.length - 1 : 0];
             if (next) selectElementById(next.id);
         }
     } else {
@@ -2838,12 +2975,61 @@ function handleEditorShortcut(e) {
     e.preventDefault();
 }
 
+// 框選：在空白處拖出矩形，選到碰到矩形的元素；一次只選同一層（有最上層元素就以最上層為準）。沒拖動＝取消選取。
+function startMarquee(e) {
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let box = null;
+    const rectOf = (ev) => ({
+        left: Math.min(startX, ev.clientX), top: Math.min(startY, ev.clientY),
+        right: Math.max(startX, ev.clientX), bottom: Math.max(startY, ev.clientY),
+    });
+    const onMove = (ev) => {
+        if (!box) {
+            if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 4) return;
+            box = document.createElement("div");
+            box.className = "marquee-box";
+            document.body.appendChild(box);
+        }
+        const r = rectOf(ev);
+        Object.assign(box.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.right - r.left}px`, height: `${r.bottom - r.top}px` });
+    };
+    const onUp = (ev) => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        if (!box) {
+            deselectElement();
+            return;
+        }
+        box.remove();
+        const r = rectOf(ev);
+        const root = state.project.template.elements;
+        const hits = [...els["edit-overlay"].querySelectorAll(".edit-block")].filter((n) => {
+            const b = n.getBoundingClientRect();
+            return b.left < r.right && b.right > r.left && b.top < r.bottom && b.bottom > r.top;
+        }).map((n) => n.dataset.id);
+        const arrayOf = (id) => findContainerOf(root, id)?.array;
+        const base = hits.find((id) => arrayOf(id) === root) ?? hits[0];
+        if (!base) {
+            deselectElement();
+            return;
+        }
+        setSelection(hits.filter((id) => arrayOf(id) === arrayOf(base)));
+        state.insertionTarget = containerToTarget(arrayOf(base));
+        renderOutline();
+        renderInspector();
+        highlightSelectedBlock();
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+}
+
 function bindEditorShortcuts() {
     document.addEventListener("keydown", handleEditorShortcut);
     els["paper-scroll"].addEventListener("pointerdown", (e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || state.viewMode !== "edit") return;
         const t = e.target;
-        if (t === els["paper-scroll"] || t === els["paper-shadow"] || t === els["canvas-host"] || t.tagName === "CANVAS") deselectElement();
+        if (t === els["paper-scroll"] || t === els["paper-shadow"] || t === els["canvas-host"] || t.tagName === "CANVAS") startMarquee(e);
     });
 }
 

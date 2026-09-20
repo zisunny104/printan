@@ -902,3 +902,12 @@ body {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: .78rem;
 }
+
+/* 框選矩形 */
+.marquee-box {
+    position: fixed;
+    z-index: 30;
+    pointer-events: none;
+    border: 1px solid var(--ts-primary-500, #3b82f6);
+    background: color-mix(in srgb, var(--ts-primary-500, #3b82f6) 12%, transparent);
+}
