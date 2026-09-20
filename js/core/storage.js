@@ -22,17 +22,6 @@ function openDb() {
     });
 }
 
-async function withStore(mode, fn) {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_DRAFTS, mode);
-        const store = tx.objectStore(STORE_DRAFTS);
-        const result = fn(store);
-        tx.oncomplete = () => resolve(result.result !== undefined ? result.result : result);
-        tx.onerror = () => reject(tx.error);
-    });
-}
-
 function requestToPromise(request) {
     return new Promise((resolve, reject) => {
         request.onsuccess = () => resolve(request.result);
@@ -70,12 +59,6 @@ export async function deleteDraft(id) {
         tx.onerror = () => reject(tx.error);
     });
     removeRecent(id);
-}
-
-export async function listDrafts() {
-    const db = await openDb();
-    const tx = db.transaction(STORE_DRAFTS, "readonly");
-    return requestToPromise(tx.objectStore(STORE_DRAFTS).getAll());
 }
 
 // ---- 「最近使用」輕量清單（localStorage，只存 id/name/時間，不存圖片內容） ----

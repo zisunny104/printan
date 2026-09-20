@@ -252,8 +252,7 @@ function measureGlyphs(glyphs, ctx) {
     return width;
 }
 
-// 以字元為單位貪婪換行（同時適用中日韓字元與西文，西文長單字可能被截斷，
-// 屬於第一階段的已知限制），沿用舊版邏輯，改成量測 glyph（含樣式）而非純文字。
+// 以字元為單位貪婪換行（同時適用中日韓字元與西文，西文長單字可能被截斷）。
 function wrapParagraphGlyphs(glyphs, maxWidth, ctx) {
     if (glyphs.length === 0) return [[]];
     const lines = [];

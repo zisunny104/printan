@@ -1,9 +1,7 @@
 // Printer Adapter 架構（見需求單第十九、二十節）。
 //
-// 目的：未來新增其他印表機連線方式時，只需要新增一個 Adapter，
-// 不需要更動 Editor / Renderer。第一階段不實作真正的實體連線，
-// 只先把介面定義出來，並提供瀏覽器連線能力偵測，
-// 讓 UI 知道目前環境「可以」提供哪些連線方式（而不是假設全部都可以）。
+// 目的：新增其他印表機連線方式時，只需要新增一個 Adapter，
+// 不需要更動 Editor / Renderer。
 
 /** 所有 Adapter 需要實作的介面（JSDoc 型別，non-enforced）。
  * @typedef {Object} PrinterAdapter
@@ -14,19 +12,7 @@
  */
 
 /**
- * 瀏覽器實體列印連線能力偵測。
- * 說明用途，不代表印表機本身一定支援（例如 TM-T82II 標準款沒有藍牙）。
- */
-export function detectBrowserCapabilities() {
-    return {
-        webUsb: typeof navigator !== "undefined" && "usb" in navigator,
-        webSerial: typeof navigator !== "undefined" && "serial" in navigator,
-        webBluetooth: typeof navigator !== "undefined" && "bluetooth" in navigator,
-    };
-}
-
-/**
- * 第一階段唯一可用的「輸出」：走系統列印對話框（window.print）或 PDF 匯出。
+ * 走系統列印對話框（window.print）或 PDF 匯出。
  * 不需要 WebUSB/WebSerial 權限，任何瀏覽器都能運作，是最保守但最可靠的路徑。
  */
 export class SystemDialogAdapter {
@@ -554,12 +540,3 @@ export class WebSerialEscposAdapter {
         }
     }
 }
-
-// 未來可能新增：
-//   - NetworkAdapter：Ethernet 介面印表機，瀏覽器無法直接開 TCP socket，
-//     需要經由後端 / 本機代理服務轉送
-export const PRINTER_ADAPTERS = {
-    "system-dialog": SystemDialogAdapter,
-    "webusb-escpos": WebUsbEscposAdapter,
-    "webserial-escpos": WebSerialEscposAdapter,
-};

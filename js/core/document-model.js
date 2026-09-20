@@ -8,8 +8,6 @@ function nextId(prefix) {
     return `${prefix}_${Date.now().toString(36)}${idCounter.toString(36)}`;
 }
 
-export const ELEMENT_TYPES = ["text", "image", "spacer", "divider", "row", "barcode", "group"];
-
 /**
  * 一個文字元素的內容由多個 run 組成（比照 Figma：同一段文字裡不同片段可以各自
  * 覆寫字體／字級／粗體／斜體／底線／刪除線／反白）。run 沒指定的樣式欄位會繼承所屬

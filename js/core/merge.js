@@ -1,5 +1,5 @@
 // Placeholder 套用資料（Mail Merge）。
-// Template + 單筆資料 → 套用後的 element tree；Template + 多筆資料 → 多份輸出。
+// Template + 單筆資料 → 套用後的 element tree。
 
 import { walkElements } from "./document-model.js";
 
@@ -32,12 +32,4 @@ export function applyDataToElements(elements, data = {}) {
         }
     });
     return cloned;
-}
-
-/**
- * Mail merge：同一個 template 套用多筆資料，回傳套用後的 element tree 陣列。
- * 呼叫端（renderer / editor）再逐筆 render 成預覽、PDF 頁或列印工作。
- */
-export function applyDataBatch(elements, dataArray = []) {
-    return dataArray.map((data) => applyDataToElements(elements, data));
 }

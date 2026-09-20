@@ -127,11 +127,6 @@ export function renderBarcodeResult(el, maxWidthDots) {
     }
 }
 
-/** 只要 canvas 的簡便版；內容為空或無法編碼時回傳 null。 */
-export function renderBarcodeCanvas(el, maxWidthDots) {
-    return renderBarcodeResult(el, maxWidthDots).canvas;
-}
-
 /** 編輯預覽用的佔位框：條碼產生不出來時在畫面上留一塊虛線框寫明原因，避免元素憑空消失又選不到。 */
 export function renderBarcodeErrorCanvas(message, widthDots) {
     const width = Math.max(1, Math.round(widthDots || 240));

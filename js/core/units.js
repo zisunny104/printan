@@ -7,10 +7,6 @@ export function dotsPerMm(dpi) {
     return dpi / MM_PER_INCH;
 }
 
-export function mmToDots(mm, dpi) {
-    return Math.round(mm * dotsPerMm(dpi));
-}
-
 export function dotsToMm(dots, dpi) {
     return dots / dotsPerMm(dpi);
 }
