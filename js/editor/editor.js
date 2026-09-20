@@ -9,19 +9,19 @@ import {
 } from "../core/printer-profiles.js";
 import { createTextElement, createImageElement, createSpacerElement, createDividerElement, createRowElement, createBarcodeElement, cloneElementWithNewIds, extractPlaceholders } from "../core/document-model.js";
 import { resolveTargetArray, findElementById, findContainerOf, flattenElements, removeElements, groupElementsIn, ungroupElementsIn, duplicateElementsIn, moveElementBy, moveElementsBy, moveElementToIndex, moveElementToContainerIn, selectionToIds, idsToSelection, pruneSelectionIn, snapshotElements, restoreElements } from "../core/element-tree.js";
-import { renderTemplate, renderBatch } from "../core/renderer.js";
+import { renderTemplate } from "../core/renderer.js";
 
 import { restoreLocalFontsIfGranted } from "../core/fonts.js";
 import { onWebFontStatusChange } from "../core/web-fonts.js";
 import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js";
 import { convertHeicIfNeeded } from "../core/heic.js";
-import { exportToPdf } from "../core/pdf-export.js";
+
 import { saveDraft, loadDraft, deleteDraft, listRecent } from "../core/storage.js";
 import { wireResizableColumns } from "./resizable-columns.js";
 import { createInlineTextEditor } from "./inline-text-editor.js";
 import { createWorkspaceView } from "./workspace-view.js";
 import { wireHelpDialog } from "./ui-helpers.js";
-import { BATCH_PANEL_EXPANDED_KEY, LAST_DRAFT_KEY, els, rt, state } from "./context.js";
+import { LAST_DRAFT_KEY, els, rt, state } from "./context.js";
 import {
     attemptSilentPrinterReconnect, bindPrinterSettings, loadPrintPrefs, printCurrent, renderMarginRows,
     renderPrintableDotsRows,
@@ -30,6 +30,7 @@ import { textInput } from "./inspector-widgets.js";
 import { renderInspector } from "./inspector.js";
 import { renderEditOverlay } from "./canvas-overlay.js";
 import { containerToTarget, renderOutline, wireOutlineKeyboard } from "./outline.js";
+import { bindBatchPanel, endBatchPreview, exportBatchPdf, exportSinglePdf } from "./batch-export.js";
 
 async function init() {
     cacheDom();
@@ -914,94 +915,6 @@ export const inlineEditor = createInlineTextEditor({
         textSel.refresh?.();
     },
 });
-
-// ---- 匯出 / 列印 ----
-
-// 有網頁字體沒載入成功時輸出會改用系統字體，版面跟預覽不同，輸出前讓使用者決定
-export function confirmFontFallbacks(results) {
-    return ![].concat(results).some((r) => r.fontFallbacks?.length) || confirm("字體未載入，仍要列印？");
-}
-
-async function exportSinglePdf() {
-    const result = await renderTemplate(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
-    if (!confirmFontFallbacks(result)) return;
-    exportToPdf([result], { fileName: `${state.project.meta.name || "printan"}.pdf` });
-}
-
-// 匯出跟預覽都要吃同一份批次資料，剖析／驗證邏輯只寫這一處，避免兩邊行為兜不起來
-function parseBatchData() {
-    try {
-        const dataArray = JSON.parse(els["batch-data"].value || "[]");
-        if (!Array.isArray(dataArray) || dataArray.length === 0) throw new Error("請提供至少一筆資料的 JSON 陣列");
-        return dataArray;
-    } catch (err) {
-        alert(`批次資料格式錯誤：${err.message}`);
-        return null;
-    }
-}
-
-async function exportBatchPdf() {
-    const dataArray = parseBatchData();
-    if (!dataArray) return;
-    const results = await renderBatch(state.project, dataArray, { mode: "thermal", profile: getEffectiveProfile() });
-    if (!confirmFontFallbacks(results)) return;
-    exportToPdf(results, { fileName: `${state.project.meta.name || "printan"}-batch.pdf` });
-}
-
-// ---- 批次資料面板：收合、逐筆預覽 ----
-
-function updateBatchPreviewNav() {
-    const { active, records, index } = state.batchPreview;
-    els["batch-preview-nav"].hidden = !active;
-    if (!active) return;
-    els["batch-preview-counter"].textContent = `第 ${index + 1} / ${records.length} 筆`;
-    els["btn-batch-prev"].disabled = index <= 0;
-    els["btn-batch-next"].disabled = index >= records.length - 1;
-}
-
-function startBatchPreview() {
-    const dataArray = parseBatchData();
-    if (!dataArray) return;
-    state.batchPreview = { active: true, records: dataArray, index: 0 };
-    updateBatchPreviewNav();
-    schedulePreview();
-}
-
-function stepBatchPreview(delta) {
-    if (!state.batchPreview.active) return;
-    const next = state.batchPreview.index + delta;
-    if (next < 0 || next >= state.batchPreview.records.length) return;
-    state.batchPreview.index = next;
-    updateBatchPreviewNav();
-    schedulePreview();
-}
-
-function endBatchPreview() {
-    if (!state.batchPreview.active) return;
-    state.batchPreview = { active: false, records: [], index: 0 };
-    updateBatchPreviewNav();
-    schedulePreview();
-}
-
-function setBatchPanelExpanded(expanded) {
-    els["batch-panel-body"].hidden = !expanded;
-    els["batch-panel-toggle"].setAttribute("aria-expanded", String(expanded));
-    localStorage.setItem(BATCH_PANEL_EXPANDED_KEY, String(expanded));
-}
-
-function bindBatchPanel() {
-    setBatchPanelExpanded(localStorage.getItem(BATCH_PANEL_EXPANDED_KEY) === "true");
-
-    els["batch-panel-toggle"].addEventListener("click", () => {
-        const expanded = els["batch-panel-toggle"].getAttribute("aria-expanded") === "true";
-        setBatchPanelExpanded(!expanded);
-    });
-
-    els["btn-preview-batch"].addEventListener("click", startBatchPreview);
-    els["btn-batch-prev"].addEventListener("click", () => stepBatchPreview(-1));
-    els["btn-batch-next"].addEventListener("click", () => stepBatchPreview(1));
-    els["btn-batch-end-preview"].addEventListener("click", endBatchPreview);
-}
 
 // ---- 列印設定（WebUSB／WebSerial 直連、印表機識別、走紙／切紙／可列印點數偏好） ----
 // 連線狀態、走紙／切紙偏好都是「這台瀏覽器、這台印表機」的本機操作習慣，不寫進 .ptan，

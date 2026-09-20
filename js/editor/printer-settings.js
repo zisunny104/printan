@@ -6,7 +6,8 @@ import {
 } from "../core/printer-profiles.js";
 import { PRINT_PREFS_KEY, els, serialAdapter, state, usbAdapter } from "./context.js";
 import { SystemDialogAdapter, interpretRealtimeStatus } from "../core/printer-adapter.js";
-import { confirmFontFallbacks, getBaseProfile, getEffectiveProfile, schedulePreview } from "./editor.js";
+import { getBaseProfile, getEffectiveProfile, schedulePreview } from "./editor.js";
+import { confirmFontFallbacks } from "./batch-export.js";
 import { renderCalibrationSheet, renderTestPrint } from "./test-print-project.js";
 import { renderTemplate } from "../core/renderer.js";
 
