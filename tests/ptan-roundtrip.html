@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Printan tests：.ptan 遷移與匯出／匯入</title>
+<style>
+body { font: 14px/1.6 system-ui, sans-serif; margin: 16px; }
+li { list-style: none; }
+.pass { color: #1a7f37; }
+.fail { color: #cf222e; }
+pre { margin: 0 0 0 24px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1 id="summary">執行中…</h1>
+<ul id="list"></ul>
+<script type="module">
+// 只測純函式與檔案讀寫，跟 tests/index.html 同一套跑法（開啟頁面即執行，標題顯示 PASS／FAIL）。
+import { createGroupElement, createTextElement, walkElements } from "../js/core/document-model.js";
+import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
+import { downloadPtan, readPtanFile } from "../js/core/ptan-file.js";
+
+const cases = [];
+const test = (name, fn) => cases.push({ name, fn });
+function assert(cond, msg = "assert failed") { if (!cond) throw new Error(msg); }
+function eq(actual, expected, msg = "") {
+    const a = JSON.stringify(actual), b = JSON.stringify(expected);
+    if (a !== b) throw new Error(`${msg}\n預期 ${b}\n實際 ${a}`);
+}
+const clone = (v) => JSON.parse(JSON.stringify(v));
+
+// 手寫的 v1 檔（舊版扁平 text 欄位、row 內巢狀、各種元素類型都有），不是用現行建構函式產生的，
+// 這樣建構函式日後加欄位不會讓 fixture 跟著變、也就不會讓遷移的對照失去意義。
+const V1_FILE = {
+    format: "ptan",
+    version: 1,
+    meta: { name: "舊版收據", createdAt: "2025-01-01T00:00:00.000Z", updatedAt: "2025-01-02T00:00:00.000Z" },
+    printerProfile: { id: "epson-tm-t82ii" },
+    paper: { widthId: "80mm" },
+    variables: ["name"],
+    template: { elements: [
+        { id: "t1", type: "text", text: "哈囉 {{name}}", fontSize: 40, bold: true, align: "center" },
+        { id: "s1", type: "spacer", heightDots: 16 },
+        { id: "r1", type: "row", ratio: [1, 2], columns: [
+            [{ id: "t2", type: "text", text: "左" }],
+            [{ id: "b1", type: "barcode", format: "qrcode", value: "{{name}}" }, { id: "d1", type: "divider", style: "dashed" }],
+        ] },
+        { id: "i1", type: "image", assetId: "a1" },
+    ] },
+    assets: [{ id: "a1", name: "logo.png", dataUrl: "data:image/png;base64,AAAA" }],
+};
+
+const textsOf = (project) => {
+    const out = [];
+    walkElements(project.template.elements, (e) => { if (e.type === "text") out.push(e); });
+    return out;
+};
+
+// ---- v1 → 目前版本 遷移 ----
+test("v1 檔遷移：扁平 text 變 runs，其餘欄位與非文字元素原樣保留", () => {
+    const out = loadProject(clone(V1_FILE));
+    assert(out.ok, out.error);
+    const [t1, s1, r1, i1] = out.project.template.elements;
+    eq(t1.runs, [{ text: "哈囉 {{name}}" }]);
+    assert(!("text" in t1), "舊的 text 欄位應被移除");
+    eq([t1.id, t1.fontSize, t1.bold, t1.align], ["t1", 40, true, "center"]);
+    eq(s1, V1_FILE.template.elements[1]);
+    eq(i1, V1_FILE.template.elements[3]);
+    eq(r1.columns[0][0].runs, [{ text: "左" }]);
+    eq(r1.columns[1], V1_FILE.template.elements[2].columns[1]);
+    eq(r1.ratio, [1, 2]);
+});
+test("v1 檔遷移：meta、印表機、紙寬、變數、素材都不變", () => {
+    const out = loadProject(clone(V1_FILE));
+    assert(out.ok, out.error);
+    for (const key of ["meta", "printerProfile", "paper", "variables", "assets"]) {
+        eq(out.project[key], V1_FILE[key], key);
+    }
+});
+test("遷移不改動傳入的物件", () => {
+    const raw = clone(V1_FILE);
+    loadProject(raw);
+    eq(raw, V1_FILE);
+});
+test("遷移後再匯出、再匯入：內容不再變化（冪等）", () => {
+    const first = loadProject(clone(V1_FILE));
+    assert(first.ok, first.error);
+    const second = loadProject(serializeProject(first.project));
+    assert(second.ok, second.error);
+    eq(second.project, first.project);
+});
+test("沒有群組的 v1 檔重新匯出仍是 v1（舊版 Printan 也能開）", () => {
+    const out = loadProject(clone(V1_FILE));
+    eq(JSON.parse(serializeProject(out.project)).version, 1);
+});
+test("v1 檔加上群組後匯出為 v2，重新匯入群組內容不變", () => {
+    const out = loadProject(clone(V1_FILE));
+    const project = out.project;
+    project.template.elements.push(createGroupElement([createTextElement({ id: "gt", runs: [{ text: "組內" }] })]));
+    const text = serializeProject(project);
+    eq(JSON.parse(text).version, PTAN_VERSION);
+    const back = loadProject(text);
+    assert(back.ok, back.error);
+    eq(back.project.template.elements, project.template.elements);
+});
+test("v2 檔內群組裡的舊版扁平 text 也會遷移", () => {
+    const out = loadProject({ format: "ptan", version: 2, template: { elements: [
+        { id: "g", type: "group", children: [{ id: "x", type: "text", text: "群組舊文字" }] },
+    ] } });
+    assert(out.ok, out.error);
+    eq(out.project.template.elements[0].children[0].runs, [{ text: "群組舊文字" }]);
+});
+test("未知的額外欄位匯出再匯入後保留（向前相容）", () => {
+    const raw = { ...clone(V1_FILE), futureThing: { a: 1 } };
+    const out = loadProject(serializeProject(loadProject(raw).project));
+    eq(out.project.futureThing, { a: 1 });
+});
+
+// ---- .ptan 檔案來回 ----
+test("readPtanFile：v1 檔與直接 loadProject 的結果一致", async () => {
+    const viaFile = await readPtanFile(new File([JSON.stringify(V1_FILE)], "old.ptan"));
+    const direct = loadProject(clone(V1_FILE));
+    assert(viaFile.ok, viaFile.error);
+    eq(viaFile.project, direct.project);
+});
+test("serializeProject → File → readPtanFile：完整專案來回一致", async () => {
+    const p = createEmptyProject({ name: "來回", printerProfileId: "epson-tm-t82ii", paperWidthId: "58mm" });
+    p.template.elements = loadProject(clone(V1_FILE)).project.template.elements;
+    p.template.elements.push(createGroupElement([createTextElement({ runs: [{ text: "甲", italic: true }, { text: "乙" }] })]));
+    p.variables = ["name"];
+    p.assets = clone(V1_FILE.assets);
+    const back = await readPtanFile(new File([serializeProject(p)], "x.ptan"));
+    assert(back.ok, back.error);
+    eq(back.project.template, p.template);
+    for (const key of ["meta", "printerProfile", "paper", "variables", "assets"]) eq(back.project[key], p[key], key);
+});
+test("downloadPtan：實際產生的檔案內容能被 readPtanFile 讀回，檔名補 .ptan", async () => {
+    const p = loadProject(clone(V1_FILE)).project;
+    let blob = null;
+    let fileName = "";
+    const realCreate = URL.createObjectURL;
+    const realRevoke = URL.revokeObjectURL;
+    const realClick = HTMLAnchorElement.prototype.click;
+    URL.createObjectURL = (b) => { blob = b; return "blob:test"; };
+    URL.revokeObjectURL = () => {};
+    HTMLAnchorElement.prototype.click = function () { fileName = this.download; };
+    try {
+        const failed = await downloadPtan(p, "我的版型.ptan");
+        eq(failed, []);
+    } finally {
+        URL.createObjectURL = realCreate;
+        URL.revokeObjectURL = realRevoke;
+        HTMLAnchorElement.prototype.click = realClick;
+    }
+    eq(fileName, "我的版型.ptan");
+    assert(blob, "沒有產生 Blob");
+    const back = await readPtanFile(new File([blob], fileName));
+    assert(back.ok, back.error);
+    eq(back.project, p);
+});
+test("內嵌字體：匯出 v2 → readPtanFile 讀回後字體不留在專案、其餘不變", async () => {
+    const p = loadProject(clone(V1_FILE)).project;
+    const fonts = [{ family: "不存在的字體", weight: 400, unicodeRange: "U+0-7F", data: "AAEC" }];
+    const text = serializeProject({ ...p, embeddedFonts: fonts });
+    eq(JSON.parse(text).version, PTAN_VERSION);
+    const back = await readPtanFile(new File([text], "f.ptan"));
+    assert(back.ok, back.error);
+    assert(!("embeddedFonts" in back.project), "embeddedFonts 應被移除");
+    eq(back.project.template, p.template);
+});
+
+// ---- 執行 ----
+const list = document.getElementById("list");
+let failed = 0;
+for (const c of cases) {
+    const li = document.createElement("li");
+    try {
+        await c.fn();
+        li.className = "pass";
+        li.textContent = "PASS  " + c.name;
+    } catch (err) {
+        failed += 1;
+        li.className = "fail";
+        li.textContent = "FAIL  " + c.name;
+        const pre = document.createElement("pre");
+        pre.textContent = err.message;
+        li.append(pre);
+    }
+    list.append(li);
+}
+const summary = document.getElementById("summary");
+summary.textContent = failed ? `${failed} / ${cases.length} 失敗` : `全部通過（${cases.length}）`;
+summary.className = failed ? "fail" : "pass";
+document.title = (failed ? "FAIL " : "PASS ") + summary.textContent;
+</script>
+</body>
+</html>
