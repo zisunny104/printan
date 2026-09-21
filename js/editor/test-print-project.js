@@ -88,74 +88,117 @@ const line = (left, right, overrides = {}) => {
 
 // 品項表：名稱／數量／金額三欄，金額靠右
 function itemRow(name, qty, amount, style) {
-    const row = createRowElement([4, 1, 3]);
+    const row = createRowElement([3, 1, 2]);
     row.columns[0].push(text({ text: name, ...style }));
     row.columns[1].push(text({ text: qty, ...style }, { align: "center" }));
     row.columns[2].push(text({ text: amount, ...style }, { align: "right" }));
     return row;
 }
 
-// 內容是這個專案自己的「收據」：品項是設計巧思與操作邏輯，金額由程式加總；
-// 底線／刪除線／斜體／粗體各排一列，順便驗證文字樣式。
+// 內容是這個專案自己的「收據」，結構參考台灣常見單據：店名區（主標＋副標＋本店／統編／網址）→
+// 電子發票證明聯抬頭（期別、字軌號碼、時間、隨機碼／總計）→ 品項（含縮排備註行）→ 小計／折扣／合計 →
+// 付款／找零 → 條碼與 QR → 感謝語與頁尾小字 → 技術資訊（小字級）。
+// 品項是專案的功能與開發過程，金額由程式加總；彩蛋藏在數字與小字裡，純屬玩笑。
 const PROJECT_URL = "https://toka.dev/koilisu/printan";
 const FALLBACK_MODEL = "TM-T82II";
 
+// 彩蛋數字的來源，要換數字只改這裡
+const EASTER_EGG = {
+    birthday: "20260914", // 第一個 commit 的日期（2026-09-14）
+    commits: 165, // 專案 commit 數（164 個＋這一個）
+    tokens: "999+", // token 消耗量：實際數不明，玩笑梗
+    monthlyFeeUsd: 20, // Claude Pro 月費（美元）
+};
+
+const money = (n) => `${n < 0 ? "-" : ""}$${Math.abs(n).toLocaleString("en-US")}`;
+
+// [名稱, 數量, 單價, 備註]；數量可放字串（如 "999+"），計價時當 0。加總剛好 1,337（leet）：
+// 42（宇宙的答案）＋914（誕生日）＋3×65（ASCII 的 A）＋165（commit 數）＋20（月費）＋1（Hello World）
+const MENU = [
+    ["所見即所得預覽", 1, 42, "宇宙、生命與一切的答案"],
+    ["直書排版", 1, Number(EASTER_EGG.birthday.slice(4)), `誕生日紀念款 ${EASTER_EGG.birthday.slice(4)}`],
+    ["續命美式咖啡", 3, 65, "喝茶請洽 HTTP 418"],
+    ["修改次數", EASTER_EGG.commits, 1, `第 ${EASTER_EGG.commits} 次 commit（含這一次）`],
+    ["Token 一籮筐", EASTER_EGG.tokens, 0, "實際數不明，大概"],
+    ["月費方案", 1, EASTER_EGG.monthlyFeeUsd, "Claude Pro，本月贊助"],
+    ["Hello World", 1, 1, "第一行輸出，成功了"],
+];
+const DISCOUNT = ["後悔折扣（無）", 0];
+const CHANGE = 0;
+
 function buildReceiptElements(info, model, stripUrl, endBarUrl, widthDots) {
-    // 品牌名／標題字級依紙寬取值：80mm 特大，58mm（約 420 點）退一級才放得下
+    // 字級依紙寬取值：80mm 特大，58mm（約 420 點）退一級才放得下
     const wide = widthDots >= 500;
     const brandSize = wide ? 68 : 48;
-    const titleSize = wide ? 44 : 32;
+    const titleSize = wide ? 36 : 28;
     const totalSize = wide ? 40 : 32;
+    const noteSize = wide ? 22 : 20;
+    const smallSize = wide ? 22 : 20;
     bodySize = wide ? 28 : 24;
-    // [名稱, 數量, 單價, 樣式]；金額 = 單價 × 數量，小計／合計由程式加總，不寫死
-    const lines = [
-        ["復原樹　不丟歷史", 1, 120, { underline: true }],
-        ["Ctrl+滾輪連續縮放", 2, 85, { italic: true }],
-        ["所見即所得", 1, 200, { bold: true }],
-        ["尺規對齊白底", 3, 60],
-        ["拖曳大綱換層", 1, 45],
-        ["Claude 的 token", 12, 5],
-        ["Claude 思考時間", 1, 1500],
-        ["一次講完的需求", 0, 300, { strikethrough: true }],
-    ];
-    const DISCOUNT = -15;
-    const money = (n) => `$${n.toLocaleString("en-US")}`;
-    const subtotal = lines.reduce((sum, [, qty, price]) => sum + qty * price, 0);
-    const total = subtotal + DISCOUNT;
-    const items = lines.map(([name, qty, price, style]) => itemRow(name, String(qty), money(qty * price), style));
 
+    const subtotal = MENU.reduce((sum, [, qty, price]) => sum + (Number(qty) || 0) * price, 0);
+    const total = subtotal + DISCOUNT[1];
+    const now = new Date();
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const dateTime = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+    const evenMonth = Math.ceil((now.getMonth() + 1) / 2) * 2; // 發票期別：兩個月一期
+    const period = `${now.getFullYear() - 1911}年${pad2(evenMonth - 1)}-${pad2(evenMonth)}月`;
+
+    const center = (runs, overrides = {}) => text(runs, { align: "center", ...overrides });
+    const gap = () => createSpacerElement({ heightDots: 8 });
+    const menuRows = MENU.flatMap(([name, qty, price, remark]) => [
+        itemRow(name, String(qty), money((Number(qty) || 0) * price), {}),
+        text(`　└ ${remark}`, { fontSize: noteSize }),
+    ]);
     const infoRows = info.map(([k, v]) => {
         const row = createRowElement([1, 2]);
-        row.columns[0].push(text(k));
-        row.columns[1].push(text(v, { align: "right" }));
+        row.columns[0].push(text(k, { fontSize: smallSize }));
+        row.columns[1].push(text(v, { fontSize: smallSize, align: "right" }));
         return row;
     });
 
     return [
-        text([{ text: "Printan ", fontSize: brandSize }, { text: "單仔", fontSize: brandSize + 12 }], { bold: true, align: "center" }),
-        text("所見即所印的收據設計工具", { fontSize: titleSize, align: "center" }),
-        line(new Date().toLocaleString("zh-TW", { hour12: false, dateStyle: "short", timeStyle: "short" }), "#0001"),
+        // 店名區
+        center([{ text: "Printan ", fontSize: brandSize }, { text: "單仔", fontSize: brandSize + 12 }], { bold: true }),
+        center("小小一張紙，所見即所印", { fontSize: titleSize, italic: true }),
+        center(`KoiLiSu 本店　統編 ${EASTER_EGG.birthday}`, { fontSize: smallSize }),
+        center("toka.dev/koilisu/printan", { fontSize: smallSize }),
         createDividerElement({ style: "dashed" }),
-        ...items,
+        // 電子發票證明聯抬頭
+        center("電子發票證明聯", { fontSize: titleSize, bold: true }),
+        center(period, { fontSize: totalSize, bold: true }),
+        center(`PT-${EASTER_EGG.birthday}`, { fontSize: totalSize, bold: true }),
+        line(dateTime, `序號 #${String(EASTER_EGG.commits).padStart(4, "0")}`, { fontSize: smallSize }),
+        line("隨機碼 0404", `總計 ${total}`, { fontSize: smallSize }),
+        createDividerElement({ style: "dashed" }),
+        // 品項
+        ...menuRows,
         createDividerElement(),
+        // 小計／折扣／合計
         line("小計", money(subtotal)),
-        line("優惠　一點點……耐心", money(DISCOUNT).replace("$-", "-$")),
+        line(DISCOUNT[0], money(DISCOUNT[1])),
+        gap(),
         line({ text: "合計", bold: true, fontSize: totalSize }, { text: money(total), bold: true, fontSize: totalSize }),
-        createSpacerElement({ heightDots: 8 }),
-        text("　已付款 / TEST　", { align: "center", inverse: true }),
-        text([{ text: "會員 " }, { text: " ★ VIP ★ ", inverse: true }, { text: " 優惠" }], { align: "center" }),
-        text("中文 English ＡＢＣ１２３ 0123456789"),
-        createSpacerElement({ heightDots: 8 }),
+        gap(),
+        line("信用卡", "4242 4242 4242 4242", { fontSize: smallSize }),
+        line("找零", money(CHANGE), { fontSize: smallSize }),
+        gap(),
+        // 條碼與 QR
         createBarcodeElement({ format: "code128", value: model, heightDots: 64, showText: true }),
-        createBarcodeElement({ format: "qrcode", value: PROJECT_URL, heightDots: 174 }),
-        text("謝謝光臨", { fontSize: titleSize, align: "center" }),
+        createBarcodeElement({ format: "qrcode", value: PROJECT_URL, heightDots: 140 }),
+        // 感謝語與頁尾小字
+        center("謝謝光臨", { fontSize: titleSize + 8, bold: true }),
+        center("歡迎再次 404", { fontSize: titleSize }),
+        center("本收據沒有法律效力，但誠意十足", { fontSize: smallSize }),
+        center(`Claude 協助開發，token ${EASTER_EGG.tokens}（大概）`, { fontSize: smallSize }),
+        // 技術資訊（小字級）
         createDividerElement({ style: "dotted" }),
         ...infoRows,
-        createSpacerElement({ heightDots: 8 }),
+        gap(),
         createImageElement({ assetId: stripUrl, fit: "auto", ditherMode: "threshold" }),
-        createSpacerElement({ heightDots: 8 }),
+        gap(),
         createImageElement({ assetId: endBarUrl, fit: "auto", ditherMode: "threshold" }),
-        text("切線在黑條下方", { align: "center" }),
+        center("切線在黑條下方"),
     ];
 }
 
@@ -194,18 +237,10 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
     );
     const body = await renderTemplate(project, {}, { mode: "thermal", profile });
 
-    // 最上面：未校正的原始邊緣＋尺規，用來量實際留白（mm）
-    const rawHeight = 96;
-    const { canvas, ctx } = makeCanvas(headWidthDots, rawHeight + body.canvas.height);
-    const rawX = Math.max(0, Math.floor((headWidthDots - rawWidth) / 2));
-    drawEdgeGauge(ctx, rawX, 0, rawWidth, dpi);
-    ctx.font = `20px ${FONT}`;
-    ctx.textBaseline = "top";
-    ctx.fillText("量左右邊距（mm）填入設定", rawX + 4, 64);
-
     // 校正後的內容：位置比照 adapter 的置中＋左補白
+    const { canvas, ctx } = makeCanvas(headWidthDots, body.canvas.height);
     const bodyX = Math.max(0, Math.floor((headWidthDots - (body.canvas.width + pad.left + pad.right)) / 2)) + pad.left;
-    ctx.drawImage(body.canvas, bodyX, rawHeight);
+    ctx.drawImage(body.canvas, bodyX, 0);
     return { canvas, fontFallbacks: body.fontFallbacks };
 }
 
