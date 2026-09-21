@@ -1405,10 +1405,43 @@ body {
     }
 }
 
-/* 大綱沒有元素時的一行提示（純 CSS，不動 JS 渲染） */
-.outline-list:not(:has(.outline-row))::before {
-    content: "尚無元素，按 ＋ 新增";
-    padding: .35rem .5rem;
+/* 大綱沒有元素時才顯示空狀態（沿用 .pane-empty-state-static：圖示在上、一行說明在下、置中） */
+.outline-list:has(.outline-row) ~ .outline-empty {
+    display: none;
+}
+
+/* 空狀態統一：圖示 1.75rem 灰、說明一行灰字；「最近編輯」的空狀態由 JS 產生文字，用 ::before 補同款圖示 */
+.pane-empty-state-static .ts-icon.is-heading {
     color: var(--ts-gray-500, #888);
-    font-size: .875rem;
+}
+
+.recent-draft-empty {
+    text-align: center;
+}
+
+.recent-draft-empty::before {
+    content: "01c";
+    display: block;
+    margin-bottom: .5rem;
+    font-family: icons;
+    font-size: 1.75rem;
+    color: var(--ts-gray-500, #888);
+}
+
+/* 下拉展開指示：Tocas chevron-down 圖示，跟隨文字色；展開時（Tocas 不在觸發鈕上留狀態，只在面板加 .is-visible）翻成向上 */
+.dropdown-caret {
+    font-size: .75rem;
+    margin-inline-start: .25rem;
+    transition: transform .15s;
+}
+
+body:has(#open-project-dropdown.is-visible) #btn-open-ptan > .dropdown-caret,
+body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
+    transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dropdown-caret {
+        transition: none;
+    }
 }

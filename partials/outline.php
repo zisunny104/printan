@@ -20,6 +20,10 @@
                         </div>
                         <div class="ts-content is-padded">
                             <div id="outline-list" class="outline-list"></div>
+                            <div class="pane-empty-state-static outline-empty">
+                                <span class="ts-icon is-list-icon is-heading" aria-hidden="true"></span>
+                                <div class="ts-text is-description">尚無元素，按 ＋ 新增</div>
+                            </div>
                         </div>
                     </div>
                     </div>

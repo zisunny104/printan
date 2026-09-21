@@ -13,11 +13,13 @@
                         data-dropdown="open-project-dropdown" aria-haspopup="true" aria-label="開啟">
                         <span class="ts-icon is-folder-open-icon" aria-hidden="true"></span>
                         <span>開啟</span>
+                        <span class="ts-icon is-chevron-down-icon dropdown-caret" aria-hidden="true"></span>
                     </button>
                     <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-export-menu"
                         data-dropdown="export-dropdown" aria-haspopup="true" aria-label="匯出">
                         <span class="ts-icon is-download-icon" aria-hidden="true"></span>
                         <span>匯出</span>
+                        <span class="ts-icon is-chevron-down-icon dropdown-caret" aria-hidden="true"></span>
                     </button>
                 </div>
                 <!-- 只在 <768px：版面結構／元素設定改成抽屜，用這兩顆開關（aria-expanded 由 JS 同步） -->
