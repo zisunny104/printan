@@ -63,20 +63,34 @@ export async function deleteDraft(id) {
 
 // ---- 「最近使用」輕量清單（localStorage，只存 id/name/時間，不存圖片內容） ----
 
+// localStorage 在無痕模式、封鎖網站資料或額度滿時會丟例外；讀失敗當作沒有值、寫失敗略過，不擋編輯器啟動
+export function safeGetItem(key) {
+    try {
+        return localStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+export function safeSetItem(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch {
+        // 只是偏好或最近清單，存不進去不影響 IndexedDB 草稿本身
+    }
+}
+
 function readRecent() {
     try {
-        return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+        const list = JSON.parse(safeGetItem(RECENT_KEY) || "[]");
+        return Array.isArray(list) ? list : [];
     } catch {
         return [];
     }
 }
 
 function writeRecent(list) {
-    try {
-        localStorage.setItem(RECENT_KEY, JSON.stringify(list));
-    } catch {
-        // localStorage 不可用時（例如無痕模式）安靜略過，不影響 IndexedDB 草稿本身
-    }
+    safeSetItem(RECENT_KEY, JSON.stringify(list));
 }
 
 function touchRecent(id, name) {

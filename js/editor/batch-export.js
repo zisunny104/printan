@@ -1,5 +1,6 @@
 import { renderTemplate, renderBatch } from "../core/renderer.js";
 import { exportToPdf } from "../core/pdf-export.js";
+import { safeGetItem, safeSetItem } from "../core/storage.js";
 import { BATCH_PANEL_EXPANDED_KEY, els, state } from "./context.js";
 import { getEffectiveProfile, schedulePreview } from "./editor.js";
 
@@ -76,11 +77,11 @@ export function endBatchPreview() {
 function setBatchPanelExpanded(expanded) {
     els["batch-panel-body"].hidden = !expanded;
     els["batch-panel-toggle"].setAttribute("aria-expanded", String(expanded));
-    localStorage.setItem(BATCH_PANEL_EXPANDED_KEY, String(expanded));
+    safeSetItem(BATCH_PANEL_EXPANDED_KEY, String(expanded));
 }
 
 export function bindBatchPanel() {
-    setBatchPanelExpanded(localStorage.getItem(BATCH_PANEL_EXPANDED_KEY) === "true");
+    setBatchPanelExpanded(safeGetItem(BATCH_PANEL_EXPANDED_KEY) === "true");
 
     els["batch-panel-toggle"].addEventListener("click", () => {
         const expanded = els["batch-panel-toggle"].getAttribute("aria-expanded") === "true";

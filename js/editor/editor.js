@@ -16,7 +16,7 @@ import { onWebFontStatusChange } from "../core/web-fonts.js";
 import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js";
 import { convertHeicIfNeeded } from "../core/heic.js";
 
-import { saveDraft, loadDraft, deleteDraft, listRecent } from "../core/storage.js";
+import { saveDraft, loadDraft, deleteDraft, listRecent, safeGetItem, safeSetItem } from "../core/storage.js";
 import { wireResizableColumns } from "./resizable-columns.js";
 import { createInlineTextEditor } from "./inline-text-editor.js";
 import { createWorkspaceView } from "./workspace-view.js";
@@ -83,7 +83,7 @@ function cacheDom() {
 // ---- 專案初始化 / 還原 ----
 
 async function restoreOrCreateProject() {
-    const lastId = localStorage.getItem(LAST_DRAFT_KEY);
+    const lastId = safeGetItem(LAST_DRAFT_KEY);
     if (lastId) {
         try {
             const draft = await loadDraft(lastId);
@@ -475,7 +475,7 @@ function populateRecentDrafts() {
                 alert(`開啟失敗：${result.error}`);
                 return;
             }
-            localStorage.setItem(LAST_DRAFT_KEY, r.id);
+            safeSetItem(LAST_DRAFT_KEY, r.id);
             loadProjectIntoEditor(result.project);
         });
         list.appendChild(row);
@@ -664,7 +664,7 @@ function scheduleSave() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
         const id = await saveDraft(state.project);
-        localStorage.setItem(LAST_DRAFT_KEY, id);
+        safeSetItem(LAST_DRAFT_KEY, id);
         populateRecentDrafts();
         const time = new Date().toLocaleTimeString("zh-TW", { hour12: false });
         els["save-status"].textContent = `已自動儲存 ${time}`;

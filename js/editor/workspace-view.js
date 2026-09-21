@@ -5,6 +5,8 @@
 // 尺規畫在 canvas 上：水平尺規以白底左緣為 0、右緣為終點，垂直尺規以白底上緣為 0；
 // 跟著縮放與工作區捲動重畫。
 
+import { safeGetItem, safeSetItem } from "../core/storage.js";
+
 const MM_PX = 96 / 25.4;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 4;
@@ -15,19 +17,11 @@ const RULER_MINOR_MIN_PX = 4;
 const RULER_LABEL_MIN_PX = 36;
 
 function readRulersPref() {
-    try {
-        return localStorage.getItem(RULERS_KEY) !== "false";
-    } catch {
-        return true;
-    }
+    return safeGetItem(RULERS_KEY) !== "false";
 }
 
 function saveRulersPref(value) {
-    try {
-        localStorage.setItem(RULERS_KEY, String(value));
-    } catch {
-        // 存不進去就只在這次頁面內生效
-    }
+    safeSetItem(RULERS_KEY, String(value));
 }
 
 /**

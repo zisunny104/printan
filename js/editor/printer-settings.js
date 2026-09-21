@@ -8,6 +8,7 @@ import { PRINT_PREFS_KEY, els, serialAdapter, state, usbAdapter } from "./contex
 import { SystemDialogAdapter, describePrinterError, interpretRealtimeStatus, isSelectionCancelled } from "../core/printer-adapter.js";
 import { getBaseProfile, getEffectiveProfile, schedulePreview } from "./editor.js";
 import { confirmFontFallbacks } from "./batch-export.js";
+import { safeGetItem, safeSetItem } from "../core/storage.js";
 import { createInfoIcon } from "./ui-helpers.js";
 import { renderCalibrationSheet, renderTestPrint } from "./test-print-project.js";
 import { renderTemplate } from "../core/renderer.js";
@@ -62,7 +63,7 @@ export async function printCurrent() {
 
 export function loadPrintPrefs() {
     try {
-        const saved = JSON.parse(localStorage.getItem(PRINT_PREFS_KEY) || "{}");
+        const saved = JSON.parse(safeGetItem(PRINT_PREFS_KEY) || "{}");
         state.printPrefs = { ...state.printPrefs, ...saved };
         state.printPrefs.printableDots = sanitizePrintableDotsOverrides(state.printPrefs.printableDots);
         state.printPrefs.margins = sanitizeMarginCalibration(state.printPrefs.margins);
@@ -72,7 +73,7 @@ export function loadPrintPrefs() {
 }
 
 function savePrintPrefs() {
-    localStorage.setItem(PRINT_PREFS_KEY, JSON.stringify(state.printPrefs));
+    safeSetItem(PRINT_PREFS_KEY, JSON.stringify(state.printPrefs));
 }
 
 function currentWebUsbVendorId() {

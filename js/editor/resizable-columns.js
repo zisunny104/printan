@@ -4,6 +4,8 @@
 // 只在桌面版三欄並排（≥1024px）時看得到；手機/平板堆疊版面分隔線本身是 display:none，
 // 拖曳/鍵盤事件掛著也不會被觸發。
 
+import { safeGetItem, safeSetItem } from "../core/storage.js";
+
 const STORAGE_KEY_LIST = "printan-list-width";
 const STORAGE_KEY_DOCK = "printan-dock-width";
 const DEFAULT_LIST = 290;
@@ -15,7 +17,7 @@ const MAX_DOCK = 520;
 const MIN_CANVAS = 320; // 中央畫布至少保留的寬度，避免兩側分隔線同時拉到最大把畫布擠不見
 
 function readStoredWidth(key, fallback, min, max) {
-    const raw = Number(localStorage.getItem(key));
+    const raw = Number(safeGetItem(key));
     if (!Number.isFinite(raw) || raw <= 0) return fallback;
     return Math.min(max, Math.max(min, raw));
 }
@@ -58,7 +60,7 @@ export function wireResizableColumns() {
         }
 
         function commit(px) {
-            localStorage.setItem(storageKey, String(px));
+            safeSetItem(storageKey, String(px));
         }
 
         resizer.addEventListener("mousedown", (evt) => {
