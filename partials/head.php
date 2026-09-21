@@ -3,8 +3,8 @@
     <meta charset="UTF-8">
     <title>Printan 單仔 - KoiLiSu | prjToka</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- CSP：只允許本站與用到的兩個 CDN；內嵌 theme-script 與 Tocas／Canvas 動態樣式需要 unsafe-inline，圖片要放行 data:／blob:（畫布轉出、列印預覽），HEIC 轉檔（heic2any）要 blob: worker 與 unsafe-eval（其內部用 new Function）。 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src 'self' data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net; worker-src blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <!-- CSP：只允許本站與用到的兩個 CDN；內嵌 theme-script 與 Tocas／Canvas 動態樣式需要 unsafe-inline，圖片放行 data:／blob:（畫布轉出、列印預覽）與 https:（批次資料的圖片網址），HEIC 轉檔（heic2any）要 blob: worker 與 unsafe-eval（其內部用 new Function）。 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src 'self' data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net; worker-src blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tocas-ui/5.7.0/tocas.min.css"
         integrity="sha512-F4xj0Qcc6/jwQjpN70mZP1F5edUVg/WbWEYqUu1FEnvZFAg5IxvBAlNgji+6547uhPtaO14HmBdMhsZ19fHVSw=="
         crossorigin="anonymous">
