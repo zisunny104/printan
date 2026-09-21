@@ -14,6 +14,9 @@ pre { margin: 0 0 0 24px; white-space: pre-wrap; }
 <body>
 <h1 id="summary">執行中…</h1>
 <ul id="list"></ul>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode_UTF8.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
 <script type="module">
 // ESC/POS 位元組 golden 測試＋左右邊距校正計算，跟 tests/index.html 同一套跑法（標題顯示 PASS／FAIL）。
 import {
@@ -28,7 +31,8 @@ import {
 import { composeResults } from "../js/core/compose.js";
 import { csvToRecords } from "../js/core/csv.js";
 import { renderElements } from "../js/core/renderer.js";
-import { createTextElement, createTextRun, createRowElement } from "../js/core/document-model.js";
+import { createTextElement, createTextRun, createRowElement, createBarcodeElement } from "../js/core/document-model.js";
+import { renderBarcodeResult } from "../js/core/barcode.js";
 import { normalizeRowGap, splitDotsByRatio } from "../js/core/units.js";
 
 const cases = [];
@@ -433,6 +437,94 @@ test("欄距：58mm／80mm 三欄 1:1:1 總寬不溢出、最後一欄貼邊", a
 test("欄距：超窄紙寬欄距自動縮小，每欄至少 1 點且不溢出", async () => {
     const { cols } = await rowCols([1, 1, 1, 1, 1, 1], 48, 10);
     assert(cols.every(([, w]) => w >= 1) && cols[5][0] + cols[5][1] <= 10);
+});
+
+// ---- 條碼／QR 留白（quiet zone）：像素斷言 ----
+function darkBox(canvas) {
+    const { width, height } = canvas;
+    const { data } = canvas.getContext("2d").getImageData(0, 0, width, height);
+    let minX = width, minY = height, maxX = -1, maxY = -1;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (data[(y * width + x) * 4] < 128) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+    return { left: minX, top: minY, right: width - 1 - maxX, bottom: height - 1 - maxY };
+}
+// 第 y 列最短的黑色連續段（＝一個模組寬）
+function minDarkRun(canvas, y) {
+    const { data } = canvas.getContext("2d").getImageData(0, y, canvas.width, 1);
+    let min = Infinity, run = 0;
+    for (let x = 0; x <= canvas.width; x++) {
+        const dark = x < canvas.width && data[x * 4] < 128;
+        if (dark) run++;
+        else if (run) { min = Math.min(min, run); run = 0; }
+    }
+    return min;
+}
+const qrCell = (canvas, box) => minDarkRun(canvas, box.top); // 第一列穿過 finder pattern，最短黑段＝1 模組
+
+test("QR：四周留白 ≥ 4 模組、留白算進寬高且為正方形", () => {
+    const { canvas } = renderBarcodeResult({ format: "qrcode", value: "https://toka.dev/koilisu/printan", heightDots: 174 }, 576);
+    const box = darkBox(canvas);
+    const cell = qrCell(canvas, box);
+    assert(cell >= 1 && canvas.width === canvas.height, `cell=${cell} ${canvas.width}x${canvas.height}`);
+    for (const side of ["left", "top", "right", "bottom"]) assert(box[side] >= 4 * cell, `${side}=${box[side]} < ${4 * cell}`);
+});
+test("QR：紙寬很窄時縮小模組，留白仍 ≥ 4 個模組（模組最小 1 點）", () => {
+    for (const maxWidth of [120, 90, 70]) {
+        const { canvas } = renderBarcodeResult({ format: "qrcode", value: "https://toka.dev/koilisu/printan", heightDots: 174 }, maxWidth);
+        const box = darkBox(canvas);
+        const cell = qrCell(canvas, box);
+        assert(cell >= 1 && box.left >= 4 * cell && box.right >= 4 * cell && box.top >= 4 * cell && box.bottom >= 4 * cell, `maxWidth=${maxWidth} cell=${cell} ${JSON.stringify(box)}`);
+        assert(canvas.width <= maxWidth || cell === 1, `maxWidth=${maxWidth} width=${canvas.width}`);
+    }
+});
+test("條碼：左右留白 ≥ 10 模組，上下 ≥ 4 點", () => {
+    for (const showText of [false, true]) {
+        const { canvas } = renderBarcodeResult({ format: "code128", value: "TM-T82II", heightDots: 64, showText }, 576);
+        const box = darkBox(canvas);
+        const module = minDarkRun(canvas, 20);
+        assert(module >= 1 && box.left >= 10 * module && box.right >= 10 * module, `showText=${showText} module=${module} ${JSON.stringify(box)}`);
+        assert(box.top >= 4 && box.bottom >= 4, `showText=${showText} ${JSON.stringify(box)}`);
+    }
+});
+test("條碼：EAN-13 左右留白 ≥ 11 模組", () => {
+    const { canvas, error } = renderBarcodeResult({ format: "ean13", value: "4006381333931", heightDots: 64, showText: true }, 576);
+    assert(canvas, error);
+    const box = darkBox(canvas);
+    const module = minDarkRun(canvas, 20);
+    assert(box.left >= 11 * module && box.right >= 11 * module, `module=${module} ${JSON.stringify(box)}`);
+});
+test("條碼：紙寬窄時線寬降為 1，留白仍 ≥ 10 模組且不超出", () => {
+    const { canvas, error } = renderBarcodeResult({ format: "code128", value: "TM-T82II", heightDots: 64, showText: false }, 200);
+    assert(canvas, error);
+    const box = darkBox(canvas);
+    assert(canvas.width <= 200 && box.left >= 10 * minDarkRun(canvas, 20), `${canvas.width} ${JSON.stringify(box)}`);
+});
+test("相鄰元素不貼合：文字、QR、條碼、QR 上下相鄰，各元素黑點之間空隙 ≥ 4 點", async () => {
+    const r = await renderElements([
+        createTextElement({ runs: [createTextRun({ text: "上方文字" })], fontSize: 24 }),
+        createBarcodeElement({ format: "qrcode", value: "https://toka.dev", heightDots: 120 }),
+        createBarcodeElement({ format: "code128", value: "TM-T82II", heightDots: 64, showText: true }),
+        createBarcodeElement({ format: "qrcode", value: "https://toka.dev", heightDots: 120 }),
+        createTextElement({ runs: [createTextRun({ text: "下方文字" })], fontSize: 24 }),
+    ], { widthDots: 576, dpi: 203, mode: "thermal" });
+    const ctx = r.canvas.getContext("2d");
+    const { data } = ctx.getImageData(0, 0, r.canvas.width, r.canvas.height);
+    const rowDark = (y) => { for (let x = 0; x < r.canvas.width; x++) if (data[(y * r.canvas.width + x) * 4] < 128) return true; return false; };
+    // 每個條碼／QR 項目自己的上下邊界內側 4 點都是白的，所以與上下相鄰元素的黑點至少隔 4 點
+    for (const item of r.items.filter((i) => i.el.type === "barcode")) {
+        const top = Math.round(item.y), bottom = Math.round(item.y + item.height);
+        assert(item.height > 0, `${item.el.format} 沒有畫出來`);
+        for (let y = top; y < top + 4; y++) assert(!rowDark(y), `${item.el.format} 上緣第 ${y - top + 1} 點有黑點`);
+        for (let y = bottom - 4; y < bottom; y++) assert(!rowDark(y), `${item.el.format} 下緣第 ${bottom - y} 點有黑點`);
+    }
 });
 
 let failed = 0;

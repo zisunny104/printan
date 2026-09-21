@@ -35,6 +35,12 @@ const JSBARCODE_FORMAT = { code128: "CODE128", ean13: "EAN13", ean8: "EAN8", upc
 
 const DEFAULT_MODULE_WIDTH = 2; // 一維條碼最窄線寬（dot）；紙寬放不下時降為 1，一律取整數，不做非整數縮放（熱感二值化後線寬會不均、掃不到）
 const PLACEHOLDER_FONT_SIZE = 20;
+// 留白（quiet zone）：渲染時加在條碼四周、算進元素寬高，不改資料格式。
+// QR 規格四周各 4 模組；一維條碼左右各 10 模組（Code128／Code39／ITF），EAN／UPC 規格 11 模組；上下固定 4 點，與相鄰元素不貼合。
+const QR_QUIET_MODULES = 4;
+const BARCODE_QUIET_MODULES = 10;
+const BARCODE_QUIET_MODULES_EAN = 11;
+const BARCODE_QUIET_VERTICAL = 4;
 
 class BarcodeInputError extends Error {}
 
@@ -174,8 +180,12 @@ function renderQrCode(value, sizeDots, maxWidthDots) {
 
     const count = qr.getModuleCount();
     const size = Math.max(count, Math.min(sizeDots || 160, maxWidthDots || sizeDots || 160));
-    const cell = Math.max(1, Math.floor(size / count));
-    const canvasSize = cell * count;
+    // heightDots 是符號本體邊長；留白另外加在四周。整數點模組，放不下時縮小模組，但留白永遠是整數個模組（最小 1 點）
+    const quiet = QR_QUIET_MODULES;
+    let cell = Math.max(1, Math.floor(size / count));
+    if (maxWidthDots) cell = Math.max(1, Math.min(cell, Math.floor(maxWidthDots / (count + quiet * 2))));
+    const canvasSize = cell * (count + quiet * 2);
+    const origin = cell * quiet;
 
     const canvas = document.createElement("canvas");
     canvas.width = canvasSize;
@@ -186,19 +196,23 @@ function renderQrCode(value, sizeDots, maxWidthDots) {
     ctx.fillStyle = "#000";
     for (let r = 0; r < count; r++) {
         for (let c = 0; c < count; c++) {
-            if (qr.isDark(r, c)) ctx.fillRect(c * cell, r * cell, cell, cell);
+            if (qr.isDark(r, c)) ctx.fillRect(origin + c * cell, origin + r * cell, cell, cell);
         }
     }
     return canvas;
 }
 
 function drawJsBarcode(value, format, heightDots, moduleWidth, showText) {
+    const quiet = (format === "EAN13" || format === "EAN8" || format === "UPC" ? BARCODE_QUIET_MODULES_EAN : BARCODE_QUIET_MODULES) * moduleWidth;
     const canvas = document.createElement("canvas");
     window.JsBarcode(canvas, value, {
         format,
         displayValue: showText,
         height: heightDots,
-        margin: 0,
+        marginLeft: quiet,
+        marginRight: quiet,
+        marginTop: BARCODE_QUIET_VERTICAL,
+        marginBottom: BARCODE_QUIET_VERTICAL,
         width: moduleWidth,
         fontSize: Math.max(10, Math.round(heightDots * 0.16)),
     });
