@@ -2,6 +2,7 @@
                 <!-- ≥768px 是一般側欄（CSS 讓未開啟的 dialog 也照常顯示）；<768px 是底部抽屜，由工具列 #btn-outline-drawer
                      以 showModal() 開啟（原生 dialog：Esc、焦點陷阱、焦點還原、body 鎖捲動）。內容只有這一份，不重複渲染。 -->
                 <dialog class="ts-app-drawer is-bottom editor-list" id="outlineSidebar" aria-label="版面結構">
+                    <button type="button" class="sheet-handle" aria-label="面板把手（拖曳調整高度）"><span aria-hidden="true"></span></button>
                     <div class="content">
                     <div class="ts-box is-rounded">
                         <div class="pane-card-header">

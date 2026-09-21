@@ -1,6 +1,7 @@
 <?php defined('PRINTAN_VIEW') || exit; ?>
                 <!-- <768px 是底部面板（非 modal、無遮罩，畫布仍可點選）：預設隱藏，加上 .is-open 才顯示；≥768px 為一般欄位 -->
                 <aside class="editor-dock" id="inspectorDock" aria-label="元素設定與批次資料">
+                    <button type="button" class="sheet-handle" aria-label="面板把手（拖曳調整高度）"><span aria-hidden="true"></span></button>
                     <div class="ts-box is-rounded">
                         <div class="pane-card-header">
                             <span class="pane-card-header-title">
