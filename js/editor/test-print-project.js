@@ -98,7 +98,8 @@ function buildCutLine(widthDots) {
 
 // 品牌 icon：頁首用的是 Tocas 的收據圖示，這裡用畫布畫同樣意象（鋸齒下緣的收據紙＋幾行字），
 // 避免依賴圖示字型；正方形，貼在標題左邊。
-const BRAND_ICON_SIZE = 72;
+const BRAND_ICON_DRAW = 72; // 下面的座標都以 72 點方格設計，實際大小依標題字級縮放
+const brandIconSize = (brandSize) => brandSize + 10; // 圖形本體約占方格 8 成，視覺高度約與標題字高相當
 const BRAND_ICON_GAP = 10; // icon 與標題文字的間距（點）
 const brandRuns = (size) => [{ text: "Printan ", fontSize: size + 6 }, { text: "單仔", fontSize: size + 4 }];
 function measureBrand(size) {
@@ -108,9 +109,10 @@ function measureBrand(size) {
         return sum + Math.ceil(ctx.measureText(r.text).width);
     }, 0);
 }
-function buildBrandIcon() {
-    const s = BRAND_ICON_SIZE;
-    const { canvas, ctx } = makeCanvas(s, s);
+function buildBrandIcon(size) {
+    const s = BRAND_ICON_DRAW;
+    const { canvas, ctx } = makeCanvas(size, size);
+    ctx.scale(size / s, size / s);
     const x0 = 14;
     const x1 = s - 14;
     const top = 6;
@@ -215,8 +217,8 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
     ]);
     // 標題列：icon＋名稱貼在一起整組置中。欄寬用「點」當比例：兩側留白 | icon | 間距 | 名稱（量出實際字寬）| 兩側留白
     const nameWidth = measureBrand(brandSize) + 16;
-    const side = Math.max(0, (widthDots - BRAND_ICON_SIZE - BRAND_ICON_GAP - nameWidth) / 2);
-    const brandRow = createRowElement([side || 1, BRAND_ICON_SIZE, BRAND_ICON_GAP, nameWidth, side || 1]);
+    const side = Math.max(0, (widthDots - brandIconSize(brandSize) - BRAND_ICON_GAP - nameWidth) / 2);
+    const brandRow = createRowElement([side || 1, brandIconSize(brandSize), BRAND_ICON_GAP, nameWidth, side || 1]);
     brandRow.columns[1].push(createImageElement({ assetId: iconUrl, fit: "auto", ditherMode: "threshold" }));
     brandRow.columns[3].push(center(brandRuns(brandSize), { bold: true }));
     // 優惠字樣較長，名稱欄放寬，58mm 才不會折行
@@ -303,7 +305,7 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
     project.template.elements = buildReceiptElements(
         info,
         model,
-        buildBrandIcon(),
+        buildBrandIcon(brandIconSize(paper.printableWidthDots >= 500 ? 56 : 40)),
         buildCalibratedStrip(paper.printableWidthDots, dpi),
         buildCutLine(paper.printableWidthDots),
         paper.printableWidthDots,
