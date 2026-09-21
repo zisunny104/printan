@@ -266,13 +266,14 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
         captionRow,
         // 感謝語與頁尾小字
         center("謝謝光臨", { fontSize: titleSize + 8, bold: true }),
-        // 技術資訊（小字級）
-        createDividerElement({ style: "dotted" }),
-        ...infoRows,
+        // 撕線：其下的技術資訊像可撕下的存根（視覺撕線；自動切刀仍在整張最後）
         gap(),
         createImageElement({ assetId: stripUrl, fit: "auto", ditherMode: "threshold" }),
         center("沿此線撕開", { fontSize: smallSize }),
         createImageElement({ assetId: cutLineUrl, fit: "auto", ditherMode: "threshold" }),
+        // 技術資訊（小字級）
+        ...infoRows,
+        gap(),
     ];
 }
 
