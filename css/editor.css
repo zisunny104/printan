@@ -195,6 +195,13 @@ body {
     height: 1.4em;
 }
 
+/* 窄螢幕工具列會折行，分隔線容易落在行尾，直接隱藏 */
+@media (width < 480px) {
+    .toolbar-divider {
+        display: none;
+    }
+}
+
 /* 富文字選取範圍跨越多種樣式時的「混合」狀態：整圈外框，不用單邊色條標示。 */
 .ts-button.is-icon.is-mixed {
     outline: 1px dashed var(--ts-gray-500);

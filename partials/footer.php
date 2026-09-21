@@ -2,7 +2,7 @@
     <!-- 開利手底部 -->
     <div id="app-footer" class="ts-content is-secondary is-vertically-padded">
         <div class="ts-container is-fluid">
-            <div class="ts-grid">
+            <div class="ts-grid mobile:is-stacked">
                 <div class="column is-fluid">
                     <div class="ts-text is-description">
                         <a href="/koilisu/" class="footer-plain-link">KoiLiSu 開利手</a> -
