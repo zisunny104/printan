@@ -75,6 +75,8 @@ export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
             const sr = dom.scroll.getBoundingClientRect();
             setZoom(zoom * Math.exp(-Math.max(-60, Math.min(60, delta)) * 0.01), false, { x: e.clientX - sr.left, y: e.clientY - sr.top });
         }, { passive: false });
+        wirePan();
+        wireZoomKeys();
         dom.scroll.addEventListener("scroll", scheduleRedraw, { passive: true });
         const resizeObserver = new ResizeObserver(() => {
             if (fitLocked) setZoom(fitZoom(), true);
@@ -100,6 +102,73 @@ export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
         zoom = Math.min(1, fitZoom());
         fitLocked = zoom < 1;
         syncUi();
+    }
+
+    // 平移（Figma 慣例）：滑鼠中鍵按住拖曳、或空白鍵按住＋左鍵拖曳。用 capture 先接手，
+    // 這樣不會同時選取元素或拖到把手；一般滾輪與 Shift＋滾輪維持瀏覽器原本的垂直／水平捲動。
+    function wirePan() {
+        const { scroll } = dom;
+        let spaceDown = false;
+        let pan = null; // { id, x, y, left, top }
+        const typing = (t) => t instanceof Element && (t.closest("input, textarea, select, [contenteditable]") !== null);
+        const idleCursor = () => { scroll.style.cursor = spaceDown ? "grab" : ""; };
+
+        scroll.addEventListener("pointerdown", (e) => {
+            const wantsPan = e.button === 1 || (e.button === 0 && spaceDown);
+            if (!wantsPan) return;
+            e.preventDefault(); // 中鍵不要進入瀏覽器的自動捲動
+            e.stopPropagation();
+            pan = { id: e.pointerId, x: e.clientX, y: e.clientY, left: scroll.scrollLeft, top: scroll.scrollTop };
+            scroll.setPointerCapture(e.pointerId);
+            scroll.style.cursor = "grabbing";
+        }, true);
+        scroll.addEventListener("pointermove", (e) => {
+            if (!pan || e.pointerId !== pan.id) return;
+            scroll.scrollLeft = pan.left - (e.clientX - pan.x);
+            scroll.scrollTop = pan.top - (e.clientY - pan.y);
+        });
+        const end = (e) => {
+            if (!pan || e.pointerId !== pan.id) return;
+            pan = null;
+            idleCursor();
+        };
+        scroll.addEventListener("pointerup", end);
+        scroll.addEventListener("pointercancel", end);
+        // 中鍵放開後會補一個 auxclick，順手擋掉，避免當成一般點擊
+        scroll.addEventListener("auxclick", (e) => { if (e.button === 1) e.preventDefault(); }, true);
+
+        document.addEventListener("keydown", (e) => {
+            if (e.code !== "Space" || e.repeat && spaceDown) {
+                if (e.code === "Space" && spaceDown) e.preventDefault();
+                return;
+            }
+            if (typing(e.target) || e.target.closest?.("button, a, summary, [role=radio]")) return;
+            if (!scroll.closest(".paper-viewport").matches(":hover")) return;
+            spaceDown = true;
+            e.preventDefault();
+            if (!pan) idleCursor();
+        });
+        document.addEventListener("keyup", (e) => {
+            if (e.code !== "Space" || !spaceDown) return;
+            spaceDown = false;
+            if (!pan) idleCursor();
+        });
+        window.addEventListener("blur", () => { spaceDown = false; idleCursor(); });
+    }
+
+    // Ctrl／⌘＋0 回 100%、Ctrl／⌘＋加減逐級縮放；只在游標在工作區上或焦點在工作區內時接手，其他地方保留瀏覽器縮放
+    function wireZoomKeys() {
+        const pane = dom.scroll.closest(".paper-viewport");
+        document.addEventListener("keydown", (e) => {
+            if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+            if (!(pane.matches(":hover") || pane.contains(e.target))) return;
+            if (e.target instanceof Element && e.target.closest("textarea, [contenteditable]")) return;
+            if (e.key === "0") setZoom(1);
+            else if (e.key === "+" || e.key === "=") setZoom(nextStep(1));
+            else if (e.key === "-" || e.key === "_") setZoom(nextStep(-1));
+            else return;
+            e.preventDefault();
+        });
     }
 
     // 百分比欄位：Enter／失焦套用（超出範圍夾到邊界、不是數字就還原），Esc 還原；↑↓ ±1%，Shift ±10%。
