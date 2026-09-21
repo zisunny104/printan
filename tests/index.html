@@ -25,6 +25,7 @@ import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from 
 import { renderElements, floatLineBox, MAX_CANVAS_HEIGHT } from "../js/core/renderer.js";
 import { createFloatBlockElement, FLOAT_GAP_DOTS } from "../js/core/document-model.js";
 import { readPtanFile } from "../js/core/ptan-file.js";
+import { runAutosave } from "../js/editor/save-status.js";
 
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
@@ -438,6 +439,34 @@ test("邊界：v1 檔案含 group／float-block 也能載入", () => {
     const res = loadProject({ ...base, format: "ptan", version: 1, template: { elements: [bt("v1"), createGroupElement([bt("g")]), createFloatBlockElement({ runs: [{ text: "fb" }] })] } });
     assert(res.ok, res.error);
     eq(res.project.template.elements.map((e) => e.type), ["text", "group", "float-block"]);
+});
+
+test("自動儲存成功：顯示已自動儲存，不用 role=alert", async () => {
+    const el = document.createElement("span");
+    el.setAttribute("role", "alert");
+    const id = await runAutosave(el, async () => "draft_1");
+    eq(id, "draft_1");
+    assert(el.textContent.startsWith("已自動儲存"), el.textContent);
+    assert(!el.hasAttribute("role"), "成功時不應朗讀");
+    assert(!el.classList.contains("is-negative"));
+});
+
+test("自動儲存失敗：顯示儲存失敗、role=alert、錯誤樣式，之後成功會恢復", async () => {
+    const el = document.createElement("span");
+    const origError = console.error;
+    console.error = () => {};
+    let id;
+    try {
+        id = await runAutosave(el, async () => { throw new DOMException("quota", "QuotaExceededError"); });
+    } finally {
+        console.error = origError;
+    }
+    eq(id, null);
+    assert(el.textContent.includes("儲存失敗"), el.textContent);
+    eq(el.getAttribute("role"), "alert");
+    assert(el.classList.contains("is-negative"));
+    await runAutosave(el, async () => "x");
+    assert(el.textContent.startsWith("已自動儲存") && !el.hasAttribute("role") && !el.classList.contains("is-negative"));
 });
 
 const list = document.getElementById("list");

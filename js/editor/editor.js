@@ -29,6 +29,7 @@ import {
 import { textInput } from "./inspector-widgets.js";
 import { renderInspector } from "./inspector.js";
 import { initMobileDrawers } from "./mobile-drawers.js";
+import { runAutosave } from "./save-status.js";
 import { renderEditOverlay } from "./canvas-overlay.js";
 import { renderOutline, wireOutlineKeyboard } from "./outline.js";
 import { bindBatchPanel, endBatchPreview, exportBatchPdf, exportSinglePdf } from "./batch-export.js";
@@ -692,11 +693,10 @@ export function schedulePreviewLive() {
 function scheduleSave() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
-        const id = await saveDraft(state.project);
+        const id = await runAutosave(els["save-status"], () => saveDraft(state.project));
+        if (!id) return;
         safeSetItem(LAST_DRAFT_KEY, id);
         populateRecentDrafts();
-        const time = new Date().toLocaleTimeString("zh-TW", { hour12: false });
-        els["save-status"].textContent = `已自動儲存 ${time}`;
     }, 500);
 }
 
