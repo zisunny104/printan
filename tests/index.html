@@ -22,7 +22,7 @@ import {
 } from "../js/core/document-model.js";
 import * as tree from "../js/core/element-tree.js";
 import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
-import { renderElements, floatLineBox } from "../js/core/renderer.js";
+import { renderElements, floatLineBox, MAX_CANVAS_HEIGHT } from "../js/core/renderer.js";
 import { createFloatBlockElement, FLOAT_GAP_DOTS } from "../js/core/document-model.js";
 import { readPtanFile } from "../js/core/ptan-file.js";
 
@@ -386,6 +386,58 @@ test("圖文段落：存檔一律 v2，讀回仍是 float-block", () => {
     const p = sampleProject([createFloatBlockElement({ assetId: "pic" })]);
     const out = loadProject(serializeProject(p));
     assert(out.ok && out.project.version === PTAN_VERSION && out.project.template.elements[0].type === "float-block");
+});
+
+// ---- 渲染邊界：不崩潰、canvas 不為 0、高度合理 ----
+const bt = (text, o = {}) => createTextElement({ runs: [{ text }], ...o });
+const bRender = (els, w = 384) => renderElements(els, { widthDots: w, dpi: 203, mode: "thermal", assets: { pic: pngDataUrl(100, 50), tiny: pngDataUrl(1, 1), tall: pngDataUrl(50, 3000) } });
+const sane = (r) => assert(r.canvas.width > 0 && r.canvas.height > 0, `canvas ${r.canvas.width}x${r.canvas.height}`);
+test("邊界：沒有元素／空文字 → canvas 至少 1 點", async () => {
+    sane(await bRender([]));
+    sane(await bRender([bt("")]));
+    sane(await bRender([bt("", { writingMode: "vertical" })]));
+});
+test("邊界：超長無空白單字會強制換行，高度隨字數成長而非爆掉", async () => {
+    const r = await bRender([bt("A".repeat(400))]);
+    sane(r);
+    assert(r.canvas.height > 100 && r.canvas.height < 3000, `h=${r.canvas.height}`);
+    assert(!r.truncated);
+});
+test("邊界：找不到圖片、1x1 圖、巨大圖都能渲染", async () => {
+    sane(await bRender([createElement("image", { assetId: "nope" })]));
+    sane(await bRender([createElement("image", { assetId: "tiny" })]));
+    const c = document.createElement("canvas"); c.width = 6000; c.height = 6000;
+    const r = await renderElements([createElement("image", { assetId: "huge" })], { widthDots: 384, dpi: 203, mode: "thermal", assets: { huge: c.toDataURL("image/png") } });
+    sane(r);
+    eq(r.canvas.width, 384);
+});
+test("邊界：6 欄在極窄寬度（64／8／1 點）也不崩潰", async () => {
+    const cols = () => [0, 1, 2, 3, 4, 5].map(() => [bt("長長長長長"), createFloatBlockElement({ assetId: "pic", runs: [{ text: "圖文圖文" }] })]);
+    for (const w of [384, 64, 8, 1]) sane(await bRender([createRowElement([1, 1, 1, 1, 1, 1], { columns: cols() })], w));
+});
+test("邊界：極端字級（0、負、1、2000）不崩潰", async () => {
+    for (const fontSize of [0, -5, 1, 2000]) sane(await bRender([bt("字", { fontSize })]));
+});
+test("邊界：直書＋長文與圖文塊（圖比字高很多）", async () => {
+    sane(await bRender([bt("直書很長的文字".repeat(50), { writingMode: "vertical" })]));
+    const r = await bRender([createFloatBlockElement({ assetId: "tall", runs: [{ text: "短" }] })]);
+    sane(r);
+    assert(r.canvas.height >= 3000 * (384 * 0.4) / 50 * 0.9, `圖文塊應被高圖撐開 h=${r.canvas.height}`);
+});
+test("邊界：內容超過 65535 點高 → 截斷並標記，canvas 不會變空白", async () => {
+    const r = await bRender([bt("直書很長的文字".repeat(300), { writingMode: "vertical" })]);
+    eq(r.canvas.height, MAX_CANVAS_HEIGHT);
+    assert(r.truncated, "應標記 truncated");
+    const d = r.canvas.getContext("2d").getImageData(0, 0, 384, 50).data;
+    let white = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] > 127) white++;
+    assert(white > 0, "頂端應有白底（空白 canvas 會全黑）");
+});
+test("邊界：v1 檔案含 group／float-block 也能載入", () => {
+    const base = createEmptyProject();
+    const res = loadProject({ ...base, format: "ptan", version: 1, template: { elements: [bt("v1"), createGroupElement([bt("g")]), createFloatBlockElement({ runs: [{ text: "fb" }] })] } });
+    assert(res.ok, res.error);
+    eq(res.project.template.elements.map((e) => e.type), ["text", "group", "float-block"]);
 });
 
 const list = document.getElementById("list");

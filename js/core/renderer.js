@@ -58,6 +58,8 @@ export async function renderBatch(project, dataArray = [{}], options = {}) {
     return results;
 }
 
+export const MAX_CANVAS_HEIGHT = 65535;
+
 /** 較底層的入口：直接給一段已經套用完資料的 element tree 進行排版與繪製。 */
 export async function renderElements(elements, {
     widthDots,
@@ -79,7 +81,8 @@ export async function renderElements(elements, {
 
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(widthDots, 1);
-    canvas.height = Math.max(height, 1);
+    // 瀏覽器 canvas 超過 65535 點高會整張變空白（熱感模式再被二值化成全黑），也超過 ESC/POS raster 上限，所以截在這裡
+    canvas.height = Math.min(Math.max(height, 1), MAX_CANVAS_HEIGHT);
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -96,6 +99,7 @@ export async function renderElements(elements, {
         dpi,
         widthMm: dotsToMm(canvas.width, dpi),
         heightMm: dotsToMm(canvas.height, dpi),
+        truncated: height > MAX_CANVAS_HEIGHT, // 內容超過最大高度、超出部分被截掉
         fontFallbacks, // 載入失敗、實際改用系統字體的網頁字體名稱（沒有失敗就是空陣列）
         items, // 排版結果樹（每個 item 帶 el/y/height/widthDots，row 另有 columns），供編輯器畫面上疊加可拖曳的元素外框使用
     };

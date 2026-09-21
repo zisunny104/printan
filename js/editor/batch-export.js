@@ -5,9 +5,11 @@ import { getEffectiveProfile, schedulePreview } from "./editor.js";
 
 // ---- 匯出 / 列印 ----
 
-// 有網頁字體沒載入成功時輸出會改用系統字體，版面跟預覽不同，輸出前讓使用者決定
+// 輸出前的確認：網頁字體沒載入成功會改用系統字體、版面跟預覽不同；內容超過最大高度會被截掉
 export function confirmFontFallbacks(results) {
-    return ![].concat(results).some((r) => r.fontFallbacks?.length) || confirm("字體未載入，仍要列印？");
+    const list = [].concat(results);
+    if (list.some((r) => r.fontFallbacks?.length) && !confirm("字體未載入，仍要列印？")) return false;
+    return !list.some((r) => r.truncated) || confirm("內容太長，超出部分會被截掉，仍要輸出？");
 }
 
 export async function exportSinglePdf() {
