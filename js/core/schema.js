@@ -99,6 +99,7 @@ function migrate(project) {
 
 // 匯入檔的圖片資源上限與格式：只收點陣圖 data URL（不收 svg 等可夾帶腳本的格式），筆數與大小設上限避免撐爆記憶體
 export const MAX_ASSETS = 100;
+const MAX_ASSET_NAME_CHARS = 200;
 export const MAX_ASSET_CHARS = 40_000_000; // data URL 字元數，約 30MB 圖檔
 export const MAX_ASSETS_TOTAL_CHARS = 120_000_000;
 export const SAFE_IMAGE_DATA_URL = /^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]*={0,2}$/;
@@ -112,7 +113,9 @@ export function sanitizeAssets(assets) {
         if (a.dataUrl.length > MAX_ASSET_CHARS || total + a.dataUrl.length > MAX_ASSETS_TOTAL_CHARS) continue;
         if (!SAFE_IMAGE_DATA_URL.test(a.dataUrl)) continue;
         total += a.dataUrl.length;
-        out.push({ id: a.id, type: a.dataUrl.slice(5, a.dataUrl.indexOf(";")), dataUrl: a.dataUrl });
+        const entry = { id: a.id };
+        if (typeof a.name === "string") entry.name = a.name.slice(0, MAX_ASSET_NAME_CHARS);
+        out.push({ ...entry, type: a.dataUrl.slice(5, a.dataUrl.indexOf(";")), dataUrl: a.dataUrl });
     }
     return out;
 }

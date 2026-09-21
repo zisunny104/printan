@@ -169,6 +169,19 @@ test("readPtanFile：內容是合法 .ptan 但夾雜中文、emoji 與換行也�
 test("elements 陣列裡有 null：loadProject 丟 TypeError（應回傳錯誤或略過該元素）", () => {
     survives(withElements([null]));
 });
+test("素材 name：非字串被略過、超過 200 字元被截斷、字串原樣保留", () => {
+    const png = "data:image/png;base64,AAAA";
+    const out = loadProject({ format: "ptan", version: 2, assets: [
+        { id: "a", name: 5, dataUrl: png },
+        { id: "b", name: "x".repeat(500), dataUrl: png },
+        { id: "c", name: "logo.png", dataUrl: png },
+    ] });
+    assert(out.ok, "應該成功");
+    const [a, b, c] = out.project.assets;
+    assert(!("name" in a), "非字串 name 應略過");
+    eq(b.name.length, 200);
+    eq(Object.keys(c), ["id", "name", "type", "dataUrl"]);
+});
 test("row 的某一欄是 null／非陣列：loadProject 丟 TypeError", () => {
     survives(withElements([{ type: "row", ratio: [1, 1], columns: [5, null] }]));
 });
