@@ -1548,3 +1548,25 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
         padding-top: 0;
     }
 }
+
+/* 匯出選單的「內嵌字體」列：勾選框與 ⓘ 同一行，ⓘ 不換行 */
+#export-embed-fonts-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+}
+
+#export-embed-fonts-row .info-icon {
+    flex: none;
+}
+
+#export-embed-fonts-row {
+    padding: .65rem 1rem;
+}
+
+/* 未勾選的勾選框：Tocas 預設 #eee 底＋同色框，白底上幾乎看不見（對比 <1.2:1）；改深灰外框，達 3:1 以上 */
+.ts-checkbox input:not(:checked) {
+    background-color: var(--ts-gray-50, #fff);
+    border-color: var(--ts-gray-600, #666);
+}
