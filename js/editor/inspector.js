@@ -11,7 +11,7 @@ import {
     primaryFamilyName,
 } from "../core/fonts.js";
 import {
-    checkboxInput, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, sectionDivider,
+    alignGroup, checkboxInput, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, sectionDivider,
     sectionHeader, selectInput, sliderField, textInput,
 } from "./inspector-widgets.js";
 import { inlineEditor, onModelChange, textSel } from "./editor.js";
@@ -58,7 +58,7 @@ const MULTI_FIELDS = [
     { key: "inverse", label: "整行反相", kind: "bool", types: ["text"] },
     { key: "lineHeight", label: "行高", kind: "number", types: ["text"] },
     { key: "letterSpacing", label: "字距", kind: "number", types: ["text"] },
-    { key: "align", label: "對齊", kind: "select", options: [["left", "靠左"], ["center", "置中"], ["right", "靠右"]], types: ["text", "image", "barcode"] },
+    { key: "align", label: "對齊", kind: "align", types: ["text", "image", "barcode"] },
     { key: "heightDots", label: "高度", kind: "number", types: ["spacer", "barcode"] },
     { key: "widthPercent", label: "寬度 %", kind: "number", types: ["image"] },
     { key: "style", label: "樣式", kind: "select", options: [["solid", "實線"], ["dashed", "虛線"], ["dotted", "點線"]], types: ["divider"] },
@@ -86,6 +86,8 @@ function buildMultiInspector(panel, ids) {
             const box = input.querySelector("input");
             box.placeholder = mixed ? "混合" : "";
             box.addEventListener("input", () => { if (box.value !== "") apply(spec, Number(box.value)); });
+        } else if (spec.kind === "align") {
+            input = alignGroup(mixed ? null : values[0], (v) => apply(spec, v));
         } else {
             const options = spec.kind === "bool" ? [["1", "是"], ["0", "否"]] : spec.options;
             const current = spec.kind === "bool" ? (values[0] ? "1" : "0") : values[0];
@@ -309,7 +311,7 @@ function buildTextInspector(panel, el) {
         ["預設字體", fontFamilySelect(el.fontFamily, (v) => { el.fontFamily = v; onModelChange({ skipInspector: true }); }, "跟隨全域預設")],
         ["預設字級 (dot)", textInput(el.fontSize, (v) => { el.fontSize = v; onModelChange({ skipInspector: true }); }, "number")],
     ]));
-    panel.appendChild(field("對齊", selectInput([["left", "靠左"], ["center", "置中"], ["right", "靠右"]], el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
+    panel.appendChild(field("對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
     panel.appendChild(field(null, checkboxInput(el.bold, (v) => { el.bold = v; onModelChange({ skipInspector: true }); }, "預設粗體")));
     panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange({ skipInspector: true }); }, "整行反相")));
 
@@ -343,9 +345,9 @@ function buildFloatBlockInspector(panel, el) {
         };
         els["image-file-input"].click();
     }, { outlined: true }));
-    sideRow.appendChild(iconToggleButton("arrow-left", "圖片靠左", el.imageSide !== "right", () => { el.imageSide = "left"; onModelChange(); }));
-    sideRow.appendChild(iconToggleButton("arrow-right", "圖片靠右", el.imageSide === "right", () => { el.imageSide = "right"; onModelChange(); }));
     panel.appendChild(sideRow);
+    panel.appendChild(field("圖片位置", alignGroup(el.imageSide === "right" ? "right" : "left", (v) => { el.imageSide = v; onModelChange({ skipInspector: true }); }, "圖片位置",
+        [["left", "圖片在左", "arrow-left"], ["right", "圖片在右", "arrow-right"]])));
     const widthInput = textInput(Math.max(1, Math.min(100, el.widthPercent ?? 40)), (v) => {
         if (!(v > 0)) return;
         el.widthPercent = Math.min(100, Math.max(1, v));
@@ -515,9 +517,6 @@ function buildImageInspector(panel, el) {
 
     const layoutRow = document.createElement("div");
     layoutRow.className = "ts-wrap is-compact has-top-spaced-small";
-    layoutRow.appendChild(iconToggleButton("align-left", "靠左", el.align === "left", () => { el.align = "left"; onModelChange(); }));
-    layoutRow.appendChild(iconToggleButton("align-center", "置中", (el.align || "center") === "center", () => { el.align = "center"; onModelChange(); }));
-    layoutRow.appendChild(iconToggleButton("align-right", "靠右", el.align === "right", () => { el.align = "right"; onModelChange(); }));
     layoutRow.appendChild(iconToggleButton("rotate-right", "順時針旋轉 90°", false, () => {
         el.rotation = ((el.rotation || 0) + 90) % 360;
         el.cropRect = null; // 旋轉後舊裁切窗格的座標系不再對應原圖，重置避免裁到錯的地方
@@ -527,6 +526,7 @@ function buildImageInspector(panel, el) {
         el.fit = el.fit === "stretch" ? "auto" : "stretch";
         onModelChange();
     }));
+    panel.appendChild(field("對齊", alignGroup(el.align || "center", (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
     panel.appendChild(layoutRow);
 
     if (el.fit === "stretch") {
@@ -658,10 +658,8 @@ function buildBarcodeInspector(panel, el) {
 
     panel.appendChild(sectionDivider());
     panel.appendChild(sectionHeader("ruler", "版面"));
-    panel.appendChild(fieldRow([
-        ["高度 (dot)", textInput(el.heightDots, (v) => { el.heightDots = v; onModelChange({ skipInspector: true }); }, "number")],
-        ["對齊", selectInput([["left", "靠左"], ["center", "置中"], ["right", "靠右"]], el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })],
-    ]));
+    panel.appendChild(field("高度 (dot)", textInput(el.heightDots, (v) => { el.heightDots = v; onModelChange({ skipInspector: true }); }, "number")));
+    panel.appendChild(field("對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
 
     if (el.format !== "qrcode") {
         panel.appendChild(foldSection("barcode.text", "明碼", (body) => {

@@ -227,3 +227,47 @@ export function foldSection(id, title, build, defaultOpen = false) {
     });
     return details;
 }
+
+const ALIGN_OPTIONS = [["left", "靠左", "align-left"], ["center", "置中", "align-center"], ["right", "靠右", "align-right"]];
+
+/** 對齊按鈕組（靠左／置中／靠右）：單選 radiogroup，左右方向鍵切換；current 為 null 表示混合（都不選）。 */
+export function alignGroup(current, onChange, label = "對齊", options = ALIGN_OPTIONS) {
+    const group = document.createElement("div");
+    group.className = "ts-wrap is-compact has-top-spaced-small";
+    group.setAttribute("role", "radiogroup");
+    group.setAttribute("aria-label", label);
+    const buttons = options.map(([value, text, icon]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "ts-button is-small is-icon is-outlined";
+        b.setAttribute("role", "radio");
+        b.setAttribute("aria-label", text);
+        b.dataset.tooltip = text;
+        b.dataset.value = value;
+        b.innerHTML = `<span class="ts-icon is-${icon}-icon" aria-hidden="true"></span>`;
+        return b;
+    });
+    const select = (value, focus) => {
+        buttons.forEach((b) => {
+            const on = b.dataset.value === value;
+            b.classList.toggle("is-active", on);
+            b.setAttribute("aria-checked", String(on));
+            b.tabIndex = on || (value == null && b === buttons[0]) ? 0 : -1;
+            if (on && focus) b.focus();
+        });
+    };
+    select(current ?? null);
+    buttons.forEach((b, i) => {
+        b.addEventListener("click", () => { select(b.dataset.value); onChange(b.dataset.value); });
+        b.addEventListener("keydown", (e) => {
+            const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+            if (!step) return;
+            e.preventDefault();
+            const next = buttons[(i + step + buttons.length) % buttons.length];
+            select(next.dataset.value, true);
+            onChange(next.dataset.value);
+        });
+    });
+    group.append(...buttons);
+    return group;
+}
