@@ -10,12 +10,12 @@
                         <span class="mobile:has-hidden">新增</span>
                     </button>
                     <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-open-ptan"
-                        data-dropdown="open-project-dropdown" aria-haspopup="true" data-tooltip="開啟" aria-label="開啟">
+                        data-dropdown="open-project-dropdown" aria-haspopup="true" aria-label="開啟">
                         <span class="ts-icon is-folder-open-icon" aria-hidden="true"></span>
                         <span class="mobile:has-hidden">開啟</span>
                     </button>
                     <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-export-menu"
-                        data-dropdown="export-dropdown" aria-haspopup="true" data-tooltip="匯出" aria-label="匯出">
+                        data-dropdown="export-dropdown" aria-haspopup="true" aria-label="匯出">
                         <span class="ts-icon is-download-icon" aria-hidden="true"></span>
                         <span class="mobile:has-hidden">匯出</span>
                     </button>
