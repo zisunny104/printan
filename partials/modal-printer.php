@@ -2,10 +2,10 @@
             <!-- 列印設定：一個 modal 由上到下四區——連線（最上面、最明顯）→ 列印設定（走紙／切紙／可列印點數）
                  → 印表機資訊（唯讀）→ 測試與診斷。「機器讀到的」與「預設／手動覆寫」的值用來源 badge
                  （.src-badge）區分，見 printer-settings.js sourceBadge()。 -->
-            <dialog id="printer-settings-dialog" class="ts-modal is-big">
+            <dialog id="printer-settings-dialog" class="ts-modal is-big" aria-labelledby="printer-dialog-title">
                 <div class="content">
                     <div class="ts-content">
-                        <div class="ts-header is-start-icon">
+                        <div class="ts-header is-start-icon" id="printer-dialog-title">
                             <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
                             列印設定
                         </div>

@@ -14,7 +14,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
 <?php require __DIR__ . '/partials/head.php'; ?>
 
 <body class="is-rounded">
-    <div class="main-content">
+    <main class="main-content">
         <div class="ts-container is-fluid has-vertically-padded">
 
             <?php require __DIR__ . '/partials/header.php'; ?>
@@ -45,7 +45,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
                 <?php require __DIR__ . '/partials/inspector.php'; ?>
             </div>
         </div>
-    </div>
+    </main>
 
     <?php require __DIR__ . '/partials/modal-help.php'; ?>
 

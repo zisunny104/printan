@@ -1,7 +1,7 @@
 <?php defined('PRINTAN_VIEW') || exit; ?>
             <div class="ts-grid is-middle-aligned">
                 <div class="column is-fluid">
-                    <div class="ts-header is-heavy is-large is-start-icon">
+                    <div class="ts-header is-heavy is-large is-start-icon" role="heading" aria-level="1">
                         <span class="ts-icon is-receipt-icon" aria-hidden="true"></span>
                         Printan 單仔
                         <span class="app-version">v<?= htmlspecialchars($appVersion) ?></span>
