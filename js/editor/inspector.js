@@ -646,6 +646,13 @@ function buildBarcodeInspector(panel, el) {
             el.showText = v;
             onModelChange({ skipInspector: true });
         }, "顯示明碼")));
+        if (el.showText !== false) {
+            panel.appendChild(field("明碼字級 (dot)", textInput(el.textSize || "", (v) => {
+                if (Number(v) > 0) el.textSize = Number(v);
+                else delete el.textSize;
+                onModelChange({ skipInspector: true });
+            }, "number"), "留空＝自動。熱感應列印字小容易糊，建議 20 以上"));
+        }
     }
 
     panel.appendChild(sectionDivider());

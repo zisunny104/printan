@@ -202,7 +202,7 @@ function renderQrCode(value, sizeDots, maxWidthDots) {
     return canvas;
 }
 
-function drawJsBarcode(value, format, heightDots, moduleWidth, showText) {
+function drawJsBarcode(value, format, heightDots, moduleWidth, showText, textSize) {
     const quiet = (format === "EAN13" || format === "EAN8" || format === "UPC" ? BARCODE_QUIET_MODULES_EAN : BARCODE_QUIET_MODULES) * moduleWidth;
     const canvas = document.createElement("canvas");
     window.JsBarcode(canvas, value, {
@@ -214,7 +214,7 @@ function drawJsBarcode(value, format, heightDots, moduleWidth, showText) {
         marginTop: BARCODE_QUIET_VERTICAL,
         marginBottom: BARCODE_QUIET_VERTICAL,
         width: moduleWidth,
-        fontSize: Math.max(10, Math.round(heightDots * 0.16)),
+        fontSize: textSize > 0 ? Math.round(textSize) : Math.max(10, Math.round(heightDots * 0.16)),
     });
     return canvas;
 }
@@ -227,12 +227,13 @@ function renderBarcode1D(el, value, maxWidthDots) {
     const heightDots = el.heightDots || 100;
     const format = JSBARCODE_FORMAT[el.format] || "CODE128";
     const showText = el.showText !== false;
+    const textSize = Number(el.textSize) || 0; // 明碼字級：0／未設＝自動（高度的 16%，最小 10）
 
     // 線寬一律取整數 dot：先用 1 dot 量出整條碼佔幾個 module，再挑放得下的最大整數線寬（上限 2）
     const modules = drawJsBarcode(checked.value, format, heightDots, 1, false).width;
     let moduleWidth = maxWidthDots ? Math.min(DEFAULT_MODULE_WIDTH, Math.floor(maxWidthDots / modules)) : DEFAULT_MODULE_WIDTH;
     for (; moduleWidth >= 1; moduleWidth--) {
-        const canvas = drawJsBarcode(checked.value, format, heightDots, moduleWidth, showText);
+        const canvas = drawJsBarcode(checked.value, format, heightDots, moduleWidth, showText, textSize);
         if (!maxWidthDots || canvas.width <= maxWidthDots) return canvas;
     }
     throw new BarcodeInputError(`內容太長，紙寬放不下（至少需要 ${modules} 點，可用 ${Math.floor(maxWidthDots)} 點）`);

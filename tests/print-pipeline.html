@@ -494,6 +494,18 @@ test("條碼：左右留白 ≥ 10 模組，上下 ≥ 4 點", () => {
         assert(box.top >= 4 && box.bottom >= 4, `showText=${showText} ${JSON.stringify(box)}`);
     }
 });
+test("條碼：明碼字級 textSize 選填，沒設＝自動，設了才放大且留白不變", () => {
+    assert(!("textSize" in createBarcodeElement({ format: "code128", value: "TM-T82II" })), "預設不寫入 textSize");
+    const base = { format: "code128", value: "TM-T82II", heightDots: 64, showText: true };
+    const auto = renderBarcodeResult(base, 576).canvas;
+    assert(renderBarcodeResult({ ...base, textSize: 0 }, 576).canvas.height === auto.height, "textSize=0 應同自動");
+    const big = renderBarcodeResult({ ...base, textSize: 28 }, 576).canvas;
+    assert(big.height >= auto.height + 12, `auto=${auto.height} big=${big.height}`);
+    const box = darkBox(big);
+    assert(box.left >= 10 * minDarkRun(big, 20) && box.top >= 4 && box.bottom >= 4, JSON.stringify(box));
+    const hidden = renderBarcodeResult({ ...base, showText: false, textSize: 28 }, 576).canvas;
+    assert(hidden.height < auto.height, "showText=false 時 textSize 不生效");
+});
 test("條碼：EAN-13 左右留白 ≥ 11 模組", () => {
     const { canvas, error } = renderBarcodeResult({ format: "ean13", value: "4006381333931", heightDots: 64, showText: true }, 576);
     assert(canvas, error);
