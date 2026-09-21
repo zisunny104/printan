@@ -46,7 +46,7 @@
                         <div class="ts-content is-padded" id="batch-panel-body" hidden>
                             <div class="ts-input is-small is-fluid">
                                 <textarea id="batch-data" class="batch-data-textarea" rows="5"
-                                    placeholder='[{"name":"手工餅乾","price":"120"}]'></textarea>
+                                    placeholder='[{"name":"手工餅乾","price":"120"}]&#10;也可貼 CSV'></textarea>
                             </div>
                             <div class="ts-space is-small"></div>
                             <div class="ts-buttons is-fluid">
