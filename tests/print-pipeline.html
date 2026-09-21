@@ -25,6 +25,8 @@ import {
     getMarginPad, getPrintHeadWidthDots, PRINTABLE_DOTS_MIN, MARGIN_MM_MAX,
 } from "../js/core/printer-profiles.js";
 
+import { composeResults } from "../js/core/compose.js";
+
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
 function assert(cond, msg = "assert failed") { if (!cond) throw new Error(msg); }
@@ -320,6 +322,30 @@ test("describePrinterError：各 DOMException 對應短中文、未知例外有�
 
 // ---- runner ----
 const list = document.getElementById("list");
+
+// ---- 多份輸出合併 ----
+const res = (rows) => ({ canvas: canvasFrom(rows), dpi: 203, fontFallbacks: [] });
+test("合併：高度相加＋間距，內容由上而下", () => {
+    const out = composeResults([res(["#.", "#."]), res([".#"])], { gapDots: 3 });
+    eq([out.widthDots, out.heightDots], [2, 6]);
+    const { data } = out.canvas.getContext("2d").getImageData(0, 0, 2, 6);
+    const black = (x, y) => data[(y * 2 + x) * 4] < 128;
+    assert(black(0, 0) && black(0, 1) && !black(0, 3) && black(1, 5), "位置不對");
+});
+test("合併：寬度不同以最寬為準、較窄置中", () => {
+    const out = composeResults([res(["####"]), res(["##"])]);
+    eq(out.widthDots, 4);
+    const { data } = out.canvas.getContext("2d").getImageData(0, 1, 4, 1);
+    eq([0, 1, 2, 3].map((x) => (data[x * 4] < 128 ? 1 : 0)), [0, 1, 1, 0]);
+});
+test("合併：空陣列丟錯；單一結果沿用 truncated", () => {
+    let threw = false;
+    try { composeResults([]); } catch { threw = true; }
+    assert(threw);
+    eq(composeResults(res(["#"])).truncated, false);
+    eq(composeResults([{ ...res(["#"]), truncated: true }]).truncated, true);
+});
+
 let failed = 0;
 for (const { name, fn } of cases) {
     const li = document.createElement("li");
