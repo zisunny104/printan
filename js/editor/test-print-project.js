@@ -99,6 +99,15 @@ function buildCutLine(widthDots) {
 // 品牌 icon：頁首用的是 Tocas 的收據圖示，這裡用畫布畫同樣意象（鋸齒下緣的收據紙＋幾行字），
 // 避免依賴圖示字型；正方形，貼在標題左邊。
 const BRAND_ICON_SIZE = 72;
+const BRAND_ICON_GAP = 10; // icon 與標題文字的間距（點）
+const brandRuns = (size) => [{ text: "Printan ", fontSize: size }, { text: "單仔", fontSize: size + 12 }];
+function measureBrand(size) {
+    const { ctx } = makeCanvas(1, 1);
+    return brandRuns(size).reduce((sum, r) => {
+        ctx.font = `bold ${r.fontSize}px ${FONT}`;
+        return sum + Math.ceil(ctx.measureText(r.text).width);
+    }, 0);
+}
 function buildBrandIcon() {
     const s = BRAND_ICON_SIZE;
     const { canvas, ctx } = makeCanvas(s, s);
@@ -150,24 +159,25 @@ function itemRow(name, qty, amount, style) {
 // 找零 → 條碼與 QR → 感謝語與頁尾小字 → 技術資訊（小字級）。
 // 品項是專案的功能與開發過程，金額由程式加總；彩蛋藏在數字與小字裡，純屬玩笑。
 const PROJECT_URL = "https://toka.dev/koilisu/printan";
+const TEAPOT_URL = "https://http.cat/418"; // 418 I'm a teapot 的貓圖
 const FALLBACK_MODEL = "TM-T82II";
 
 // 彩蛋數字的來源，要換數字只改這裡
 const EASTER_EGG = {
     birthday: "20260914", // 第一個 commit 的日期（2026-09-14）
-    commits: 165, // 專案 commit 數（164 個＋這一個）
+    commits: 172, // 專案 commit 數（171 個＋這一個）
     tokens: "999+", // token 消耗量：實際數不明，玩笑梗
     monthlyFeeUsd: 20, // Claude Pro 月費（美元）
 };
 
 const money = (n) => `${n < 0 ? "-" : ""}$${Math.abs(n).toLocaleString("en-US")}`;
 
-// [名稱, 數量, 單價, 備註]；數量可放字串（如 "999+"），計價時當 0。小計 1,352，扣優惠 15 後合計剛好 1,337（leet）：
-// 42（宇宙的答案）＋914（誕生日）＋3×70（咖啡）＋165（commit 數）＋20（月費）＋1（Hello World）－15（優惠）
+// [名稱, 數量, 單價, 備註]；數量可放字串（如 "999+"），計價時當 0。金額照實填，合計由程式加總：
+// 42（宇宙的答案）、914（誕生日）、3×65（ASCII 的 A）、commit 數、20（月費）、1（Hello World），再減優惠 15
 const MENU = [
     ["所見即所得預覽", 1, 42, "宇宙、生命與一切的答案"],
     ["直書排版", 1, Number(EASTER_EGG.birthday.slice(4)), `誕生日紀念款 ${EASTER_EGG.birthday.slice(4)}`],
-    ["續命美式咖啡", 3, 70, "喝茶請洽 HTTP 418"],
+    ["續命美式咖啡", 3, 65, "喝茶請洽 HTTP 418"],
     ["修改次數", EASTER_EGG.commits, 1, `第 ${EASTER_EGG.commits} 次 commit（含這一次）`],
     ["Token 一籮筐", EASTER_EGG.tokens, 0, "實際數不明，大概"],
     ["月費方案", 1, EASTER_EGG.monthlyFeeUsd, "Claude Pro，本月贊助"],
@@ -184,6 +194,7 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
     const totalSize = wide ? 40 : 32;
     const noteSize = wide ? 22 : 20;
     const smallSize = wide ? 22 : 20;
+    const qrSize = wide ? 140 : 120;
     bodySize = wide ? 28 : 24;
 
     const subtotal = MENU.reduce((sum, [, qty, price]) => sum + (Number(qty) || 0) * price, 0);
@@ -194,13 +205,24 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
         itemRow(name, String(qty), money((Number(qty) || 0) * price), {}),
         text(`　└ ${remark}`, { fontSize: noteSize }),
     ]);
-    const brandRow = createRowElement([1, 5]);
-    brandRow.columns[0].push(createImageElement({ assetId: iconUrl, fit: "auto", ditherMode: "threshold" }));
-    brandRow.columns[1].push(center([{ text: "Printan ", fontSize: brandSize }, { text: "單仔", fontSize: brandSize + 12 }], { bold: true }));
+    // 標題列：icon＋名稱貼在一起整組置中。欄寬用「點」當比例：兩側留白 | icon | 間距 | 名稱（量出實際字寬）| 兩側留白
+    const nameWidth = measureBrand(brandSize) + 16;
+    const side = Math.max(0, (widthDots - BRAND_ICON_SIZE - BRAND_ICON_GAP - nameWidth) / 2);
+    const brandRow = createRowElement([side || 1, BRAND_ICON_SIZE, BRAND_ICON_GAP, nameWidth, side || 1]);
+    brandRow.columns[1].push(createImageElement({ assetId: iconUrl, fit: "auto", ditherMode: "threshold" }));
+    brandRow.columns[3].push(center(brandRuns(brandSize), { bold: true }));
     // 優惠字樣較長，名稱欄放寬，58mm 才不會折行
     const discountRow = createRowElement([2, 1]);
     discountRow.columns[0].push(text(DISCOUNT[0]));
     discountRow.columns[1].push(text(money(DISCOUNT[1]), { align: "right" }));
+    // 兩個 QR 左右並列；內容長度不同、QR 格數（尺寸）也不同，說明另開一列，兩行字才會對齊在同一條線上
+    const qrs = [[PROJECT_URL, "專案網站"], [TEAPOT_URL, "418 茶壺"]];
+    const qrRow = createRowElement([1, 1]);
+    const captionRow = createRowElement([1, 1]);
+    qrs.forEach(([value, caption], i) => {
+        qrRow.columns[i].push(createBarcodeElement({ format: "qrcode", value, heightDots: qrSize }));
+        captionRow.columns[i].push(center(caption, { fontSize: smallSize }));
+    });
     const infoRows = info.map(([k, v]) => {
         const row = createRowElement([1, 2]);
         row.columns[0].push(text(k, { fontSize: smallSize }));
@@ -213,26 +235,30 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
         brandRow,
         center("小小一張紙，所見即所印", { fontSize: titleSize, italic: true }),
         center("toka.dev/koilisu/printan", { fontSize: smallSize }),
-        createDividerElement({ style: "dashed" }),
-        // 品項
+        gap(),
+        // 品項：上方一條反白窄帶當區段標頭
+        center("ORDER　本次開發明細", { fontSize: noteSize + 4, bold: true, inverse: true }),
+        createSpacerElement({ heightDots: 4 }),
         ...menuRows,
         createDividerElement(),
         // 小計／折扣／合計
         line("小計", money(subtotal)),
         discountRow,
         gap(),
-        line({ text: "合計", bold: true, fontSize: totalSize }, { text: money(total), bold: true, fontSize: totalSize }),
+        line({ text: "合計", bold: true, fontSize: totalSize }, { text: money(total), bold: true, fontSize: totalSize }, { inverse: true }),
         gap(),
         line("找零", money(CHANGE), { fontSize: smallSize }),
         gap(),
         // 條碼與 QR
-        createBarcodeElement({ format: "code128", value: model, heightDots: 64, showText: true }),
-        createBarcodeElement({ format: "qrcode", value: PROJECT_URL, heightDots: 140 }),
+        // 明碼另用一般文字元素，字級與內文同大（條碼內建明碼太小，熱感應二值化後糊成一團）
+        createBarcodeElement({ format: "code128", value: model, heightDots: 64, showText: false }),
+        center(model),
+        gap(),
+        qrRow,
+        captionRow,
         // 感謝語與頁尾小字
         center("謝謝光臨", { fontSize: titleSize + 8, bold: true }),
-        center("歡迎再次 404", { fontSize: titleSize }),
         center("本收據沒有法律效力，但誠意十足", { fontSize: smallSize }),
-        center(`Claude 協助開發，token ${EASTER_EGG.tokens}（大概）`, { fontSize: smallSize }),
         // 技術資訊（小字級）
         createDividerElement({ style: "dotted" }),
         ...infoRows,
