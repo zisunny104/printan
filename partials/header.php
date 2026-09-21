@@ -9,7 +9,7 @@
                     <div class="ts-text is-description mobile:has-hidden">熱感紙收據／標籤設計與預覽工具，所見即所印。</div>
                 </div>
                 <div class="column mobile:is-16-wide app-header-save">
-                    <span id="save-status" class="ts-text is-description is-small"></span>
+                    <span id="save-status" role="status" class="ts-text is-description is-small"></span>
                 </div>
                 <div class="column">
                     <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-help"
