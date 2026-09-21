@@ -66,9 +66,33 @@ function buildCalibratedStrip(widthDots, dpi) {
 
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
-function buildEndBar(widthDots) {
-    const { canvas, ctx } = makeCanvas(widthDots, 40);
-    ctx.fillRect(0, 0, widthDots, 40);
+// 切割線：左邊向右張開的向量剪刀（不靠字型，不會變成缺字方框）＋一路到右邊的虛線（線寬 2 點）。
+// 虛線的空白會微調，讓左右兩端都剛好是完整線段；線畫在圖的上緣附近，圖下方只留一小段，
+// 這條線是整份收據最後印出的東西，走紙後刀口落在它的下方。
+const CUT_LINE_HEIGHT = 34;
+function buildCutLine(widthDots) {
+    const { canvas, ctx } = makeCanvas(widthDots, CUT_LINE_HEIGHT);
+    const cy = 16;
+    // 剪刀：兩個把手圈在左、兩片刀刃交叉於樞軸後向右張開
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    for (const dir of [-1, 1]) {
+        ctx.beginPath();
+        ctx.arc(9, cy + dir * 8, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(14, cy + dir * 6);
+        ctx.lineTo(40, cy - dir * 8);
+        ctx.stroke();
+    }
+    // 虛線：從剪刀尖端到右緣，線段 14 點、空白約 8 點，兩端都是完整線段
+    const start = 46;
+    const dash = 14;
+    const span = widthDots - start;
+    const count = Math.max(1, Math.round((span + 8) / (dash + 8)));
+    const step = count > 1 ? (span - dash) / (count - 1) : 0;
+    for (let i = 0; i < count; i++) ctx.fillRect(Math.round(start + i * step), cy - 1, dash, 2);
     return canvas.toDataURL("image/png");
 }
 
@@ -126,7 +150,7 @@ const MENU = [
 const DISCOUNT = ["後悔折扣（無）", 0];
 const CHANGE = 0;
 
-function buildReceiptElements(info, model, stripUrl, endBarUrl, widthDots) {
+function buildReceiptElements(info, model, stripUrl, cutLineUrl, widthDots) {
     // 字級依紙寬取值：80mm 特大，58mm（約 420 點）退一級才放得下
     const wide = widthDots >= 500;
     const brandSize = wide ? 68 : 48;
@@ -196,9 +220,8 @@ function buildReceiptElements(info, model, stripUrl, endBarUrl, widthDots) {
         ...infoRows,
         gap(),
         createImageElement({ assetId: stripUrl, fit: "auto", ditherMode: "threshold" }),
-        gap(),
-        createImageElement({ assetId: endBarUrl, fit: "auto", ditherMode: "threshold" }),
-        center("切線在黑條下方"),
+        center("沿此線撕開", { fontSize: smallSize }),
+        createImageElement({ assetId: cutLineUrl, fit: "auto", ditherMode: "threshold" }),
     ];
 }
 
@@ -232,7 +255,7 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
         info,
         model,
         buildCalibratedStrip(paper.printableWidthDots, dpi),
-        buildEndBar(paper.printableWidthDots),
+        buildCutLine(paper.printableWidthDots),
         paper.printableWidthDots,
     );
     const body = await renderTemplate(project, {}, { mode: "thermal", profile });
