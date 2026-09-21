@@ -976,17 +976,13 @@ body {
     flex: 1 1 auto;
     min-height: 12rem;
     overflow-y: auto;
+    overflow-wrap: anywhere; /* help/help.md 轉出的內容（markdown.js）：長字串可換行 */
 }
 
 .help-list {
     margin: 0;
     padding-left: 1.25rem;
     line-height: 1.7;
-}
-
-/* help/help.md 轉出的內容（js/help/markdown.js）：長字串可換行、表格窄版可橫向捲動 */
-.help-body {
-    overflow-wrap: anywhere;
 }
 
 .help-body > div > * + * {
