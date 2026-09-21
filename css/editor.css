@@ -1005,7 +1005,8 @@ body {
 .help-dialog-content {
     display: flex;
     flex-direction: column;
-    max-height: calc(100dvh - 3rem);
+    /* 固定高度：切換章節時分頁列與關閉鈕位置不跳動，內文不夠長時底下留白 */
+    height: min(40rem, calc(100dvh - 3rem));
 }
 
 /* 標題、分頁、關閉鈕固定，只有內文捲動 */
@@ -1024,6 +1025,10 @@ body {
 
 .help-body > div > * + * {
     margin-top: .75rem;
+}
+
+.help-list > li + li {
+    margin-top: .375rem;
 }
 
 .help-paragraph {
@@ -1045,6 +1050,11 @@ body {
 
 .help-table-wrap .ts-table {
     width: 100%;
+}
+
+/* 第一欄是短名稱（元素、快捷鍵…），不折行，避免「分隔線」被拆成兩行 */
+.help-table-wrap :is(th, td):first-child {
+    white-space: nowrap;
 }
 
 .help-body kbd {
