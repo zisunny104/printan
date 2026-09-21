@@ -151,7 +151,7 @@ body {
         width: var(--printan-dock-width);
     }
 
-    /* 寬度 1rem 接手原本 gap 讓出的視覺間距；中間的 grip 圖示純裝飾用 aria-hidden，
+    /* 寬度 1rem 補上欄與欄之間 gap 的視覺間距；中間的 grip 圖示純裝飾用 aria-hidden，
        實際可操作的是整個 .col-resizer（role="separator"）。 */
     .col-resizer {
         display: flex;
@@ -488,9 +488,8 @@ body {
 
 /* ---- 紙張預覽：陰影表示整捲紙寬，虛線表示可列印範圍與安全區 ---- */
 
-/* .paper-viewport 現在是外層 ts-box（比照 pitrace #scanPaneBox），直向排列
-   .pane-card-header（工作區標題＋顯示模式切換）跟下面實際的紙張預覽本體；
-   原本置中紙張的排版規則搬到 .paper-viewport-body，避免跟標題列擠成同一列。 */
+/* .paper-viewport 是外層 ts-box，直向排列 .pane-card-header（工作區標題＋顯示模式切換）與紙張預覽本體；
+   置中紙張的規則放在 .paper-viewport-body，避免跟標題列擠成同一列。 */
 .paper-viewport {
     display: flex;
     flex-direction: column;
@@ -796,7 +795,7 @@ body {
     opacity: .6;
 }
 
-/* 圖片縮放把手（editor.js buildImageResizeHandle 用 inline style 設定位置、大小、底色、邊框與游標，
+/* 圖片縮放把手（canvas-overlay.js buildImageResizeHandle 用 inline style 設定位置、大小、底色、邊框與游標，
    所以這裡凡是要覆蓋 inline 的屬性一律加 !important；游標由 inline 依把手位置給
    ew-resize／nwse-resize／nesw-resize，不重寫）。視覺是 10px 白底藍框小方塊，整圈外框。 */
 .edit-resize-handle.is-img {
@@ -1050,7 +1049,7 @@ body {
     --accent-color: light-dark(var(--ts-positive-700, #237804), var(--ts-positive-400, #95de64));
 }
 
-/* 列印設定 modal 的「值的來源」badge（editor.js sourceBadge）：機器提供＝綠、已覆寫＝藍、
+/* 列印設定 modal 的「值的來源」badge（printer-settings.js sourceBadge）：機器提供＝綠、已覆寫＝藍、
    預設＝中性灰。外框跟文字同色（Tocas outlined 預設是灰框），三種都是整圈外框，不用色條。 */
 .src-badge {
     margin-left: .5rem;

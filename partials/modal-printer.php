@@ -1,7 +1,7 @@
 <?php defined('PRINTAN_VIEW') || exit; ?>
             <!-- 列印設定：一個 modal 由上到下四區——連接（最上面、最明顯）→ 列印設定（走紙／切紙／可列印點數）
                  → 印表機資訊（唯讀）→ 測試與診斷。「機器讀到的」與「預設／手動覆寫」的值用來源 badge
-                 （.src-badge）區分，見 editor.js sourceBadge()。 -->
+                 （.src-badge）區分，見 printer-settings.js sourceBadge()。 -->
             <dialog id="printer-settings-dialog" class="ts-modal">
                 <div class="content">
                     <div class="ts-content">
@@ -66,7 +66,7 @@
                         <div class="has-top-spaced"></div>
                         <div class="ts-text is-label">可列印點數（依紙寬）<span class="info-icon" tabindex="0" role="img" aria-label="預設用內建規格；別牌印表機可能不同（58 mm 常見 384 點），依規格書填寫，範圍 64–1024，留空＝預設" data-tooltip="預設用內建規格；別牌印表機可能不同（58 mm 常見 384 點），依規格書填寫，範圍 64–1024，留空＝預設"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span></div>
                         <div class="has-top-spaced-small"></div>
-                        <!-- 每個紙寬一列輸入框，由 renderPrintableDotsRows() 產生，見 editor.js -->
+                        <!-- 每個紙寬一列輸入框，由 renderPrintableDotsRows() 產生，見 printer-settings.js -->
                         <div id="printer-dots-list"></div>
                         <div class="has-top-spaced-small"></div>
                         <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-dots-reset">
@@ -75,7 +75,7 @@
                         <div class="has-top-spaced"></div>
                         <div class="ts-text is-label">邊距校正</div>
                         <div class="has-top-spaced-small"></div>
-                        <!-- 每個紙寬一列（左／右留白 mm），由 renderMarginRows() 產生，見 editor.js -->
+                        <!-- 每個紙寬一列（左／右留白 mm），由 renderMarginRows() 產生，見 printer-settings.js -->
                         <div id="printer-margin-list"></div>
                         <div class="has-top-spaced-small"></div>
                         <div class="ts-wrap">
@@ -90,7 +90,7 @@
                     <div class="ts-divider"></div>
                     <!-- 印表機資訊（唯讀）：連接後盡量用機器讀到的（WebUSB 裝置名稱、GS I 回傳的廠牌／型號／韌體）；
                          規格資料（DPI、紙寬、切刀距離）來自內建規格，比對不到已知型號就標示「無法辨識，使用預設值」。
-                         各列內容由 updatePrinterInfo() 填入，見 editor.js。 -->
+                         各列內容由 updatePrinterInfo() 填入，見 printer-settings.js。 -->
                     <div class="ts-content">
                         <div class="ts-text is-label">印表機資訊</div>
                         <div class="has-top-spaced-small"></div>
