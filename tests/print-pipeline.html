@@ -27,6 +27,7 @@ import {
 
 import { composeResults } from "../js/core/compose.js";
 import { csvToRecords } from "../js/core/csv.js";
+import { renderElements } from "../js/core/renderer.js";
 
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
@@ -358,6 +359,33 @@ test("CSV：欄位不足補空字串、多的略過、空欄名略過；只有�
     eq(csvToRecords("a,b,,c\n1\n1,2,3,4,5"), [{ a: "1", b: "", c: "" }, { a: "1", b: "2", c: "4" }]);
     eq(csvToRecords("a,b"), []);
     eq(csvToRecords("  \n"), []);
+});
+
+// ---- 批次資料圖片網址（Plan C） ----
+const PX = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const imgEl = (assetId) => ({ id: "i", type: "image", assetId, heightDots: 0, align: "center", widthPercent: 100, fit: "auto", rotation: 0, cropRect: null, brightness: 0, contrast: 0, invert: false, ditherMode: "threshold", thresholdLevel: 128 });
+const textEl = { id: "t", type: "text", content: "hi", fontSize: 24 };
+const runEls = (elements, assets = {}) => renderElements(elements, { widthDots: 100, dpi: 203, mode: "thermal", assets });
+test("圖片網址：非 https（http／javascript／file）被拒並列入 imageFailures", async () => {
+    const refs = ["http://example.com/a.png", "javascript:alert(1)", "file:///c:/a.png"];
+    const r = await runEls(refs.map(imgEl));
+    eq(r.imageFailures, refs);
+});
+test("圖片網址：https 載入失敗 → 列入清單，其他元素仍輸出", async () => {
+    const bad = "https://invalid.invalid/x.png";
+    const r = await runEls([imgEl(bad), textEl]);
+    eq(r.imageFailures, [bad]);
+    assert(r.items.some((it) => it.el.id === "t"), "文字元素不見了");
+    assert(r.heightDots > 0);
+});
+test("圖片網址：data: 與 assets 內圖片不受影響、不列入清單", async () => {
+    const r = await runEls([imgEl(PX), imgEl("a1")], { a1: PX });
+    eq(r.imageFailures, []);
+    assert(r.items.every((it) => it.img), "圖片沒載入");
+});
+test("合併：imageFailures 去重合併", () => {
+    const out = composeResults([{ ...res(["#"]), imageFailures: ["a", "b"] }, { ...res(["#"]), imageFailures: ["b"] }]);
+    eq(out.imageFailures, ["a", "b"]);
 });
 
 let failed = 0;

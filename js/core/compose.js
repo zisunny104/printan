@@ -38,6 +38,7 @@ export function composeResults(results, { gapDots = 0 } = {}) {
         heightMm: dotsToMm(canvas.height, dpi),
         truncated: total > MAX_CANVAS_HEIGHT || list.some((r) => r.truncated),
         fontFallbacks: [...new Set(list.flatMap((r) => r.fontFallbacks || []))],
+        imageFailures: [...new Set(list.flatMap((r) => r.imageFailures || []))],
         items: [],
     };
 }

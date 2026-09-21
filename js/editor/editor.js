@@ -580,6 +580,7 @@ async function updatePreview() {
     if (generation !== state.previewGeneration) return; // 過期的渲染結果，丟棄
     rt.lastRenderResult = result;
     updateFontFallbackNotice(result.fontFallbacks);
+    updateImageFailureNotice(result.imageFailures);
     els["canvas-host"].innerHTML = "";
     els["canvas-host"].appendChild(result.canvas);
     if (!els["edit-overlay"]) {
@@ -588,6 +589,26 @@ async function updatePreview() {
     }
     els["canvas-host"].appendChild(els["edit-overlay"]);
     renderEditOverlay();
+}
+
+/** 批次資料的圖片網址被拒絕或載入失敗時，在預覽區上方提示已略過。 */
+function updateImageFailureNotice(failures) {
+    let notice = els["image-failure-notice"];
+    if (!failures?.length) {
+        if (notice) notice.hidden = true;
+        return;
+    }
+    if (!notice) {
+        notice = document.createElement("div");
+        notice.className = "ts-notice is-negative";
+        notice.appendChild(Object.assign(document.createElement("div"), { className: "content" }));
+        const stage = els["paper-shadow"].parentElement.parentElement;
+        stage.parentElement.insertBefore(notice, stage);
+        els["image-failure-notice"] = notice;
+    }
+    notice.hidden = false;
+    notice.firstChild.textContent = `有 ${failures.length} 張圖片無法載入，已略過`;
+    notice.title = failures.join("\n");
 }
 
 /** 網頁字體（等寬）載入失敗時，在預覽區上方明確提示目前顯示與列印的是系統字體，不默默換字。 */

@@ -77,7 +77,8 @@ export async function renderElements(elements, {
     measureCanvas.height = 10;
     const measureCtx = measureCanvas.getContext("2d");
 
-    const { items, height } = await layoutColumn(elements, widthDots, measureCtx, fontFamily, assetMap, mode === "screen");
+    const assetCtx = { map: assetMap, failures: new Set() }; // 每次渲染各一份，批次共用同一個 Map 時失敗清單也不會互相累積
+    const { items, height } = await layoutColumn(elements, widthDots, measureCtx, fontFamily, assetCtx, mode === "screen");
 
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(widthDots, 1);
@@ -100,6 +101,7 @@ export async function renderElements(elements, {
         widthMm: dotsToMm(canvas.width, dpi),
         heightMm: dotsToMm(canvas.height, dpi),
         truncated: height > MAX_CANVAS_HEIGHT, // 內容超過最大高度、超出部分被截掉
+        imageFailures: [...assetCtx.failures], // 被拒絕（非 https）或載入失敗而略過的圖片網址（已去重）
         fontFallbacks, // 載入失敗、實際改用系統字體的網頁字體名稱（沒有失敗就是空陣列）
         items, // 排版結果樹（每個 item 帶 el/y/height/widthDots，row 另有 columns），供編輯器畫面上疊加可拖曳的元素外框使用
     };
@@ -139,7 +141,7 @@ function measureImageContent(el, img) {
 
 // ---- 排版（measure pass）----
 
-async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap, showBarcodeErrors) {
+async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, showBarcodeErrors) {
     const items = [];
     let y = 0;
     for (const el of elements) {
@@ -148,7 +150,7 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap, show
             items.push({ el, y, height: totalHeight, widthDots, lines, vertical });
             y += totalHeight;
         } else if (el.type === "float-block") {
-            const item = await layoutFloatBlock(el, widthDots, ctx, fontFamily, assetMap);
+            const item = await layoutFloatBlock(el, widthDots, ctx, fontFamily, assetCtx);
             items.push({ el, y, widthDots, ...item });
             y += item.height;
         } else if (el.type === "spacer") {
@@ -159,7 +161,7 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap, show
             items.push({ el, y, height, widthDots });
             y += height;
         } else if (el.type === "image") {
-            const img = await resolveImage(el, assetMap);
+            const img = await resolveImage(el, assetCtx);
             const { contentWidth, contentHeight } = measureImageContent(el, img);
             const widthPercent = clampNumber(el.widthPercent ?? 100, 1, 100);
             const drawWidth = Math.round((widthDots * widthPercent) / 100);
@@ -183,7 +185,7 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap, show
             let rowHeight = 0;
             let xOffset = 0;
             for (let i = 0; i < el.columns.length; i++) {
-                const sub = await layoutColumn(el.columns[i], colWidths[i], ctx, fontFamily, assetMap, showBarcodeErrors);
+                const sub = await layoutColumn(el.columns[i], colWidths[i], ctx, fontFamily, assetCtx, showBarcodeErrors);
                 columns.push({ x: xOffset, width: colWidths[i], items: sub.items });
                 rowHeight = Math.max(rowHeight, sub.height);
                 xOffset += colWidths[i];
@@ -191,7 +193,7 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetMap, show
             items.push({ el, y, height: rowHeight, widthDots, columns });
             y += rowHeight;
         } else if (el.type === "group") {
-            const sub = await layoutColumn(el.children, widthDots, ctx, fontFamily, assetMap, showBarcodeErrors);
+            const sub = await layoutColumn(el.children, widthDots, ctx, fontFamily, assetCtx, showBarcodeErrors);
             items.push({ el, y, height: sub.height, widthDots, children: sub.items });
             y += sub.height;
         }
@@ -338,9 +340,9 @@ export function floatLineBox({ side, y, imageWidth, imageHeight, columnWidth, ga
     return { x: 0, width: columnWidth };
 }
 
-async function layoutFloatBlock(el, columnWidth, ctx, fontFamily, assetMap) {
+async function layoutFloatBlock(el, columnWidth, ctx, fontFamily, assetCtx) {
     if ("letterSpacing" in ctx) ctx.letterSpacing = `${el.letterSpacing || 0}px`;
-    const img = await resolveImage(el, assetMap);
+    const img = await resolveImage(el, assetCtx);
     const { contentWidth, contentHeight } = measureImageContent(el, img);
     const drawWidth = Math.round((columnWidth * clampNumber(el.widthPercent ?? 40, 1, 100)) / 100);
     const drawHeight = contentWidth > 0 ? Math.round((drawWidth * contentHeight) / contentWidth) : 0;
@@ -516,19 +518,36 @@ function paintVerticalText(ctx, item, x, y) {
     ctx.restore();
 }
 
-async function resolveImage(el, assetMap) {
+const IMAGE_LOAD_TIMEOUT_MS = 10000;
+
+// 批次資料的圖片欄位可以是網址：只收 https（http、javascript:、file: 等一律無效），
+// 並以 crossOrigin 載入避免畫布受污染；失敗只略過該張，記進 failures 讓預覽與輸出提示
+async function resolveImage(el, assetCtx) {
     const ref = el.assetId;
     if (!ref) return null;
-    const src = /^(data:|https?:)/.test(ref) ? ref : assetMap.get(ref);
-    if (!src) return null;
-    return loadImage(src);
+    if (/^data:/i.test(ref)) return loadImage(ref);
+    if (/^[a-z][a-z0-9+.-]*:/i.test(ref)) {
+        const img = /^https:\/\//i.test(ref) ? await loadImage(ref, true) : null;
+        if (!img) assetCtx.failures.add(ref);
+        return img;
+    }
+    const src = assetCtx.map.get(ref);
+    return src ? loadImage(src) : null;
 }
 
-function loadImage(src) {
+function loadImage(src, crossOrigin = false) {
     return new Promise((resolve) => {
         const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(null); // 單張圖片載入失敗不應讓整份輸出失敗
+        const timer = setTimeout(() => finish(null), IMAGE_LOAD_TIMEOUT_MS);
+        function finish(result) {
+            clearTimeout(timer);
+            img.onload = img.onerror = null;
+            if (!result) img.src = ""; // 失敗或逾時就中止載入
+            resolve(result); // 單張圖片載入失敗不應讓整份輸出失敗
+        }
+        img.onload = () => finish(img);
+        img.onerror = () => finish(null);
+        if (crossOrigin) img.crossOrigin = "anonymous";
         img.src = src;
     });
 }

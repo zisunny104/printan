@@ -11,7 +11,9 @@ import { getEffectiveProfile, schedulePreview } from "./editor.js";
 export function confirmFontFallbacks(results) {
     const list = [].concat(results);
     if (list.some((r) => r.fontFallbacks?.length) && !confirm("字體未載入，仍要列印？")) return false;
-    return !list.some((r) => r.truncated) || confirm("內容太長，超出部分會被截掉，仍要輸出？");
+    if (list.some((r) => r.truncated) && !confirm("內容太長，超出部分會被截掉，仍要輸出？")) return false;
+    const failedImages = new Set(list.flatMap((r) => r.imageFailures || []));
+    return !failedImages.size || confirm(`有 ${failedImages.size} 張圖片無法載入，已略過，仍要輸出？`);
 }
 
 export async function exportSinglePdf() {
