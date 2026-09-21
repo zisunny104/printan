@@ -295,16 +295,16 @@ body {
     flex: 0 0 auto;
 }
 
-/* 窄螢幕與觸控：標題列按鈕加大，方便點選 */
-@media (width < 768px), (pointer: coarse) {
-    .pane-card-header .ts-button.is-icon,
-    .pane-zoom-controls .ts-button.is-small {
-        --height: 2rem;
-    }
-
-    .pane-zoom-value {
-        height: 2rem;
-    }
+/* 窄螢幕與觸控：標題列按鈕加大，方便點選 */
+@media (width < 768px), (pointer: coarse) {
+    .pane-card-header .ts-button.is-icon,
+    .pane-zoom-controls .ts-button.is-small {
+        --height: 2rem;
+    }
+
+    .pane-zoom-value {
+        height: 2rem;
+    }
 }
 
 /* 工作區欄位很窄時（手機、1024～1279px 三欄並排）：縮放列獨立一行，標題與顯示切換鈕留在第一行，不擠成三行 */
@@ -1161,6 +1161,9 @@ body {
 }
 
 .footer-plain-link {
+    display: inline-block;
+    min-height: 24px;
+    line-height: 24px;
     color: inherit;
     text-decoration: none;
 }
@@ -1296,6 +1299,11 @@ body {
    - 元素設定＝#inspectorDock 自訂的非 modal 底部面板（Tocas 沒有非 modal 版本），加 .is-open 才顯示，
      最高半個螢幕，其上的畫布仍可點選。開關由 JS 控制（見 TODO／給 b3 的介面清單）。 */
 @media (width < 768px) {
+    /* 面板開啟時畫布下緣不被蓋住：--printan-sheet-height 由 JS 設成面板高度，未設定為 0 */
+    .main-content {
+        padding-bottom: var(--printan-sheet-height, 0px);
+    }
+
     #inspectorDock {
         display: none;
     }
