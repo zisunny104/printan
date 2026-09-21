@@ -1,4 +1,4 @@
-import { createTextElement, createFloatBlockElement, createSpacerElement, createDividerElement, createRowElement, createBarcodeElement } from "../core/document-model.js";
+import { createTextElement, createFloatBlockElement, createSpacerElement, createDividerElement, createRowElement, createBarcodeElement, DEFAULT_ROW_GAP } from "../core/document-model.js";
 import { resolveTargetArray, findElementById, findContainerOf, removeElements, groupElementsIn, ungroupElementsIn, duplicateElementsIn, moveElementBy, moveElementsBy, moveElementToIndex, moveElementToContainerIn, selectionToIds, idsToSelection, pruneSelectionIn } from "../core/element-tree.js";
 import { els, rt, state } from "./context.js";
 import { renderInspector } from "./inspector.js";
@@ -26,7 +26,7 @@ export function addElement(kind, { ratio, target } = {}) {
         case "spacer": return insertElement(createSpacerElement());
         case "divider": return insertElement(createDividerElement());
         case "barcode": return insertElement(createBarcodeElement());
-        case "row": return insertElement(createRowElement(ratio));
+        case "row": return insertElement(createRowElement(ratio, { gap: DEFAULT_ROW_GAP }));
         case "image":
             rt.imageFileInputHandler = null;
             els["image-file-input"].click();

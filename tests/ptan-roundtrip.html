@@ -171,6 +171,20 @@ test("內嵌字體：匯出 v2 → readPtanFile 讀回後字體不留在專案�
 
 // ---- 執行 ----
 const list = document.getElementById("list");
+test("多欄 gap：非 0 才寫進檔案、來回一致；0 或缺欄位不寫、讀入後仍沒有 gap", async () => {
+    const p = createEmptyProject({ name: "gap", printerProfileId: "epson-tm-t82ii", paperWidthId: "58mm" });
+    const mk = (id, gap) => ({ id, type: "row", ratio: [1, 1], columns: [[], []], ...(gap === undefined ? {} : { gap }) });
+    p.template.elements = [mk("g8", 8), mk("g0", 0), mk("gn"), mk("g48", 48)];
+    const text = serializeProject(p);
+    const raw = JSON.parse(text).template.elements;
+    eq(raw.map((r) => r.gap), [8, undefined, undefined, 48]);
+    assert(!("gap" in raw[1]), "gap=0 不該寫入");
+    assert(p.template.elements[1].gap === 0, "序列化不可改動原專案");
+    const back = await readPtanFile(new File([text], "x.ptan"));
+    assert(back.ok, back.error);
+    eq(back.project.template.elements.map((r) => r.gap), [8, undefined, undefined, 48]);
+    eq(serializeProject(back.project), text);
+});
 let failed = 0;
 for (const c of cases) {
     const li = document.createElement("li");

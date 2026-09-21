@@ -28,6 +28,8 @@ import {
 import { composeResults } from "../js/core/compose.js";
 import { csvToRecords } from "../js/core/csv.js";
 import { renderElements } from "../js/core/renderer.js";
+import { createTextElement, createTextRun, createRowElement } from "../js/core/document-model.js";
+import { normalizeRowGap, splitDotsByRatio } from "../js/core/units.js";
 
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
@@ -386,6 +388,51 @@ test("圖片網址：data: 與 assets 內圖片不受影響、不列入清單", 
 test("合併：imageFailures 去重合併", () => {
     const out = composeResults([{ ...res(["#"]), imageFailures: ["a", "b"] }, { ...res(["#"]), imageFailures: ["b"] }]);
     eq(out.imageFailures, ["a", "b"]);
+});
+
+// ---- 多欄欄距 ----
+const colText = (t) => createTextElement({ runs: [createTextRun({ text: t })], fontSize: 20 });
+const gapRow = (ratio, gap) => {
+    const row = createRowElement(ratio, gap === "absent" ? {} : { gap });
+    row.columns = ratio.map((_, i) => [colText(`欄${i + 1}ABC`)]);
+    return row;
+};
+const rowCols = async (ratio, gap, width) => {
+    const r = await renderElements([gapRow(ratio, gap)], { widthDots: width, dpi: 203, mode: "thermal" });
+    return { cols: r.items[0].columns.map((c) => [c.x, c.width]), canvas: r.canvas };
+};
+const pixels = (c) => [...c.getContext("2d").getImageData(0, 0, c.width, c.height).data].join(",");
+test("欄距：normalizeRowGap 壞值＝0、超大夾 48、小數四捨五入", () => {
+    eq([undefined, null, "8", NaN, Infinity, -5, 0, 8, 8.4, 999].map(normalizeRowGap), [0, 0, 0, 0, 0, 0, 0, 8, 8, 48]);
+});
+test("欄距：gap=0／缺欄位／壞值 → 與舊版逐點相同", async () => {
+    const old = splitDotsByRatio(384, [1, 2, 1]);
+    const base = await rowCols([1, 2, 1], "absent", 384);
+    let x = 0;
+    eq(base.cols, old.map((w) => { const c = [x, w]; x += w; return c; }));
+    for (const g of [0, "6", -3, NaN]) {
+        const other = await rowCols([1, 2, 1], g, 384);
+        eq(other.cols, base.cols);
+        assert(pixels(other.canvas) === pixels(base.canvas), `gap=${g} 像素不同`);
+    }
+});
+test("欄距：gap=8 欄寬＝(總寬−欄距×(欄數−1))依比例，欄間留 8", async () => {
+    eq((await rowCols([1, 1], 8, 100)).cols, [[0, 46], [54, 46]]);
+    eq((await rowCols([2, 1], 8, 100)).cols, [[0, 61], [69, 31]]);
+});
+test("欄距：58mm／80mm 三欄 1:1:1 總寬不溢出、最後一欄貼邊", async () => {
+    for (const width of [384, 576]) {
+        for (const gap of [0, 8, 48]) {
+            const { cols } = await rowCols([1, 1, 1], gap, width);
+            const last = cols[2];
+            eq(last[0] + last[1], width, `${width}/${gap}`);
+            eq([cols[1][0] - (cols[0][0] + cols[0][1]), last[0] - (cols[1][0] + cols[1][1])], [gap, gap]);
+        }
+    }
+});
+test("欄距：超窄紙寬欄距自動縮小，每欄至少 1 點且不溢出", async () => {
+    const { cols } = await rowCols([1, 1, 1, 1, 1, 1], 48, 10);
+    assert(cols.every(([, w]) => w >= 1) && cols[5][0] + cols[5][1] <= 10);
 });
 
 let failed = 0;

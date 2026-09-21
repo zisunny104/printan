@@ -2,6 +2,7 @@
 // 這個檔案是 core 的一部分：不得依賴 DOM／window／editor 狀態。
 
 import { normalizeTextElement, walkElements } from "./document-model.js";
+import { normalizeRowGap } from "./units.js";
 
 export const PTAN_FORMAT = "ptan";
 export const PTAN_VERSION = 2;
@@ -143,7 +144,11 @@ function normalizeRow(el) {
     const count = Math.max(ratio.length, columns.length, 1);
     while (ratio.length < count) ratio.push(1);
     while (columns.length < count) columns.push([]);
-    return { ...el, ratio, columns };
+    const { gap, ...rest } = el;
+    const normalized = { ...rest, ratio, columns };
+    const g = normalizeRowGap(gap);
+    if (g > 0) normalized.gap = g; // 0 或壞值不留欄位，跟舊檔一致
+    return normalized;
 }
 
 export function serializeProject(project) {
@@ -151,5 +156,7 @@ export function serializeProject(project) {
     // （內嵌字體 embeddedFonts 同理：有才寫 v2）
     let usesGroup = Array.isArray(project.embeddedFonts) && project.embeddedFonts.length > 0;
     walkElements(project.template?.elements || [], (el) => { if (el.type === "group" || el.type === "float-block" || el.writingMode === "vertical") usesGroup = true; });
-    return JSON.stringify({ ...project, version: usesGroup ? PTAN_VERSION : 1, format: PTAN_FORMAT }, null, 2);
+    // 多欄 gap 為 0（或沒設）就不寫進檔案
+    const dropZeroGap = function (key, value) { return key === "gap" && value === 0 && this.type === "row" ? undefined : value; };
+    return JSON.stringify({ ...project, version: usesGroup ? PTAN_VERSION : 1, format: PTAN_FORMAT }, dropZeroGap, 2);
 }

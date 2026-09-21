@@ -1,7 +1,8 @@
 // 右側檢視器：依選取的元素類型組出對應的編輯面板。
 
 import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
-import { MIXED, applyStyleToRange, getRangeStyle, getTextContent, replaceFullText } from "../core/document-model.js";
+import { DEFAULT_ROW_GAP, MIXED, applyStyleToRange, getRangeStyle, getTextContent, replaceFullText } from "../core/document-model.js";
+import { MAX_ROW_GAP, normalizeRowGap } from "../core/units.js";
 import { WEB_FONTS, findWebFont, isWebFontFailed } from "../core/web-fonts.js";
 import { applyFieldToElements, findElementById, setRowRatio, splitRowColumn, MAX_ROW_COLUMNS } from "../core/element-tree.js";
 import { createInfoIcon } from "./ui-helpers.js";
@@ -585,6 +586,17 @@ function buildRowInspector(panel, el) {
         onModelChange();
     });
     panel.appendChild(field("欄位比例", ratioInput));
+    const gapInput = textInput(normalizeRowGap(el.gap), () => {}, "number");
+    const gapBox = gapInput.querySelector("input");
+    gapBox.min = "0";
+    gapBox.max = String(MAX_ROW_GAP);
+    gapBox.addEventListener("change", () => {
+        const gap = normalizeRowGap(Number(gapBox.value));
+        if (gap > 0) el.gap = gap;
+        else delete el.gap;
+        onModelChange();
+    });
+    panel.appendChild(field("欄距", gapInput, `欄與欄之間的空白，單位點，0～${MAX_ROW_GAP}；新建預設 ${DEFAULT_ROW_GAP}，舊專案為 0`));
     const wrap = document.createElement("div");
     wrap.className = "ts-wrap is-compact has-top-spaced-small";
     wrap.appendChild(mkButton("分割欄位", "table-columns", () => {

@@ -257,6 +257,8 @@ export function createDividerElement(overrides = {}) {
     };
 }
 
+export const DEFAULT_ROW_GAP = 8; // 新建多欄的預設欄距（點）；舊檔沒有 gap 欄位＝0，輸出維持不變
+
 export function createRowElement(ratio = [1], overrides = {}) {
     return {
         id: nextId("row"),

@@ -1,5 +1,5 @@
 import { MAX_ROW_COLUMNS, childArrays, findContainerOf, findElementById, mergeRowColumns, splitRowColumn } from "../core/element-tree.js";
-import { splitDotsByRatio } from "../core/units.js";
+import { splitRowColumns } from "../core/units.js";
 import { els, rt, state } from "./context.js";
 import { iconButton } from "./inspector-widgets.js";
 import { inlineEditor, onModelChange, schedulePreviewLive } from "./editor.js";
@@ -31,11 +31,9 @@ export function renderEditOverlay() {
             for (const spec of imageHandleSpecs(box, item)) handleBuilders.push(() => buildImageResizeHandle(box, item, spec, scale));
         }
         if (box.el.type === "row") {
-            let cumulative = 0;
             item.columns.forEach((col, i) => {
-                cumulative += col.width;
                 if (i === item.columns.length - 1) return; // 最後一欄後面沒有把手
-                const boundaryXDots = box.x + cumulative;
+                const boundaryXDots = box.x + (col.x + col.width + item.columns[i + 1].x) / 2; // 有欄距時把手放在兩欄中間
                 handleBuilders.push(() => buildColumnResizeHandle(box.el, i, boundaryXDots, box.y, box.height, box.width, scale));
             });
             if (item.columns.length < MAX_ROW_COLUMNS && getSelectedIds().includes(box.el.id)) { // 只在選取該多欄時顯示，避免每個多欄都冒出＋
@@ -334,7 +332,7 @@ function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHe
         const realRow = findElementById(state.project.template.elements, rowEl.id);
         if (!realRow) return;
         const startX = e.clientX;
-        const startWidths = splitDotsByRatio(rowWidthDots, realRow.ratio);
+        const startWidths = splitRowColumns(rowWidthDots, realRow.ratio, realRow.gap).widths;
         const minWidth = 10;
         let moved = false;
         function onMove(ev) {

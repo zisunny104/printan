@@ -201,6 +201,11 @@ test("readPtanFile：含 null 元素的檔案 → onload 內例外，Promise 永
 
 // ---- 執行 ----
 const list = document.getElementById("list");
+test("row.gap：字串、負數、NaN、null、物件 → 沒有 gap；超大夾 48、小數四捨五入", () => {
+    const gapOf = (gap) => survives(withElements([{ type: "row", ratio: [1, 1], columns: [[], []], gap }])).project.template.elements[0].gap;
+    for (const bad of ["8", "abc", -5, NaN, null, {}, [], Infinity, 0]) assert(gapOf(bad) === undefined, `gap=${String(bad)}`);
+    eq([gapOf(9999), gapOf(8.6), gapOf(48), gapOf(1)], [48, 9, 48, 1]);
+});
 let failed = 0;
 let knownCount = 0;
 for (const c of cases) {

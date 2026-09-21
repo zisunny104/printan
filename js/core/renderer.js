@@ -14,7 +14,7 @@
 import { getPrinterProfile, getPaperWidth } from "./printer-profiles.js";
 import { applyDataToElements } from "./merge.js";
 import { FLOAT_GAP_DOTS } from "./document-model.js";
-import { dotsToMm, splitDotsByRatio } from "./units.js";
+import { dotsToMm, splitRowColumns } from "./units.js";
 import { applyThermalSimulation, toGrayscale, applyDither } from "./dithering.js";
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
 import { ensureWebFonts } from "./web-fonts.js";
@@ -180,7 +180,7 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, show
             items.push({ el, y, height: drawHeight, widthDots, barcodeCanvas, barcodeError: result.error, drawWidth, drawHeight });
             y += drawHeight;
         } else if (el.type === "row") {
-            const colWidths = splitDotsByRatio(widthDots, el.ratio);
+            const { widths: colWidths, gap: colGap } = splitRowColumns(widthDots, el.ratio, el.gap);
             const columns = [];
             let rowHeight = 0;
             let xOffset = 0;
@@ -188,7 +188,7 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, show
                 const sub = await layoutColumn(el.columns[i], colWidths[i], ctx, fontFamily, assetCtx, showBarcodeErrors);
                 columns.push({ x: xOffset, width: colWidths[i], items: sub.items });
                 rowHeight = Math.max(rowHeight, sub.height);
-                xOffset += colWidths[i];
+                xOffset += colWidths[i] + colGap;
             }
             items.push({ el, y, height: rowHeight, widthDots, columns });
             y += rowHeight;
