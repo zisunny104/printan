@@ -163,7 +163,7 @@ function attachBlockInteractions(div, origId) {
             } else if (!dragging) {
                 // 已選取的文字元素再點一下＝在預覽區直接編輯，插入點落在點擊位置
                 const toggle = ev.shiftKey || ev.ctrlKey || ev.metaKey;
-                const editText = !toggle && state.selectedId === elId && !state.multi.length && findElementById(state.project.template.elements, elId)?.type === "text";
+                const editText = !toggle && state.selectedId === elId && !state.multi.length && ["text", "float-block"].includes(findElementById(state.project.template.elements, elId)?.type);
                 const enter = elId !== origId && !toggle && getSelectedIds().includes(elId);
                 selectElementById(enter ? origId : elId, { toggle });
                 if (editText) inlineEditor.open(elId, { x: ev.clientX, y: ev.clientY });

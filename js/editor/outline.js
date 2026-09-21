@@ -166,13 +166,14 @@ function buildTargetHeader(label, target, depth) {
     return row;
 }
 
-const TYPE_ICON = { text: "font", image: "image", spacer: "arrows-up-down", divider: "minus", row: "table-columns", barcode: "qrcode", group: "object-group" };
+const TYPE_ICON = { text: "font", image: "image", spacer: "arrows-up-down", divider: "minus", row: "table-columns", barcode: "qrcode", group: "object-group", "float-block": "newspaper" };
 
 const BARCODE_FORMAT_LABEL = Object.fromEntries(BARCODE_FORMATS);
 
 function elementLabel(el) {
     switch (el.type) {
         case "text": { const t = getTextContent(el); return t ? t.slice(0, 14) : "文字"; }
+        case "float-block": { const t = getTextContent(el); return t ? `圖文：${t.slice(0, 10)}` : "圖文"; }
         case "image": return el.assetId ? "圖片" : "圖片（未設定）";
         case "spacer": return `間隔 ${el.heightDots}dot`;
         case "divider": return "分隔線";

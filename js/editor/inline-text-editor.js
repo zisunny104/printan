@@ -188,7 +188,7 @@ export function createInlineTextEditor({ getHost, getElement, getBlockNode, getS
     /** 開始編輯：point 是點擊當下的 viewport 座標，插入點會落在那個位置。 */
     function open(id, point) {
         const el = getElement(id);
-        if (!el || el.type !== "text" || !getBlockNode(id)) return false;
+        if (!el || (el.type !== "text" && el.type !== "float-block") || !getBlockNode(id)) return false;
         if (isOpen()) close();
         ensureNode();
         currentId = id;

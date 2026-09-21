@@ -1,4 +1,4 @@
-import { createTextElement, createSpacerElement, createDividerElement, createRowElement, createBarcodeElement } from "../core/document-model.js";
+import { createTextElement, createFloatBlockElement, createSpacerElement, createDividerElement, createRowElement, createBarcodeElement } from "../core/document-model.js";
 import { resolveTargetArray, findElementById, findContainerOf, removeElements, groupElementsIn, ungroupElementsIn, duplicateElementsIn, moveElementBy, moveElementsBy, moveElementToIndex, moveElementToContainerIn, selectionToIds, idsToSelection, pruneSelectionIn } from "../core/element-tree.js";
 import { els, rt, state } from "./context.js";
 import { renderInspector } from "./inspector.js";
@@ -11,6 +11,7 @@ import { inlineEditor, onModelChange } from "./editor.js";
 const ADD_KINDS = [
     { kind: "text", label: "文字", icon: "font" },
     { kind: "image", label: "圖片", icon: "image" },
+    { kind: "float-block", label: "圖文", icon: "newspaper" },
     { kind: "spacer", label: "間隔", icon: "arrows-up-down" },
     { kind: "divider", label: "分隔線", icon: "minus" },
     { kind: "barcode", label: "條碼", icon: "qrcode" },
@@ -29,6 +30,10 @@ export function addElement(kind, { ratio, target } = {}) {
         case "image":
             rt.imageFileInputHandler = null;
             els["image-file-input"].click();
+            break;
+        case "float-block":
+            rt.imageFileInputHandler = (assetId) => insertElement(createFloatBlockElement({ assetId }));
+            els["image-file-input"].click();
     }
 }
 
@@ -40,7 +45,7 @@ export function insertElement(element) {
     target.push(element);
     state.selectedId = element.id;
     state.multi = [];
-    rt.pendingReveal = { id: element.id, edit: element.type === "text" };
+    rt.pendingReveal = { id: element.id, edit: element.type === "text" || element.type === "float-block" };
     onModelChange();
     els["outline-list"].querySelector(".outline-row.is-selected")?.scrollIntoView({ block: "nearest" });
 }
