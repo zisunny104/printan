@@ -18,14 +18,14 @@
                     </button>
                 </div>
                 <span class="toolbar-spacer"></span>
-                <!-- 印表機連線、走紙／切紙、可列印點數、測試列印都歸在同一顆「列印設定」按鈕底下同一個 modal 裡。
+                <!-- 印表機連接、走紙／切紙、可列印點數、測試列印都歸在同一顆「列印設定」按鈕底下同一個 modal 裡。
                      紙寬（80/58mm）編輯時常常切換，維持獨立的快速開關，不塞進 modal
                      （ESC/POS 也沒有標準指令能讀回印表機目前的紙寬，不做自動偵測）。
                      印表機型號不開放使用者選，內部固定用預設規格（見 printer-profiles.js）。 -->
                 <div class="ts-selection is-small" id="paper-width-tabs" role="radiogroup" aria-label="紙寬"></div>
                 <div class="ts-divider is-vertical toolbar-divider"></div>
                 <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-printer-settings"
-                    data-tooltip="列印設定（印表機連線、走紙／切紙、可列印點數、測試列印）" aria-label="列印設定">
+                    data-tooltip="列印設定（印表機連接、走紙／切紙、可列印點數、測試列印）" aria-label="列印設定">
                     <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
                     <span class="printer-conn-dot is-on" id="printer-toolbar-dot" aria-hidden="true" hidden></span>
                 </button>
