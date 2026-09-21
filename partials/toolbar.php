@@ -4,17 +4,20 @@
                      列印設定、列印）。兩組用途不同（前者管版型檔案，後者管實體輸出），分兩側
                      排列比全部擠在一起好找。 -->
                 <div class="ts-buttons">
-                    <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-new-ptan"
+                    <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-new-ptan"
                         data-tooltip="新增空白版型（目前版型會留在「最近編輯」清單，不會遺失）" aria-label="新增">
                         <span class="ts-icon is-file-circle-plus-icon" aria-hidden="true"></span>
+                        <span class="mobile:has-hidden">新增</span>
                     </button>
-                    <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-open-ptan"
+                    <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-open-ptan"
                         data-dropdown="open-project-dropdown" aria-haspopup="true" data-tooltip="開啟" aria-label="開啟">
                         <span class="ts-icon is-folder-open-icon" aria-hidden="true"></span>
+                        <span class="mobile:has-hidden">開啟</span>
                     </button>
-                    <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-export-menu"
+                    <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-export-menu"
                         data-dropdown="export-dropdown" aria-haspopup="true" data-tooltip="匯出" aria-label="匯出">
                         <span class="ts-icon is-download-icon" aria-hidden="true"></span>
+                        <span class="mobile:has-hidden">匯出</span>
                     </button>
                 </div>
                 <span class="toolbar-spacer"></span>
