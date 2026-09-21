@@ -1230,3 +1230,63 @@ body {
 .ts-button.is-negative.is-outlined {
     color: light-dark(#cf1322, #f5222d);
 }
+
+/* 小螢幕（mobile <768px）頁首與工具列依操作分組：品牌＋說明鈕同一行、儲存狀態獨立一行；
+   工具列＝檔案組（整行、三鍵等寬）→ 紙寬（整行、兩鍵等寬）→ 列印設定＋列印（列印撐滿在右，方便拇指），組內緊靠、組間換行 */
+@media (width < 768px) {
+    .app-header-save {
+        order: 3;
+    }
+
+    .main-content .ts-header.is-heavy {
+        white-space: nowrap;
+    }
+
+    .toolbar-spacer,
+    .toolbar-divider {
+        display: none;
+    }
+
+    #toolbar > .ts-buttons {
+        display: flex;
+        flex: 1 0 100%;
+    }
+
+    #toolbar > .ts-buttons > .ts-button {
+        flex: 1 1 0;
+    }
+
+    #paper-width-tabs {
+        display: flex;
+        flex: 1 0 100%;
+    }
+
+    #paper-width-tabs .item {
+        flex: 1 1 0;
+        white-space: nowrap;
+    }
+
+    #paper-width-tabs .item {
+        display: flex;
+    }
+
+    #paper-width-tabs .item .text {
+        flex: 1;
+        text-align: center;
+    }
+
+    #btn-printer-settings {
+        flex: 0 0 auto;
+    }
+
+    #btn-print {
+        flex: 1 1 0;
+    }
+}
+
+@media (width < 768px) and (pointer: coarse) {
+    #toolbar .ts-button.is-small,
+    #paper-width-tabs .item {
+        min-height: 2.5rem;
+    }
+}
