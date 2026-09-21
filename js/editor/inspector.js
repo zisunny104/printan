@@ -493,7 +493,7 @@ function buildImageInspector(panel, el) {
     panel.appendChild(varWrap);
 
     panel.appendChild(sectionDivider());
-    panel.appendChild(sectionHeader("ruler", "尺寸與版面"));
+    panel.appendChild(sectionHeader("ruler", "版面"));
     const widthInput = textInput(Math.max(1, Math.min(100, el.widthPercent ?? 100)), (v) => {
         if (!(v > 0)) return;
         el.widthPercent = Math.min(100, Math.max(1, v));
@@ -523,32 +523,31 @@ function buildImageInspector(panel, el) {
     }
 
     if (!isVariable && el.assetId) {
-        panel.appendChild(sectionDivider());
-        panel.appendChild(sectionHeader("crop-simple", "裁切"));
-        const cropTool = buildCropTool(el);
-        panel.appendChild(cropTool);
-        const cropActions = document.createElement("div");
-        cropActions.className = "ts-wrap is-compact has-top-spaced-small";
-        cropActions.appendChild(iconButton("expand", "還原（取消裁切）", () => {
-            el.cropRect = null;
-            onModelChange();
+        panel.appendChild(foldSection("image.crop", "裁切", (body) => {
+            body.appendChild(buildCropTool(el));
+            const cropActions = document.createElement("div");
+            cropActions.className = "ts-wrap is-compact has-top-spaced-small";
+            cropActions.appendChild(iconButton("expand", "還原（取消裁切）", () => {
+                el.cropRect = null;
+                onModelChange();
+            }));
+            body.appendChild(cropActions);
         }));
-        panel.appendChild(cropActions);
     }
 
-    panel.appendChild(sectionDivider());
-    panel.appendChild(sectionHeader("sliders", "調整"));
-    panel.appendChild(sliderField("亮度", el.brightness ?? 0, -100, 100, (v) => { el.brightness = v; onModelChange({ skipInspector: true }); }));
-    panel.appendChild(sliderField("對比", el.contrast ?? 0, -100, 100, (v) => { el.contrast = v; onModelChange({ skipInspector: true }); }));
-    panel.appendChild(field(null, checkboxInput(!!el.invert, (v) => { el.invert = v; onModelChange({ skipInspector: true }); }, "反相")));
-    panel.appendChild(field("取樣方式", selectInput(
-        [["floyd-steinberg", "誤差擴散"], ["ordered", "網點"], ["threshold", "純黑白"]],
-        el.ditherMode || "floyd-steinberg",
-        (v) => { el.ditherMode = v; onModelChange(); },
-    )));
-    if (el.ditherMode === "threshold") {
-        panel.appendChild(sliderField("門檻", el.thresholdLevel ?? 128, 0, 255, (v) => { el.thresholdLevel = v; onModelChange({ skipInspector: true }); }));
-    }
+    panel.appendChild(foldSection("image.adjust", "調整", (body) => {
+        body.appendChild(sliderField("亮度", el.brightness ?? 0, -100, 100, (v) => { el.brightness = v; onModelChange({ skipInspector: true }); }));
+        body.appendChild(sliderField("對比", el.contrast ?? 0, -100, 100, (v) => { el.contrast = v; onModelChange({ skipInspector: true }); }));
+        body.appendChild(field(null, checkboxInput(!!el.invert, (v) => { el.invert = v; onModelChange({ skipInspector: true }); }, "反相")));
+        body.appendChild(field("取樣方式", selectInput(
+            [["floyd-steinberg", "誤差擴散"], ["ordered", "網點"], ["threshold", "純黑白"]],
+            el.ditherMode || "floyd-steinberg",
+            (v) => { el.ditherMode = v; onModelChange(); },
+        )));
+        if (el.ditherMode === "threshold") {
+            body.appendChild(sliderField("門檻", el.thresholdLevel ?? 128, 0, 255, (v) => { el.thresholdLevel = v; onModelChange({ skipInspector: true }); }));
+        }
+    }, true));
 }
 
 function buildSpacerInspector(panel, el) {

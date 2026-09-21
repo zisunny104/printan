@@ -215,9 +215,13 @@ export function foldSection(id, title, build, defaultOpen = false) {
     setMark();
     summary.append(mark, title);
     const body = document.createElement("div");
-    build(body);
+    // 收合時先不建內容（如裁切工具要量尺寸、載入圖片），第一次展開才建
+    let built = false;
+    const ensureBuilt = () => { if (!built) { built = true; build(body); } };
+    if (details.open) ensureBuilt();
     details.append(summary, body);
     details.addEventListener("toggle", () => {
+        if (details.open) ensureBuilt();
         setMark();
         writeFold(id, details.open);
     });
