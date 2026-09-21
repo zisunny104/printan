@@ -638,7 +638,18 @@ body {
     position: relative;
     /* 畫面上只有一個範圍：白底可列印區（寬度＝printableWidthMm × 縮放，見 updatePaperFrame），
        不畫整卷紙寬的外框、也不留左右邊距；尺規 0 就對齊它的左緣。 */
+}
+
+/* 紙張外緣：整張紙（可印區＋左右不可印區）四邊 1px 實線＋輕陰影，白紙在灰底上一眼看得出紙寬；
+   內側可印範圍的邊界是不可印區的虛線，兩者線型不同。 */
+.paper-shadow::before {
+    content: "";
+    position: absolute;
+    inset: 0 calc(-1 * var(--paper-unprintable, 0px));
+    z-index: 2;
+    border: 1px solid light-dark(rgba(0, 0, 0, .35), rgba(255, 255, 255, .4));
     box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
+    pointer-events: none;
 }
 
 /* 唯一的輔助線：切刀安全線（底部，離下緣 --paper-safe-bottom ＝ 切刀到列印頭的距離，
