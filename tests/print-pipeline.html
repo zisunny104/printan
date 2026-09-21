@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Printan tests：列印管線</title>
+<style>
+body { font: 14px/1.6 system-ui, sans-serif; margin: 16px; }
+li { list-style: none; }
+.pass { color: #1a7f37; }
+.fail { color: #cf222e; }
+pre { margin: 0 0 0 24px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1 id="summary">執行中…</h1>
+<ul id="list"></ul>
+<script type="module">
+// ESC/POS 位元組 golden 測試＋左右邊距校正計算，跟 tests/index.html 同一套跑法（標題顯示 PASS／FAIL）。
+import { buildEscposJob, canvasToEscposRaster, centerCanvasOnWidth } from "../js/core/printer-adapter.js";
+import {
+    getPrinterProfile, marginPadDots, sanitizeMarginCalibration, withMarginCalibration,
+    getMarginPad, getPrintHeadWidthDots, PRINTABLE_DOTS_MIN, MARGIN_MM_MAX,
+} from "../js/core/printer-profiles.js";
+
+const cases = [];
+const test = (name, fn) => cases.push({ name, fn });
+function assert(cond, msg = "assert failed") { if (!cond) throw new Error(msg); }
+function eq(actual, expected, msg = "") {
+    const a = JSON.stringify(actual), b = JSON.stringify(expected);
+    if (a !== b) throw new Error(`${msg}\n預期 ${b}\n實際 ${a}`);
+}
+const hex = (u8) => [...u8].map((b) => b.toString(16).padStart(2, "0")).join(" ");
+
+// 每個字串一列，"#" 黑、"." 白
+function canvasFrom(rows) {
+    const c = document.createElement("canvas");
+    c.width = rows[0].length;
+    c.height = rows.length;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = "#000";
+    rows.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === "#") ctx.fillRect(x, y, 1, 1); }));
+    return c;
+}
+function blackCols(canvas) {
+    const { data } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+    const cols = [];
+    for (let x = 0; x < canvas.width; x++) {
+        for (let y = 0; y < canvas.height; y++) {
+            if (data[(y * canvas.width + x) * 4] < 128) { cols.push(x); break; }
+        }
+    }
+    return cols;
+}
+const HEADER = "1b 40 1d 4c 00 00 1b 61 00";
+const one = () => ({ canvas: canvasFrom(["#......."]) });
+
+// ---- ESC/POS 位元組 ----
+test("raster：MSB 為最左點、bit=1 為黑", () => {
+    const { bytesPerLine, height, raster } = canvasToEscposRaster(canvasFrom(["#.......", ".......#", "#.#.#.#."]));
+    eq([bytesPerLine, height], [1, 3]);
+    eq([...raster], [0x80, 0x01, 0xaa]);
+});
+test("raster：寬度非 8 的倍數，尾端補 0", () => {
+    const { bytesPerLine, raster } = canvasToEscposRaster(canvasFrom(["#########", "........#"]));
+    eq(bytesPerLine, 2);
+    eq([...raster], [0xff, 0x80, 0x00, 0x80]);
+});
+test("raster：灰階門檻 128（127 黑、128 白）", () => {
+    const c = document.createElement("canvas");
+    c.width = 2; c.height = 1;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "rgb(127,127,127)"; ctx.fillRect(0, 0, 1, 1);
+    ctx.fillStyle = "rgb(128,128,128)"; ctx.fillRect(1, 0, 1, 1);
+    eq([...canvasToEscposRaster(c).raster], [0x80]);
+});
+test("raster：0 尺寸 canvas 不崩潰、回空 raster", () => {
+    const c = document.createElement("canvas");
+    c.width = 8; c.height = 0;
+    eq(canvasToEscposRaster(c).raster.length, 0);
+});
+test("整份工作：ESC @、左邊界 0、靠左、GS v 0 寬高、raster（無走紙／切紙）", () => {
+    const out = buildEscposJob({ canvas: canvasFrom(["#.......", "........"]) });
+    eq(hex(out), `${HEADER} 1d 76 30 00 01 00 02 00 80 00`);
+});
+test("GS v 0 寬高為小端：bytesPerLine 與 height 各 2 bytes", () => {
+    const out = buildEscposJob({ canvas: canvasFrom(Array.from({ length: 300 }, () => ".".repeat(576))) });
+    eq(hex(out.subarray(9, 17)), "1d 76 30 00 48 00 2c 01"); // 72 bytes、300 = 0x012c
+    eq(out.length, 17 + 72 * 300);
+});
+test("走紙 ESC d n、切紙 GS V 1 接在 raster 之後", () => {
+    const out = buildEscposJob(one(), { feedLines: 4, cutPaper: true });
+    eq(hex(out.subarray(-7)), "80 1b 64 04 1d 56 01");
+});
+test("feedLines 0 不送走紙；cutPaper false 不送切紙", () => {
+    const out = buildEscposJob(one(), { feedLines: 0, cutPaper: false });
+    eq(out.length, 9 + 8 + 1);
+    eq(hex(out.subarray(-1)), "80");
+});
+test("feedLines 超過 255 夾到 255、小數四捨五入", () => {
+    eq(hex(buildEscposJob(one(), { feedLines: 999 }).subarray(-3)), "1b 64 ff");
+    eq(hex(buildEscposJob(one(), { feedLines: 2.6 }).subarray(-3)), "1b 64 03");
+});
+test("只切紙不走紙", () => {
+    eq(hex(buildEscposJob(one(), { cutPaper: true }).subarray(-4)), "80 1d 56 01");
+});
+test("批次多張：每張都是獨立完整工作（各自 ESC @ 開頭、各自切紙）", () => {
+    const opts = { feedLines: 4, cutPaper: true };
+    const jobs = [["#......."], ["........", "#......#"], ["########"]].map((rows) => buildEscposJob({ canvas: canvasFrom(rows) }, opts));
+    for (const j of jobs) {
+        eq(hex(j.subarray(0, 9)), HEADER);
+        eq(hex(j.subarray(-3)), "1d 56 01");
+    }
+    eq(jobs.map((j) => j[15]), [1, 2, 1]); // yL：各張自己的高度，沒有互相污染
+});
+test("尺寸超出 0xffff 丟錯", () => {
+    const c = document.createElement("canvas");
+    c.width = 8; c.height = 65536;
+    let msg = "";
+    try { buildEscposJob({ canvas: c }); } catch (e) { msg = e.message; }
+    assert(msg.includes("超過"), "應丟尺寸錯誤：" + msg);
+});
+
+// ---- 置中與補白 ----
+test("centerCanvasOnWidth：置中（左右各 floor(slack/2)）", () => {
+    const out = centerCanvasOnWidth(canvasFrom(["####"]), 10);
+    eq(out.width, 10);
+    eq(blackCols(out), [3, 4, 5, 6]);
+});
+test("centerCanvasOnWidth：奇數 slack 多的一點在右側", () => {
+    eq(blackCols(centerCanvasOnWidth(canvasFrom(["####"]), 9)), [2, 3, 4, 5]);
+});
+test("centerCanvasOnWidth：來源已達目標寬度就原樣回傳", () => {
+    const c = canvasFrom(["####"]);
+    assert(centerCanvasOnWidth(c, 4) === c);
+    assert(centerCanvasOnWidth(c, 3) === c);
+    assert(centerCanvasOnWidth(c, null) === c);
+    assert(centerCanvasOnWidth(c, 0) === c);
+});
+test("centerCanvasOnWidth：左補白＝置中位置再右移 padLeft，高度不變", () => {
+    const out = centerCanvasOnWidth(canvasFrom(["####", "####"]), 20, 3, 0);
+    eq([out.width, out.height], [20, 2]);
+    eq(blackCols(out), [9, 10, 11, 12]); // slack=13 → 6，+3
+});
+test("centerCanvasOnWidth：右補白讓置中位置左移", () => {
+    eq(blackCols(centerCanvasOnWidth(canvasFrom(["####"]), 20, 0, 4)), [6, 7, 8, 9]); // slack=12 → 6，不加 padLeft
+});
+test("centerCanvasOnWidth：高度 0 的 canvas 不崩潰", () => {
+    const c = document.createElement("canvas");
+    c.width = 4; c.height = 0;
+    eq(centerCanvasOnWidth(c, 10).width, 10);
+});
+test("buildEscposJob 帶 targetWidthDots：raster 寬度＝列印頭寬度", () => {
+    const out = buildEscposJob({ canvas: canvasFrom(Array.from({ length: 2 }, () => ".".repeat(420))) }, { targetWidthDots: 576 });
+    eq(hex(out.subarray(9, 17)), "1d 76 30 00 48 00 02 00");
+});
+
+// ---- 邊距校正 ----
+const T82 = getPrinterProfile("epson-tm-t82ii");
+const DPI = T82.dpi.x;
+test("marginPadDots：左 2／右 5（80mm 不對稱）→ 左側補 24 點、右 0", () => {
+    eq(marginPadDots({ leftMm: 2, rightMm: 5 }, DPI), { left: 24, right: 0 }); // 3/25.4*203 = 23.97
+});
+test("marginPadDots：左 5／右 2 → 補右側", () => {
+    eq(marginPadDots({ leftMm: 5, rightMm: 2 }, DPI), { left: 0, right: 24 });
+});
+test("marginPadDots：左右相等 → 不補", () => {
+    eq(marginPadDots({ leftMm: 3, rightMm: 3 }, DPI), { left: 0, right: 0 });
+});
+test("marginPadDots：只補一側（不會兩側同時有值）", () => {
+    for (const [l, r] of [[1, 9], [9, 1], [0.1, 20], [20, 0.1], [4.4, 4.5]]) {
+        const p = marginPadDots({ leftMm: l, rightMm: r }, DPI);
+        assert(p.left === 0 || p.right === 0, `${l}/${r}`);
+    }
+});
+test("sanitizeMarginCalibration：取到 0.1mm、超過 20 夾到 20", () => {
+    eq(sanitizeMarginCalibration({ "80mm": { leftMm: 2.04, rightMm: 99 } }), { "80mm": { leftMm: 2, rightMm: MARGIN_MM_MAX } });
+});
+test("sanitizeMarginCalibration：缺值、負值、0、NaN、非數字整筆丟掉", () => {
+    const bad = {
+        a: { leftMm: 2 }, b: { rightMm: 2 }, c: { leftMm: -1, rightMm: 2 }, d: { leftMm: 0, rightMm: 2 },
+        e: { leftMm: "x", rightMm: 2 }, f: null, g: 5, h: { leftMm: NaN, rightMm: 1 }, i: { leftMm: Infinity, rightMm: 1 },
+    };
+    eq(sanitizeMarginCalibration(bad), {});
+});
+test("sanitizeMarginCalibration：null／undefined／字串回空物件", () => {
+    eq(sanitizeMarginCalibration(null), {});
+    eq(sanitizeMarginCalibration(undefined), {});
+    eq(sanitizeMarginCalibration("abc"), {});
+});
+test("withMarginCalibration：80mm 左 2／右 5 → 可列印 576-24=552，pad 左 24", () => {
+    const p = withMarginCalibration(T82, { "80mm": { leftMm: 2, rightMm: 5 } });
+    const paper = p.paperWidths.find((w) => w.id === "80mm");
+    eq(paper.printableWidthDots, 552);
+    eq(getMarginPad(p, "80mm"), { left: 24, right: 0 });
+    assert(Math.abs(paper.printableWidthMm - (552 / DPI) * 25.4) < 1e-9);
+});
+test("withMarginCalibration：58mm 只影響自己、80mm 不動", () => {
+    const p = withMarginCalibration(T82, { "58mm": { leftMm: 6, rightMm: 1 } });
+    eq(p.paperWidths.find((w) => w.id === "80mm").printableWidthDots, 576);
+    eq(getMarginPad(p, "80mm"), { left: 0, right: 0 });
+    eq(getMarginPad(p, "58mm"), { left: 0, right: 40 }); // 5/25.4*203 = 39.96
+    eq(p.paperWidths.find((w) => w.id === "58mm").printableWidthDots, 380);
+});
+test("withMarginCalibration：不改動原 profile", () => {
+    withMarginCalibration(T82, { "80mm": { leftMm: 2, rightMm: 5 } });
+    eq(T82.paperWidths.find((w) => w.id === "80mm").printableWidthDots, 576);
+    assert(!("marginPadDots" in T82.paperWidths[0]));
+});
+test("withMarginCalibration：沒有有效校正原樣回傳同一物件", () => {
+    assert(withMarginCalibration(T82, {}) === T82);
+    assert(withMarginCalibration(T82, undefined) === T82);
+    assert(withMarginCalibration(T82, { "80mm": { leftMm: -3, rightMm: 5 } }) === T82);
+});
+test("withMarginCalibration：極端值（0.1／20）補白夾在可列印點數下限內", () => {
+    const p = withMarginCalibration(T82, { "58mm": { leftMm: 0.1, rightMm: 20 } });
+    const paper = p.paperWidths.find((w) => w.id === "58mm");
+    assert(paper.printableWidthDots >= PRINTABLE_DOTS_MIN, "低於下限");
+    const pad = getMarginPad(p, "58mm");
+    assert(pad.left > 0 && pad.right === 0);
+});
+test("withMarginCalibration：不認得的紙寬 id 忽略", () => {
+    const p = withMarginCalibration(T82, { "99mm": { leftMm: 1, rightMm: 9 } });
+    eq(p.paperWidths.map((w) => w.printableWidthDots), [576, 420]);
+});
+test("getMarginPad：沒校正／未知紙寬回 0", () => {
+    eq(getMarginPad(T82, "80mm"), { left: 0, right: 0 });
+    eq(getMarginPad(T82, "nope"), { left: 0, right: 0 });
+});
+test("getPrintHeadWidthDots：校正前 576；校正後的 profile 會變窄（呼叫端須用 base）", () => {
+    eq(getPrintHeadWidthDots(T82), 576);
+    eq(getPrintHeadWidthDots(withMarginCalibration(T82, { "80mm": { leftMm: 2, rightMm: 5 } })), 552);
+});
+
+// ---- 端到端：校正後的位置 ----
+function edgeCanvas(width) { return canvasFrom(["#" + ".".repeat(width - 2) + "#"]); }
+test("端到端：80mm 左 2／右 5 → 內容右移補白，右緣不超出列印頭", () => {
+    const eff = withMarginCalibration(T82, { "80mm": { leftMm: 2, rightMm: 5 } });
+    const pad = getMarginPad(eff, "80mm");
+    const width = eff.paperWidths[0].printableWidthDots; // 552
+    const out = centerCanvasOnWidth(edgeCanvas(width), getPrintHeadWidthDots(T82), pad.left, pad.right);
+    eq(out.width, 576);
+    const cols = blackCols(out);
+    eq([cols[0], cols[cols.length - 1]], [24, 24 + width - 1]);
+});
+test("端到端：右側補白（左 5／右 2）→ 內容貼左、右側留白", () => {
+    const eff = withMarginCalibration(T82, { "80mm": { leftMm: 5, rightMm: 2 } });
+    const pad = getMarginPad(eff, "80mm");
+    const width = eff.paperWidths[0].printableWidthDots;
+    const cols = blackCols(centerCanvasOnWidth(edgeCanvas(width), 576, pad.left, pad.right));
+    eq([cols[0], cols[cols.length - 1]], [0, width - 1]);
+});
+test("端到端：58mm 無校正在 576 頭上置中", () => {
+    const cols = blackCols(centerCanvasOnWidth(edgeCanvas(420), 576, 0, 0));
+    eq([cols[0], cols[cols.length - 1]], [78, 497]);
+});
+
+// ---- runner ----
+const list = document.getElementById("list");
+let failed = 0;
+for (const { name, fn } of cases) {
+    const li = document.createElement("li");
+    try {
+        await fn();
+        li.className = "pass";
+        li.textContent = `✓ ${name}`;
+    } catch (e) {
+        failed++;
+        li.className = "fail";
+        li.textContent = `✗ ${name}`;
+        const pre = document.createElement("pre");
+        pre.textContent = e.message;
+        li.appendChild(pre);
+    }
+    list.appendChild(li);
+}
+document.title = `${failed ? "FAIL" : "PASS"} ${cases.length - failed}/${cases.length}`;
+document.getElementById("summary").textContent = document.title;
+</script>
+</body>
+</html>

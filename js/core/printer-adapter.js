@@ -67,12 +67,13 @@ function concatUint8Arrays(chunks) {
  * MSB 對應最左邊的點，bit=1 代表要打點（黑）。寬度不是 8 的倍數時，最後一 byte
  * 多出來的 bit 補 0（白），印表機不會多印超出範圍的點。
  */
-function canvasToEscposRaster(canvas) {
+export function canvasToEscposRaster(canvas) {
     const ctx = canvas.getContext("2d");
     const { width, height } = canvas;
-    const { data } = ctx.getImageData(0, 0, width, height);
     const bytesPerLine = Math.ceil(width / 8);
     const raster = new Uint8Array(bytesPerLine * height);
+    if (!width || !height) return { bytesPerLine, height, raster }; // getImageData 不接受 0 尺寸
+    const { data } = ctx.getImageData(0, 0, width, height);
     for (let y = 0; y < height; y++) {
         const rowOffset = y * bytesPerLine;
         for (let x = 0; x < width; x++) {
@@ -92,7 +93,7 @@ function canvasToEscposRaster(canvas) {
  * padLeftDots／padRightDots 是左右邊距校正的補白（見 printer-profiles.js withMarginCalibration）：
  * canvas 已經扣掉補白，位置＝原本的置中位置再往右 padLeftDots；沒校正時兩者為 0，跟單純置中一樣。
  */
-function centerCanvasOnWidth(canvas, targetWidthDots, padLeftDots = 0, padRightDots = 0) {
+export function centerCanvasOnWidth(canvas, targetWidthDots, padLeftDots = 0, padRightDots = 0) {
     if (!targetWidthDots || canvas.width >= targetWidthDots) return canvas;
     const padded = document.createElement("canvas");
     padded.width = targetWidthDots;
@@ -101,7 +102,8 @@ function centerCanvasOnWidth(canvas, targetWidthDots, padLeftDots = 0, padRightD
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, padded.width, padded.height);
     const slack = targetWidthDots - (canvas.width + padLeftDots + padRightDots);
-    ctx.drawImage(canvas, Math.max(0, Math.floor(slack / 2)) + padLeftDots, 0);
+    // 寬或高為 0 的 canvas 傳給 drawImage 會丟例外，空內容就只留白底
+    if (canvas.width > 0 && canvas.height > 0) ctx.drawImage(canvas, Math.max(0, Math.floor(slack / 2)) + padLeftDots, 0);
     return padded;
 }
 
@@ -112,7 +114,7 @@ function centerCanvasOnWidth(canvas, targetWidthDots, padLeftDots = 0, padRightD
  *   targetWidthDots：印表機列印頭最大寬度（見 printer-profiles.js getPrintHeadWidthDots），
  *   有值時會把 canvas 置中貼到這個寬度再組 raster，見 centerCanvasOnWidth。
  */
-function buildEscposJob(renderResult, { feedLines = 0, cutPaper = false, targetWidthDots = null, padLeftDots = 0, padRightDots = 0 } = {}) {
+export function buildEscposJob(renderResult, { feedLines = 0, cutPaper = false, targetWidthDots = null, padLeftDots = 0, padRightDots = 0 } = {}) {
     const canvas = centerCanvasOnWidth(renderResult.canvas, targetWidthDots, padLeftDots, padRightDots);
     const { bytesPerLine, height, raster } = canvasToEscposRaster(canvas);
     if (bytesPerLine > 0xffff || height > 0xffff) {
