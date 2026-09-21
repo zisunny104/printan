@@ -1,4 +1,5 @@
 import { renderTemplate, renderBatch } from "../core/renderer.js";
+import { csvToRecords } from "../core/csv.js";
 import { exportToPdf } from "../core/pdf-export.js";
 import { safeGetItem, safeSetItem } from "../core/storage.js";
 import { BATCH_PANEL_EXPANDED_KEY, els, state } from "./context.js";
@@ -22,8 +23,10 @@ export async function exportSinglePdf() {
 // 匯出跟預覽都要吃同一份批次資料，剖析／驗證邏輯只寫這一處，避免兩邊行為兜不起來
 function parseBatchData() {
     try {
-        const dataArray = JSON.parse(els["batch-data"].value || "[]");
-        if (!Array.isArray(dataArray) || dataArray.length === 0) throw new Error("請提供至少一筆資料的 JSON 陣列");
+        const text = els["batch-data"].value.trim();
+        // 不是 JSON（不以 [ 或 { 開頭）就當 CSV：第一列欄位名稱、之後每列一筆
+        const dataArray = /^[[{]/.test(text) || !text ? JSON.parse(text || "[]") : csvToRecords(text);
+        if (!Array.isArray(dataArray) || dataArray.length === 0) throw new Error("請提供至少一筆資料（JSON 陣列或 CSV）");
         return dataArray;
     } catch (err) {
         alert(`批次資料格式錯誤：${err.message}`);

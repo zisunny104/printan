@@ -26,6 +26,7 @@ import {
 } from "../js/core/printer-profiles.js";
 
 import { composeResults } from "../js/core/compose.js";
+import { csvToRecords } from "../js/core/csv.js";
 
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
@@ -344,6 +345,19 @@ test("合併：空陣列丟錯；單一結果沿用 truncated", () => {
     assert(threw);
     eq(composeResults(res(["#"])).truncated, false);
     eq(composeResults([{ ...res(["#"]), truncated: true }]).truncated, true);
+});
+
+// ---- CSV 批次資料 ----
+test("CSV：首列欄名、每列一筆；BOM、CRLF、尾端空行", () => {
+    eq(csvToRecords("﻿name,qty\r\n蘋果,3\r\n香蕉,5\r\n\r\n"), [{ name: "蘋果", qty: "3" }, { name: "香蕉", qty: "5" }]);
+});
+test("CSV：雙引號欄位可含逗號、換行與兩個引號跳脫", () => {
+    eq(csvToRecords('a,b\n"x,y","第一行\n第二行"\n"say ""hi""",z'), [{ a: "x,y", b: "第一行\n第二行" }, { a: 'say "hi"', b: "z" }]);
+});
+test("CSV：欄位不足補空字串、多的略過、空欄名略過；只有表頭或空白回 []", () => {
+    eq(csvToRecords("a,b,,c\n1\n1,2,3,4,5"), [{ a: "1", b: "", c: "" }, { a: "1", b: "2", c: "4" }]);
+    eq(csvToRecords("a,b"), []);
+    eq(csvToRecords("  \n"), []);
 });
 
 let failed = 0;
