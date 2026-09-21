@@ -125,7 +125,7 @@ body {
         flex: none;
     }
 
-    .editor-list > .ts-box,
+    .editor-list .ts-box,
     .editor-dock > .ts-box:has(> #inspector) {
         flex: 1 0 auto;
     }
@@ -1403,4 +1403,12 @@ body {
         left: auto !important;
         right: .625rem !important;
     }
+}
+
+/* 大綱沒有元素時的一行提示（純 CSS，不動 JS 渲染） */
+.outline-list:not(:has(.outline-row))::before {
+    content: "尚無元素，按 ＋ 新增";
+    padding: .35rem .5rem;
+    color: var(--ts-gray-500, #888);
+    font-size: .875rem;
 }
