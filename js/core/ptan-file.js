@@ -2,6 +2,8 @@
 import { serializeProject, loadProject } from "./schema.js";
 import { buildEmbeddedFonts, registerEmbeddedFonts } from "./web-fonts.js";
 
+const MAX_PTAN_BYTES = 128 * 1024 * 1024; // 超過就不讀，避免一次把整個檔案吃進記憶體
+
 /**
  * 觸發瀏覽器下載 .ptan 檔案。檔名會自動補上 .ptan 副檔名。
  * embedFonts：把用到的開源網頁字體（限用到字元的分片）一併寫進檔案；回傳沒能內嵌的字體名稱。
@@ -30,6 +32,7 @@ export async function downloadPtan(project, fileName = "untitled", { embedFonts 
 /** 讀取使用者選擇的 .ptan 檔（File 物件），回傳 { ok, project } 或 { ok:false, error }。 */
 export function readPtanFile(file) {
     return new Promise((resolve) => {
+        if (file.size > MAX_PTAN_BYTES) return resolve({ ok: false, error: "檔案太大，無法開啟" });
         const reader = new FileReader();
         reader.onload = async () => {
             // 例外若沒接住，這個 Promise 永遠不 resolve，匯入會卡住

@@ -349,12 +349,18 @@ function bindToolbar() {
 // inspector 的「更換圖片」都借用同一個），用這個變數帶「這一次選檔要怎麼處理」，避免像過去
 // 那樣在同一個 input 上疊加第二個 change 監聽器（會兩邊都觸發，多插入一個重複元素）。
 
+const SAFE_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]); // 與匯入 .ptan 的白名單一致
+
 async function handleImageFileSelected(file) {
     let converted;
     try {
         converted = await convertHeicIfNeeded(file);
     } catch (err) {
         alert(`HEIC 轉換失敗：${err.message}`);
+        return null;
+    }
+    if (!SAFE_IMAGE_TYPES.has(converted.type)) {
+        alert("只支援 PNG、JPEG、GIF、WebP 圖片");
         return null;
     }
     const dataUrl = await fileToDataUrl(converted);

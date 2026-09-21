@@ -194,12 +194,16 @@ export async function buildEmbeddedFonts(elements, defaultFamily) {
     return { fonts, failed };
 }
 
+// 匯入檔內嵌字體的上限（分片字體一片通常不到 200KB）
+const MAX_EMBEDDED_FONTS = 64;
+const MAX_EMBEDDED_FONT_CHARS = 6_000_000;
+
 /** 匯入用：把 .ptan 內嵌的字體註冊成 FontFace。只接受已知的網頁字體家族，回傳成功註冊的片數。 */
 export async function registerEmbeddedFonts(list) {
     if (!Array.isArray(list)) return 0;
     let count = 0;
-    for (const item of list) {
-        if (!item || !WEB_FONTS.some((f) => f.family === item.family) || typeof item.data !== "string") continue;
+    for (const item of list.slice(0, MAX_EMBEDDED_FONTS)) {
+        if (!item || typeof item.data !== "string" || item.data.length > MAX_EMBEDDED_FONT_CHARS || !WEB_FONTS.some((f) => f.family === item.family)) continue;
         const weight = item.weight === 700 ? 700 : 400;
         try {
             const bytes = Uint8Array.from(atob(item.data), (c) => c.charCodeAt(0));
