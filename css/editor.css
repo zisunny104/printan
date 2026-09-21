@@ -673,22 +673,25 @@ body {
 }
 
 /* 不可印區：白底可列印區左右兩側印表機印不到的範圍（寬度由 JS 寫入 --paper-unprintable）。
-   視覺上與紙張同色、無任何標示；只保留 hover 提示（pointer-events 維持 auto） */
+   純白底（同紙張），只在靠可印區的內側邊緣畫 1px 虛線當邊界參考線，色與樣式同切刀安全線；hover 提示（pointer-events 維持 auto）保留 */
 .unprintable-zone {
     position: absolute;
     top: 0;
     bottom: 0;
     z-index: 0;
     width: var(--paper-unprintable, 0);
+    box-sizing: border-box;
     background: var(--paper-color);
 }
 
 .unprintable-zone.is-left {
     right: 100%;
+    border-right: 1px dashed rgba(120, 120, 120, .55);
 }
 
 .unprintable-zone.is-right {
     left: 100%;
+    border-left: 1px dashed rgba(120, 120, 120, .55);
 }
 
 .canvas-host {
