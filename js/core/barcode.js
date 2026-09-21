@@ -149,15 +149,14 @@ export function renderBarcodeErrorCanvas(message, widthDots) {
     canvas.width = width;
     canvas.height = lines.length * lineHeight + 16;
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#fff";
+    // 只出現在預覽（thermal 不畫），用螢光黃底＋紅框紅字，一眼就看得到哪個條碼壞了
+    ctx.fillStyle = "#fff200";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
-    ctx.setLineDash([]);
-    ctx.fillStyle = "#333";
-    ctx.font = font;
+    ctx.strokeStyle = "#e00000";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+    ctx.fillStyle = "#c00000";
+    ctx.font = `bold ${font}`;
     ctx.textBaseline = "top";
     lines.forEach((text, i) => ctx.fillText(text, 8, 8 + i * lineHeight));
     return canvas;
