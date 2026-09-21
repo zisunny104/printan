@@ -51,10 +51,7 @@
                     </div>
                     <div class="ts-divider"></div>
                     <div class="ts-content">
-                        <div class="ts-text is-label">列印設定</div>
-                        <div class="ts-text is-description is-small has-top-spaced-small">
-                            以下設定只在 USB／序列埠直連時套用，走系統列印對話框時不受影響。
-                        </div>
+                        <div class="ts-text is-label">列印設定<span class="info-icon" tabindex="0" role="img" aria-label="只在 USB／序列埠直連時套用，系統列印不受影響" data-tooltip="只在 USB／序列埠直連時套用，系統列印不受影響"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span></div>
                         <div class="has-top-spaced-small"></div>
                         <label class="ts-text is-label" for="pref-feed-lines">切紙前走紙行數</label>
                         <div class="ts-input is-small is-fluid has-top-spaced-small">
@@ -67,12 +64,7 @@
                             <div class="text">列印後自動切紙</div>
                         </label>
                         <div class="has-top-spaced"></div>
-                        <div class="ts-text is-label">可列印點數（依紙寬）</div>
-                        <div class="ts-text is-description is-small has-top-spaced-small">
-                            ESC/POS 讀不到印表機的可列印寬度，預設用內建規格的值；別牌印表機的點數可能不同
-                            （例如 58 mm 機常見 384 點），請依印表機規格書填寫（範圍 64–1024），留空＝使用預設。
-                            列印頭最大寬度取所有紙寬中最大的點數，列印內容會置中補白到這個寬度再送出。
-                        </div>
+                        <div class="ts-text is-label">可列印點數（依紙寬）<span class="info-icon" tabindex="0" role="img" aria-label="預設用內建規格；別牌印表機可能不同（58 mm 常見 384 點），依規格書填寫，範圍 64–1024，留空＝預設" data-tooltip="預設用內建規格；別牌印表機可能不同（58 mm 常見 384 點），依規格書填寫，範圍 64–1024，留空＝預設"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span></div>
                         <div class="has-top-spaced-small"></div>
                         <!-- 每個紙寬一列輸入框，由 renderPrintableDotsRows() 產生，見 editor.js -->
                         <div id="printer-dots-list"></div>
@@ -120,10 +112,7 @@
                          需要 USB 或序列埠其中一個已連接，走系統列印對話框時無法使用。
                          忘記已授權裝置：清掉瀏覽器記住的授權，換印表機或想重新選擇裝置時用。 -->
                     <div class="ts-content">
-                        <div class="ts-text is-label">測試與診斷</div>
-                        <div class="ts-text is-description has-top-spaced-small">
-                            測試列印與查詢狀態需要先連接印表機才能使用。
-                        </div>
+                        <div class="ts-text is-label">測試與診斷<span class="info-icon" tabindex="0" role="img" aria-label="測試列印與查詢狀態需要先連接印表機" data-tooltip="測試列印與查詢狀態需要先連接印表機"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span></div>
                         <div class="has-top-spaced-small"></div>
                         <div class="ts-wrap">
                             <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-test-print">
