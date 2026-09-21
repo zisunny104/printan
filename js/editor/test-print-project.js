@@ -182,13 +182,13 @@ const menuItems = (connectionItem) => [
     ["Hello World", 1, 1, "第一行輸出，成功了"],
 ];
 
-// 連線方式：備註寫這次的實際連線，單價取最像「埠」的數字——USB 用廠商 ID（十進位）、序列埠用鮑率；
+// 連線方式：備註只寫這次的實際連線；單價取最像「埠」的數字（USB 用廠商 ID 十進位、序列埠用鮑率），不加說明；
 // 其他連線（或取不到數字）就是 0，連線資訊為空時備註退回固定說明，不印 undefined
 function connectionItem({ connection, vendorId, baudRate }) {
     const conn = String(connection ?? "").trim();
     const num = (n) => (Number.isFinite(Number(n)) && Number(n) > 0 ? Math.round(Number(n)) : 0);
-    if (/USB/i.test(conn)) return ["連線方式", 1, num(vendorId), "USB（單價＝廠商 ID）"];
-    if (conn.includes("序列")) return ["連線方式", 1, num(baudRate), `序列埠（單價＝鮑率）`];
+    if (/USB/i.test(conn)) return ["連線方式", 1, num(vendorId), "USB"];
+    if (conn.includes("序列")) return ["連線方式", 1, num(baudRate), "序列埠"];
     return ["連線方式", 1, 0, conn || "尚未指定連線"];
 }
 const DISCOUNT = ["優惠　一點點……耐心", -15];
