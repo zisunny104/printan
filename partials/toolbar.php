@@ -22,19 +22,6 @@
                         <span class="ts-icon is-chevron-down-icon dropdown-caret" aria-hidden="true"></span>
                     </button>
                 </div>
-                <!-- 只在 <768px：版面結構／元素設定改成抽屜，用這兩顆開關（aria-expanded 由 JS 同步） -->
-                <div class="ts-buttons tablet+:has-hidden" id="mobile-drawer-buttons">
-                    <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-outline-drawer"
-                        aria-haspopup="dialog" aria-controls="outlineSidebar" aria-expanded="false">
-                        <span class="ts-icon is-list-icon" aria-hidden="true"></span>
-                        版面結構
-                    </button>
-                    <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-inspector-drawer"
-                        aria-controls="inspectorDock" aria-expanded="false">
-                        <span class="ts-icon is-sliders-icon" aria-hidden="true"></span>
-                        元素設定
-                    </button>
-                </div>
                 <span class="toolbar-spacer"></span>
                 <!-- 印表機連線、走紙／切紙、可列印點數、測試列印都歸在同一顆「列印設定」按鈕底下同一個 modal 裡。
                      紙寬（80/58mm）編輯時常常切換，維持獨立的快速開關，不塞進 modal

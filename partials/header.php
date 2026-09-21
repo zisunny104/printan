@@ -19,4 +19,4 @@
                 </div>
             </div>
 
-            <div class="ts-divider has-vertically-spaced"></div>
+            <div class="ts-divider has-vertically-spaced-small tablet+:has-vertically-spaced"></div>

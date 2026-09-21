@@ -44,6 +44,8 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
 
                 <?php require __DIR__ . '/partials/inspector.php'; ?>
             </div>
+
+            <?php require __DIR__ . '/partials/panel-buttons.php'; ?>
         </div>
     </main>
 

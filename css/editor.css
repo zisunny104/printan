@@ -164,6 +164,14 @@ body {
         color: var(--ts-gray-400, #ccc);
         touch-action: none;
         border-radius: 4px;
+        position: relative;
+    }
+
+    /* 命中區加寬到 ≥24px（可見寬度不變）：兩側各多 5px，不會蓋到相鄰欄的內容操作 */
+    .col-resizer::before {
+        content: "";
+        position: absolute;
+        inset: 0 -5px;
     }
 
     .col-resizer:hover,
@@ -1295,7 +1303,7 @@ body {
 
     #paper-width-tabs {
         display: flex;
-        flex: 1 0 100%;
+        flex: 1 1 6.5rem;
     }
 
     #paper-width-tabs .item {
@@ -1310,15 +1318,16 @@ body {
 
     #paper-width-tabs .item .text {
         flex: 1;
+        padding-inline: .25rem;
         text-align: center;
     }
 
     #btn-printer-settings {
-        flex: 1 1 0;
+        flex: 1 1 auto;
     }
 
     #btn-print {
-        flex: 1.2 1 0;
+        flex: 1 1 auto;
     }
 }
 
@@ -1452,5 +1461,22 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
 @media (prefers-reduced-motion: reduce) {
     .dropdown-caret {
         transition: none;
+    }
+}
+
+/* 小螢幕面板開關：畫布下方、頁尾之上的文件流內兩顆等寬按鈕（不固定在視窗底部）。
+   抽屜／面板本身才是疊層；元素設定面板開啟時 .main-content 的 padding-bottom（--printan-sheet-height）讓這排仍可捲到。 */
+@media (width < 768px) {
+    .mobile-panel-bar {
+        margin-top: .75rem;
+    }
+
+    .mobile-panel-bar > .ts-buttons {
+        display: flex;
+    }
+
+    .mobile-panel-bar .ts-button {
+        flex: 1 1 0;
+        min-height: 2.5rem;
     }
 }
