@@ -32,14 +32,19 @@ export function readPtanFile(file) {
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = async () => {
-            const result = loadProject(reader.result);
-            if (result.ok && result.project.embeddedFonts) {
-                // 字體資料只用來註冊 FontFace，不留在專案裡（避免草稿與下次匯出膨脹）
-                const { embeddedFonts, ...rest } = result.project;
-                await registerEmbeddedFonts(embeddedFonts);
-                result.project = rest;
+            // 例外若沒接住，這個 Promise 永遠不 resolve，匯入會卡住
+            try {
+                const result = loadProject(reader.result);
+                if (result.ok && result.project.embeddedFonts) {
+                    // 字體資料只用來註冊 FontFace，不留在專案裡（避免草稿與下次匯出膨脹）
+                    const { embeddedFonts, ...rest } = result.project;
+                    await registerEmbeddedFonts(embeddedFonts);
+                    result.project = rest;
+                }
+                resolve(result);
+            } catch {
+                resolve({ ok: false, error: "檔案內容有誤，無法開啟" });
             }
-            resolve(result);
         };
         reader.onerror = () => resolve({ ok: false, error: "讀取檔案失敗" });
         reader.readAsText(file);

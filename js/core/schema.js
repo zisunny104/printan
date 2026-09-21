@@ -66,9 +66,13 @@ export function loadProject(raw) {
     if (typeof data.version !== "number") {
         return { ok: false, error: "缺少版本號" };
     }
-    const migrated = migrate(data);
-    if (!migrated.ok) return migrated;
-    return { ok: true, project: migrated.project };
+    try {
+        const migrated = migrate(data);
+        if (!migrated.ok) return migrated;
+        return { ok: true, project: migrated.project };
+    } catch {
+        return { ok: false, error: "檔案內容有誤，無法開啟" };
+    }
 }
 
 /**
@@ -93,16 +97,30 @@ function migrate(project) {
     return { ok: true, project: p };
 }
 
-/** 文字元素舊版扁平 text 欄位 → runs 陣列（見 document-model.js normalizeTextElement）。 */
+/**
+ * 整理元素樹：文字元素舊版扁平 text 欄位 → runs 陣列（見 document-model.js normalizeTextElement）；
+ * 壞檔防護：丟掉非物件／沒有 type 的節點，row 的 columns／ratio 與 group 的 children 缺了或型別不對就補預設，
+ * 讓後面的排版、walkElements、序列化不會因為壞資料丟例外。
+ */
 function migrateElements(elements) {
-    return elements.map((el) => {
-        if (el.type === "text") return normalizeTextElement(el);
-        if (el.type === "row" && Array.isArray(el.columns)) {
-            return { ...el, columns: el.columns.map(migrateElements) };
-        }
-        if (el.type === "group") return { ...el, children: migrateElements(Array.isArray(el.children) ? el.children : []) };
-        return el;
-    });
+    if (!Array.isArray(elements)) return [];
+    return elements
+        .filter((el) => el && typeof el === "object" && !Array.isArray(el) && typeof el.type === "string")
+        .map((el) => {
+            if (el.type === "text") return normalizeTextElement(el);
+            if (el.type === "row") return normalizeRow(el);
+            if (el.type === "group") return { ...el, children: migrateElements(el.children) };
+            return el;
+        });
+}
+
+function normalizeRow(el) {
+    const columns = (Array.isArray(el.columns) ? el.columns : []).map(migrateElements);
+    const ratio = Array.isArray(el.ratio) ? el.ratio.map((r) => (Number.isFinite(r) && r > 0 ? r : 1)) : [];
+    const count = Math.max(ratio.length, columns.length, 1);
+    while (ratio.length < count) ratio.push(1);
+    while (columns.length < count) columns.push([]);
+    return { ...el, ratio, columns };
 }
 
 export function serializeProject(project) {

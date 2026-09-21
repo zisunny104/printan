@@ -166,22 +166,22 @@ test("readPtanFile：內容是合法 .ptan 但夾雜中文、emoji 與換行也�
 });
 
 // ---- 已知的 core 問題（回報給 site-e8／b3，此頁不修 core）----
-known("elements 陣列裡有 null：loadProject 丟 TypeError（應回傳錯誤或略過該元素）", () => {
+test("elements 陣列裡有 null：loadProject 丟 TypeError（應回傳錯誤或略過該元素）", () => {
     survives(withElements([null]));
 });
-known("row 的某一欄是 null／非陣列：loadProject 丟 TypeError", () => {
+test("row 的某一欄是 null／非陣列：loadProject 丟 TypeError", () => {
     survives(withElements([{ type: "row", ratio: [1, 1], columns: [5, null] }]));
 });
-known("row 的欄內元素是 null：loadProject 丟 TypeError", () => {
+test("row 的欄內元素是 null：loadProject 丟 TypeError", () => {
     survives(withElements([{ type: "row", ratio: [1], columns: [[null]] }]));
 });
-known("group 的 children 裡有 null：loadProject 丟 TypeError", () => {
+test("group 的 children 裡有 null：loadProject 丟 TypeError", () => {
     survives(withElements([{ type: "group", children: [null] }]));
 });
-known("row 沒有 columns：loadProject 成功，但之後 walkElements／serializeProject 丟 TypeError", () => {
+test("row 沒有 columns：loadProject 成功，但之後 walkElements／serializeProject 丟 TypeError", () => {
     survives(withElements([{ type: "row", id: "r" }]));
 });
-known("readPtanFile：含 null 元素的檔案 → onload 內例外，Promise 永遠不 resolve（匯入按鈕看起來卡住）", async () => {
+test("readPtanFile：含 null 元素的檔案 → onload 內例外，Promise 永遠不 resolve（匯入按鈕看起來卡住）", async () => {
     const out = await withTimeout(readPtanFile(file(JSON.stringify(withElements([null])))), 1500);
     assert(!out.ok || out.project, "應回傳結果");
 });

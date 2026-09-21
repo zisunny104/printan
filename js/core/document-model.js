@@ -354,9 +354,9 @@ export function extractPlaceholders(elements) {
 export function walkElements(elements, visitor) {
     for (const el of elements) {
         visitor(el);
-        if (el.type === "row") {
-            for (const col of el.columns) walkElements(col, visitor);
+        if (el.type === "row" && Array.isArray(el.columns)) {
+            for (const col of el.columns) walkElements(Array.isArray(col) ? col : [], visitor);
         }
-        if (el.type === "group") walkElements(el.children, visitor);
+        if (el.type === "group" && Array.isArray(el.children)) walkElements(el.children, visitor);
     }
 }
