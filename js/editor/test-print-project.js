@@ -72,9 +72,11 @@ function buildEndBar(widthDots) {
     return canvas.toDataURL("image/png");
 }
 
+// 內文字級：buildReceiptElements 依紙寬設定（58mm 用小一級，品項名稱才不會折行）
+let bodySize = 28;
 const text = (runs, overrides = {}) => createTextElement({
     runs: (Array.isArray(runs) ? runs : [runs]).map((r) => createTextRun(typeof r === "string" ? { text: r } : r)),
-    fontSize: 24,
+    fontSize: bodySize,
     ...overrides,
 });
 const line = (left, right, overrides = {}) => {
@@ -95,11 +97,16 @@ function itemRow(name, qty, amount, style) {
 
 // 內容是這個專案自己的「收據」：品項是設計巧思與操作邏輯，金額由程式加總；
 // 底線／刪除線／斜體／粗體各排一列，順便驗證文字樣式。
-const PROJECT_NAME = "Printan 單仔";
 const PROJECT_URL = "https://toka.dev/koilisu/printan";
 const FALLBACK_MODEL = "TM-T82II";
 
-function buildReceiptElements(info, model, stripUrl, endBarUrl) {
+function buildReceiptElements(info, model, stripUrl, endBarUrl, widthDots) {
+    // 品牌名／標題字級依紙寬取值：80mm 特大，58mm（約 420 點）退一級才放得下
+    const wide = widthDots >= 500;
+    const brandSize = wide ? 68 : 48;
+    const titleSize = wide ? 44 : 32;
+    const totalSize = wide ? 40 : 32;
+    bodySize = wide ? 28 : 24;
     // [名稱, 數量, 單價, 樣式]；金額 = 單價 × 數量，小計／合計由程式加總，不寫死
     const lines = [
         ["復原樹　不丟歷史", 1, 120, { underline: true }],
@@ -125,15 +132,15 @@ function buildReceiptElements(info, model, stripUrl, endBarUrl) {
     });
 
     return [
-        text(PROJECT_NAME, { fontSize: 32, bold: true, align: "center" }),
-        text("所見即所印的收據設計工具", { align: "center" }),
+        text([{ text: "Printan ", fontSize: brandSize }, { text: "單仔", fontSize: brandSize + 12 }], { bold: true, align: "center" }),
+        text("所見即所印的收據設計工具", { fontSize: titleSize, align: "center" }),
         line(new Date().toLocaleString("zh-TW", { hour12: false, dateStyle: "short", timeStyle: "short" }), "#0001"),
         createDividerElement({ style: "dashed" }),
         ...items,
         createDividerElement(),
         line("小計", money(subtotal)),
         line("優惠　一點點……耐心", money(DISCOUNT).replace("$-", "-$")),
-        line({ text: "合計", bold: true, fontSize: 32 }, { text: money(total), bold: true, fontSize: 32 }),
+        line({ text: "合計", bold: true, fontSize: totalSize }, { text: money(total), bold: true, fontSize: totalSize }),
         createSpacerElement({ heightDots: 8 }),
         text("　已付款 / TEST　", { align: "center", inverse: true }),
         text([{ text: "會員 " }, { text: " ★ VIP ★ ", inverse: true }, { text: " 優惠" }], { align: "center" }),
@@ -141,7 +148,7 @@ function buildReceiptElements(info, model, stripUrl, endBarUrl) {
         createSpacerElement({ heightDots: 8 }),
         createBarcodeElement({ format: "code128", value: model, heightDots: 64, showText: true }),
         createBarcodeElement({ format: "qrcode", value: PROJECT_URL, heightDots: 174 }),
-        text("謝謝光臨", { fontSize: 32, align: "center" }),
+        text("謝謝光臨", { fontSize: titleSize, align: "center" }),
         createDividerElement({ style: "dotted" }),
         ...infoRows,
         createSpacerElement({ heightDots: 8 }),
@@ -183,6 +190,7 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
         model,
         buildCalibratedStrip(paper.printableWidthDots, dpi),
         buildEndBar(paper.printableWidthDots),
+        paper.printableWidthDots,
     );
     const body = await renderTemplate(project, {}, { mode: "thermal", profile });
 
