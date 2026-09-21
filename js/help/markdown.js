@@ -6,6 +6,7 @@
 
 const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ESCAPES[c]);
+const ENTITY_CHARS = { quot: '"', "#39": "'", amp: "&" };
 const HOLD = "\u0000"; // 暫存已轉好的 HTML 用的占位符；輸入裡的 NUL 會先移除，來源文字無法偽造
 
 function safeHref(url) {
@@ -22,9 +23,9 @@ export function renderInline(raw) {
     let s = escapeHtml(raw.replaceAll(HOLD, ""));
     s = s.replace(/`([^`]+)`/g, (_, code) => hold(`<code>${code}</code>`));
     s = s.replace(/\[\[([^\]]+)\]\]/g, (_, key) => hold(`<kbd>${key}</kbd>`));
-    // 網址在跳脫後 & 已變成 &amp;，還原後再檢查，輸出時再跳脫一次
+    // 網址在跳脫後 & " ' 已變成實體，還原後再檢查，輸出時再跳脫一次（否則 &quot; 會被二次跳脫成 &amp;quot;）
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, url) => {
-        const href = safeHref(url.replace(/&amp;/g, "&"));
+        const href = safeHref(url.replace(/&(quot|#39|amp);/g, (_m, e) => ENTITY_CHARS[e]));
         if (!href) return label;
         const external = /^https?:/i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : "";
         return hold(`<a href="${escapeHtml(href)}"${external}>${label}</a>`);

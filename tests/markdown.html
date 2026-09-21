@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Printan tests：說明書 Markdown 轉換</title>
+<style>
+body { font: 14px/1.6 system-ui, sans-serif; margin: 16px; }
+li { list-style: none; }
+.pass { color: #1a7f37; }
+.fail { color: #cf222e; }
+pre { margin: 0 0 0 24px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1 id="summary">執行中…</h1>
+<ul id="list"></ul>
+<script type="module">
+// js/help/markdown.js 純函式測試，跟 tests/index.html 同一套跑法（標題顯示 PASS／FAIL）。
+// 安全類的測試把輸出交給 DOMParser 解析後檢查 DOM（有沒有 script／img／on* 屬性、連結是否安全），而不是比對字串。
+import { renderInline, renderMarkdown, splitChapters } from "../js/help/markdown.js";
+
+const cases = [];
+const test = (name, fn) => cases.push({ name, fn });
+function assert(cond, msg = "assert failed") { if (!cond) throw new Error(msg); }
+function eq(actual, expected, msg = "") {
+    const a = JSON.stringify(actual), b = JSON.stringify(expected);
+    if (a !== b) throw new Error(`${msg}\n預期 ${b}\n實際 ${a}`);
+}
+
+const parse = (html) => new DOMParser().parseFromString(`<body>${html}</body>`, "text/html").body;
+const SAFE_TAGS = new Set(["P", "A", "STRONG", "EM", "CODE", "KBD", "UL", "OL", "LI", "BLOCKQUOTE", "DIV", "TABLE", "THEAD", "TBODY", "TR", "TH", "TD"]);
+/** 輸出裡不該有：不在白名單的標籤、on* 屬性、非 http(s)／相對路徑的 href。 */
+function assertSafeDom(html) {
+    const body = parse(html);
+    for (const el of body.querySelectorAll("*")) {
+        assert(SAFE_TAGS.has(el.tagName), `出現不該有的標籤 <${el.tagName.toLowerCase()}>`);
+        for (const attr of el.attributes) {
+            assert(!/^on/i.test(attr.name), `出現事件屬性 ${attr.name}`);
+            assert(!/^(src|srcset|style|formaction)$/i.test(attr.name), `出現屬性 ${attr.name}`);
+        }
+        if (el.tagName === "A") {
+            const href = el.getAttribute("href");
+            assert(/^https?:\/\/\S+$/i.test(href) || (/^[\w./#?=&%-]+$/.test(href) && !href.startsWith("//")), `不安全的 href：${href}`);
+        }
+    }
+    return body;
+}
+const links = (html) => [...parse(html).querySelectorAll("a")].map((a) => a.getAttribute("href"));
+
+// ---- 一般語法 ----
+test("### 小標與 ---", () => {
+    eq(renderMarkdown("### 小標"), '<div class="ts-header is-small">小標</div>');
+    eq(renderMarkdown("---"), '<div class="ts-divider"></div>');
+});
+test("無序／有序清單，連續項目合成同一個清單", () => {
+    eq(renderMarkdown("- a\n- b"), '<ul class="help-list"><li>a</li><li>b</li></ul>');
+    eq(renderMarkdown("* a\n* b"), '<ul class="help-list"><li>a</li><li>b</li></ul>');
+    eq(renderMarkdown("1. a\n2) b"), '<ol class="help-list"><li>a</li><li>b</li></ol>');
+});
+test("清單後接段落各自成區塊", () => {
+    eq(renderMarkdown("- a\n\n段落"), '<ul class="help-list"><li>a</li></ul><p class="help-paragraph">段落</p>');
+});
+test("粗體、斜體、行內碼", () => {
+    eq(renderInline("**粗** *斜* `碼`"), "<strong>粗</strong> <em>斜</em> <code>碼</code>");
+});
+test("行內碼內的標記符號不再轉換", () => {
+    eq(renderInline("`**x** [a](b)`"), "<code>**x** [a](b)</code>");
+});
+test("[[按鍵]] 轉成 kbd", () => {
+    eq(renderInline("[[Ctrl]]+[[Z]]"), "<kbd>Ctrl</kbd>+<kbd>Z</kbd>");
+});
+test("連結：https 開新視窗並帶 noopener，相對路徑與錨點不開新視窗", () => {
+    eq(renderInline("[站](https://a.com/x?y=1&z=2)"), '<a href="https://a.com/x?y=1&amp;z=2" target="_blank" rel="noopener noreferrer">站</a>');
+    eq(renderInline("[說明](/help/a.md#b)"), '<a href="/help/a.md#b">說明</a>');
+    eq(renderInline("[頂](#)"), '<a href="#">頂</a>');
+});
+test("連結：網址含 & 與引號時輸出只跳脫一次", () => {
+    const html = renderInline('[x](https://a.com/?a=1&b="2")');
+    assert(!html.includes("&amp;quot;"), "引號被二次跳脫：" + html);
+    eq(links(html), ['https://a.com/?a=1&b="2"']);
+});
+test("表格：欄位不足補空、表頭與內容分開", () => {
+    const body = parse(renderMarkdown("| a | b |\n|---|---|\n| 1 |"));
+    eq([...body.querySelectorAll("th")].map((e) => e.textContent), ["a", "b"]);
+    eq([...body.querySelectorAll("td")].map((e) => e.textContent), ["1", ""]);
+});
+test("引用：多行合成一個 blockquote", () => {
+    eq(renderMarkdown("> a\n> b"), '<blockquote class="help-quote">a b</blockquote>');
+});
+test("段落：連續行合併，空行分段", () => {
+    eq(renderMarkdown("a\nb\n\nc"), '<p class="help-paragraph">a b</p><p class="help-paragraph">c</p>');
+});
+test("CRLF 換行與 LF 結果相同", () => {
+    eq(renderMarkdown("- a\r\n- b\r\n\r\n段落"), renderMarkdown("- a\n- b\n\n段落"));
+});
+test("程式區塊（```）：目前不支援，內容一律跳脫成文字、不產生標籤", () => {
+    const html = renderMarkdown("```\n<b>x</b>\n```");
+    assertSafeDom(html);
+    assert(!html.includes("<b>"), html);
+    assert(html.includes("&lt;b&gt;x&lt;/b&gt;"), html);
+});
+test("splitChapters：以 ## 分章、第一個 ## 之前忽略、### 不分章", () => {
+    eq(splitChapters("前言\n## A\nx\n### 小\n## B\ny"), [{ title: "A", body: "x\n### 小\n" }, { title: "B", body: "y\n" }]);
+    eq(splitChapters("沒有章節"), []);
+    eq(splitChapters(""), []);
+});
+test("實際的 help/help.md 能轉換且結果安全", async () => {
+    const text = await (await fetch("../help/help.md")).text();
+    const chapters = splitChapters(text);
+    assert(chapters.length >= 8, "章節數 " + chapters.length);
+    for (const c of chapters) assertSafeDom(renderMarkdown(c.body));
+});
+
+// ---- 安全 ----
+test("javascript:／data:／vbscript: 連結不轉成 <a>，只留文字", () => {
+    for (const url of ["javascript:alert(1)", "data:text/html,x", "vbscript:x", "file:///c:/x", "blob:https://a.com/x"]) {
+        const html = renderInline(`[點我](${url})`);
+        eq(links(html), [], url);
+        assertSafeDom(html);
+    }
+});
+test("協定大小寫混寫、百分比編碼、控制字元、HTML 實體都擋下", () => {
+    for (const url of ["JaVaScRiPt:alert(1)", "JAVASCRIPT:1", "%6Aavascript:1", "\tjavascript:1", "java\tscript:1", "&#106;avascript:1"]) {
+        const html = renderInline(`[x](${url})`);
+        eq(links(html), [], JSON.stringify(url));
+        assertSafeDom(html);
+    }
+});
+test("// 開頭（protocol-relative）不轉成連結", () => {
+    eq(links(renderInline("[x](//evil.com/a)")), []);
+    eq(links(renderInline("[x](///evil.com)")), []);
+});
+test("HTTPS 大小寫混寫仍是合法 http(s) 連結", () => {
+    eq(links(renderInline("[x](HTTPS://A.COM)")), ["HTTPS://A.COM"]);
+});
+test("網址裡的引號無法跳出 href 屬性", () => {
+    for (const url of ['https://a.com/"onmouseover="alert(1)', "https://a.com/'onmouseover='alert(1)", 'https://a.com/"><script>alert(1)<\/script>']) {
+        const body = assertSafeDom(renderInline(`[x](${url})`));
+        for (const a of body.querySelectorAll("a")) eq([...a.attributes].map((x) => x.name).sort(), ["href", "rel", "target"]);
+    }
+});
+test("連結文字裡的 HTML 一律當純文字", () => {
+    const html = renderInline("[<img src=x onerror=alert(1)>](https://a.com)");
+    assertSafeDom(html);
+    assert(parse(html).querySelector("a").textContent.includes("<img"), html);
+});
+test("原始 HTML（img onerror、script、iframe、style）都被跳脫", () => {
+    for (const src of ["<img src=x onerror=alert(1)>", "<script>alert(1)<\/script>", "<iframe src=//x></iframe>", "<style>*{}</style>", "<a href=javascript:1>x</a>", "<svg onload=alert(1)>"]) {
+        const html = renderMarkdown(src);
+        const body = assertSafeDom(html);
+        assert(!body.querySelector("script,img,iframe,style,svg"), src);
+        assert(!html.includes("<img") && !html.includes("<script"), src);
+    }
+});
+test("各區塊裡的原始 HTML 也被跳脫（標題、清單、表格、引用）", () => {
+    const evil = "<img src=x onerror=alert(1)>";
+    for (const src of [`### ${evil}`, `- ${evil}`, `1. ${evil}`, `> ${evil}`, `| ${evil} |\n|---|\n| ${evil} |`]) assertSafeDom(renderMarkdown(src));
+});
+test("NUL 字元：輸入的 NUL 被移除，不能偽造占位符取出別的內容", () => {
+    eq(renderInline("a\u0000b"), "ab");
+    eq(renderInline("`x` \u00000\u0000"), "<code>x</code> 0");
+    const html = renderInline("`<b>`\u00000\u0000");
+    assertSafeDom(html);
+    assert(!html.includes("\u0000"), "輸出殘留 NUL");
+});
+test("未閉合／殘缺的標記原樣保留成文字", () => {
+    for (const src of ["**未閉合", "*未閉合", "`未閉合", "[x](", "[x]", "[[k", "[a](b", "]]", "**", "* *", "[](x)"]) assertSafeDom(renderInline(src));
+    eq(renderInline("**未閉合"), "**未閉合");
+    eq(renderInline("`未閉合"), "`未閉合");
+    eq(renderInline("[x]("), "[x](");
+});
+test("巢狀與交錯的標記：不產生不成對標籤或危險內容", () => {
+    for (const src of ["*a **b* c**", "**a*b**", "***x***", "**`x`**", "[**x**](https://a.com)", "`[a](https://a.com)`", "[[**x**]]", "[a [b](https://a.com)](https://b.com)"]) {
+        const html = renderInline(src);
+        assertSafeDom(html);
+        const count = (re) => (html.match(re) || []).length;
+        for (const t of ["strong", "em", "code", "kbd", "a"]) eq(count(new RegExp(`<${t}[ >]`, "g")) - count(new RegExp(`</${t}>`, "g")), 0, `${src} 的 <${t}> 不成對`);
+    }
+});
+test("空字串與只有空白", () => {
+    eq(renderInline(""), "");
+    eq(renderMarkdown(""), "");
+    eq(renderMarkdown("   \n\n  \n"), "");
+    eq(splitChapters(""), []);
+});
+test("極長輸入不當機（百萬字純文字、數萬行、數千次重複標記）", () => {
+    const t0 = performance.now();
+    renderMarkdown("字".repeat(1_000_000));
+    renderMarkdown("- 項目\n".repeat(20000));
+    renderMarkdown("| a | b |\n|---|---|\n" + "| 1 | 2 |\n".repeat(20000));
+    renderInline("**a".repeat(3000));
+    renderInline("[a](".repeat(3000));
+    renderInline("`".repeat(5000));
+    renderInline("[[a".repeat(3000));
+    const ms = performance.now() - t0;
+    assert(ms < 5000, `耗時 ${Math.round(ms)}ms`);
+});
+
+// ---- 執行 ----
+const list = document.getElementById("list");
+let failed = 0;
+for (const c of cases) {
+    const li = document.createElement("li");
+    try {
+        await c.fn();
+        li.className = "pass";
+        li.textContent = "PASS  " + c.name;
+    } catch (err) {
+        failed += 1;
+        li.className = "fail";
+        li.textContent = "FAIL  " + c.name;
+        const pre = document.createElement("pre");
+        pre.textContent = err.message;
+        li.append(pre);
+    }
+    list.append(li);
+}
+const summary = document.getElementById("summary");
+summary.textContent = failed ? `${failed} / ${cases.length} 失敗` : `全部通過（${cases.length}）`;
+summary.className = failed ? "fail" : "pass";
+document.title = (failed ? "FAIL " : "PASS ") + summary.textContent;
+</script>
+</body>
+</html>
