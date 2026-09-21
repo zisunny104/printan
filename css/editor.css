@@ -253,8 +253,8 @@ body {
 
 /* 卡片標題列內嵌的小型圖示按鈕（沿用 pitrace 慣例），避免跟標題文字擠成兩種高度 */
 .pane-card-header .ts-button.is-icon {
-    --height: 1.75rem;
-    --icon-size: 1rem;
+    --height: 1.5rem;
+    --icon-size: .875rem;
     flex: 0 0 auto;
 }
 
@@ -269,7 +269,7 @@ body {
 .pane-zoom-value {
     box-sizing: border-box;
     width: 3.5rem;
-    height: 1.75rem;
+    height: 1.5rem;
     padding: 0 .25rem;
     border: 1px solid transparent;
     border-radius: .3rem;
@@ -291,19 +291,29 @@ body {
 }
 
 .pane-zoom-controls .ts-button.is-small {
-    --height: 1.75rem;
+    --height: 1.5rem;
+    --icon-size: .875rem;
     flex: 0 0 auto;
 }
 
-/* 窄螢幕與觸控：標題列按鈕加大，方便點選 */
-@media (width < 768px), (pointer: coarse) {
-    .pane-card-header .ts-button.is-icon,
-    .pane-zoom-controls .ts-button.is-small {
-        --height: 2rem;
-    }
+/* 按鈕外觀維持小巧（24px、icon 14px），可點範圍用 ::before 向外擴張：桌面各邊 4px（≥24px 綽綽有餘），
+   窄螢幕與觸控各邊 11px（實測 ≥40px；相鄰按鈕間距 8px，擴張區只稍微伸進鄰居邊緣） */
+.pane-card-header .ts-button.is-icon,
+.pane-zoom-controls .ts-button.is-small {
+    position: relative;
+}
 
-    .pane-zoom-value {
-        height: 2rem;
+.pane-card-header .ts-button.is-icon::before,
+.pane-zoom-controls .ts-button.is-small::before {
+    content: "";
+    position: absolute;
+    inset: -4px;
+}
+
+@media (width < 768px), (pointer: coarse) {
+    .pane-card-header .ts-button.is-icon::before,
+    .pane-zoom-controls .ts-button.is-small::before {
+        inset: -11px;
     }
 }
 
