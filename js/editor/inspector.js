@@ -560,12 +560,16 @@ function buildSpacerInspector(panel, el) {
 
 function buildDividerInspector(panel, el) {
     panel.appendChild(sectionHeader("minus", "分隔線"));
-    panel.appendChild(field("樣式", selectInput([["solid", "實線"], ["dashed", "虛線"], ["dotted", "點線"]], el.style, (v) => { el.style = v; onModelChange({ skipInspector: true }); })));
-    panel.appendChild(field("粗細 (dot)", textInput(el.thicknessDots, (v) => { el.thicknessDots = v; onModelChange({ skipInspector: true }); }, "number")));
     panel.appendChild(fieldRow([
-        ["上邊距 (dot)", textInput(el.marginTopDots, (v) => { el.marginTopDots = v; onModelChange({ skipInspector: true }); }, "number")],
-        ["下邊距 (dot)", textInput(el.marginBottomDots, (v) => { el.marginBottomDots = v; onModelChange({ skipInspector: true }); }, "number")],
+        ["樣式", selectInput([["solid", "實線"], ["dashed", "虛線"], ["dotted", "點線"]], el.style, (v) => { el.style = v; onModelChange({ skipInspector: true }); })],
+        ["粗細 (dot)", textInput(el.thicknessDots, (v) => { el.thicknessDots = v; onModelChange({ skipInspector: true }); }, "number")],
     ]));
+    panel.appendChild(foldSection("divider.margin", "邊距", (body) => {
+        body.appendChild(fieldRow([
+            ["上 (dot)", textInput(el.marginTopDots, (v) => { el.marginTopDots = v; onModelChange({ skipInspector: true }); }, "number")],
+            ["下 (dot)", textInput(el.marginBottomDots, (v) => { el.marginBottomDots = v; onModelChange({ skipInspector: true }); }, "number")],
+        ]));
+    }));
 }
 
 function buildGroupInspector(panel, el) {
