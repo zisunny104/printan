@@ -1281,6 +1281,7 @@ body {
 
     #paper-width-tabs .item {
         display: flex;
+        min-height: 2rem;
     }
 
     #paper-width-tabs .item .text {
@@ -1289,11 +1290,11 @@ body {
     }
 
     #btn-printer-settings {
-        flex: 0 0 auto;
+        flex: 1 1 0;
     }
 
     #btn-print {
-        flex: 1 1 0;
+        flex: 1.2 1 0;
     }
 }
 
