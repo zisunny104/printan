@@ -10,12 +10,11 @@
 - [ ] 螢幕閱讀器實際朗讀、Windows 高對比模式：只做過 Tab 順序、焦點外框與對比度計算，未實測
 
 ## 進行中
-- [ ] 文繞圖（site-b3，最小版：單圖靠左／右＋橫書文字）
+- [ ] 圖文段落（site-b3，最小版：單圖靠左／右＋橫書文字）：渲染、檢視器、畫布把手、測試、說明書已提交，實機列印與各紙寬繞排外觀待驗證
 - [ ] 文字直書（site-b3）：writingMode／renderer 直排／檢視器切換已提交（1～3/3），版面細節與實機列印待驗證
 
 ## 已知但未處理
-- [ ] 檢視器欄位（select／number／textarea／變數面板輸入）缺 aria-label：螢幕閱讀器讀不到欄位名稱，需在 inspector-widgets 的 field() 補（site-b3，排在圖文段落之後）
-- [ ] editor.js 仍有 669 行：已拆出 context／inspector-widgets／inspector／printer-settings／outline／batch-export／element-actions／canvas-overlay／workspace-view，是否再拆待評估
+- [ ] editor.js 仍有 674 行：已拆出 context／inspector-widgets／inspector／printer-settings／outline／batch-export／element-actions／canvas-overlay／workspace-view，是否再拆待評估
 
 ## 低優先
 - [ ] 58mm 紙寬置中假設（commit 23ea7ab）尚未實機驗證（使用者確認紙寬固定 80mm）
