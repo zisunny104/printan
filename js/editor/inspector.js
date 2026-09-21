@@ -18,7 +18,15 @@ import { inlineEditor, onModelChange, textSel } from "./editor.js";
 import { deleteElement, deleteElements, duplicateElement, duplicateElements, ungroupElements } from "./element-actions.js";
 import { els, rt, state } from "./context.js";
 
+// 選取對象改變時通知訂閱者（小螢幕抽屜據此打開元素設定面板）；同一個元素重繪不會重發
+let announcedSelection = null;
+
 export function renderInspector() {
+    const selection = state.selectedId || state.multi[0] || null;
+    if (selection !== announcedSelection) {
+        announcedSelection = selection;
+        document.dispatchEvent(new CustomEvent("printan:selectionchange", { detail: { id: selection } }));
+    }
     const panel = els.inspector;
     panel.innerHTML = "";
     if (state.multi.length > 1) {

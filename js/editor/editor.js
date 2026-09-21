@@ -28,6 +28,7 @@ import {
 } from "./printer-settings.js";
 import { textInput } from "./inspector-widgets.js";
 import { renderInspector } from "./inspector.js";
+import { initMobileDrawers } from "./mobile-drawers.js";
 import { renderEditOverlay } from "./canvas-overlay.js";
 import { renderOutline, wireOutlineKeyboard } from "./outline.js";
 import { bindBatchPanel, endBatchPreview, exportBatchPdf, exportSinglePdf } from "./batch-export.js";
@@ -50,6 +51,7 @@ async function init() {
     wireToolbarOverflow();
     workspace.mount();
     wireHelpDialog();
+    initMobileDrawers();
     onModelChange({ skipInspector: false });
     onWebFontStatusChange(() => renderInspector()); // 字體載入失敗／恢復時，選單上的標示要跟著更新
     restoreLocalFontsIfGranted().then((restored) => { if (restored) renderInspector(); });
