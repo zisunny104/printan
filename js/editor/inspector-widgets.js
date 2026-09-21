@@ -3,6 +3,14 @@
 import { createInfoIcon } from "./ui-helpers.js";
 import { state } from "./context.js";
 
+// 文字一律走 textContent／文字節點，呼叫端傳進來的字不會被當成 HTML
+function iconSpan(icon, extraClass = "") {
+    const span = document.createElement("span");
+    span.className = `ts-icon is-${icon}-icon${extraClass ? ` ${extraClass}` : ""}`;
+    span.setAttribute("aria-hidden", "true");
+    return span;
+}
+
 export function iconButton(icon, label, onClick) {
     const btn = document.createElement("button");
     btn.className = "ts-button is-icon is-ghost is-small";
@@ -20,18 +28,21 @@ export function iconButton(icon, label, onClick) {
 export function emptyState(icon, title, description) {
     const wrap = document.createElement("div");
     wrap.className = "pane-empty-state-static";
-    wrap.innerHTML = `
-        <span class="ts-icon is-${icon}-icon is-heading" aria-hidden="true"></span>
-        <div class="ts-text is-description">${title}</div>
-        ${description ? `<div class="ts-text is-description">${description}</div>` : ""}
-    `;
+    wrap.append(iconSpan(icon, "is-heading"));
+    for (const text of [title, description]) {
+        if (!text) continue;
+        const line = document.createElement("div");
+        line.className = "ts-text is-description";
+        line.textContent = text;
+        wrap.appendChild(line);
+    }
     return wrap;
 }
 
 export function sectionHeader(icon, text, info) {
     const wrap = document.createElement("div");
     wrap.className = "has-top-spaced ts-header is-start-icon is-small";
-    wrap.innerHTML = `<span class="ts-icon is-${icon}-icon" aria-hidden="true"></span> ${text}`;
+    wrap.append(iconSpan(icon), ` ${text}`);
     if (info) wrap.appendChild(createInfoIcon(info));
     return wrap;
 }
@@ -46,7 +57,8 @@ export function mkButton(text, icon, onClick, { negative = false, outlined = tru
     const b = document.createElement("button");
     b.className = `ts-button is-small${outlined ? " is-outlined" : ""}${negative ? " is-negative" : ""}${icon ? " is-start-icon" : ""}`;
     b.type = "button";
-    b.innerHTML = icon ? `<span class="ts-icon is-${icon}-icon" aria-hidden="true"></span> ${text}` : text;
+    if (icon) b.append(iconSpan(icon), ` ${text}`);
+    else b.textContent = text;
     b.addEventListener("click", onClick);
     return b;
 }

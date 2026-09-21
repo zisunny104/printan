@@ -29,13 +29,16 @@ export class SystemDialogAdapter {
      */
     async print(renderResult) {
         const dataUrl = renderResult.canvas.toDataURL("image/png");
+        // 寫進 document.write 的只有數字（限縮成有限數值）與 canvas 自己產生的 PNG data URL
+        const widthMm = Number(renderResult.widthMm) || 0;
+        const heightMm = Number(renderResult.heightMm) || 0;
         const printWindow = window.open("", "_blank");
         if (!printWindow) throw new Error("瀏覽器封鎖了列印視窗，請允許彈出視窗後再試一次");
         printWindow.document.write(`<!DOCTYPE html><html><head><title>列印</title>
             <style>
-                @page { size: ${renderResult.widthMm}mm ${renderResult.heightMm}mm; margin: 0; }
+                @page { size: ${widthMm}mm ${heightMm}mm; margin: 0; }
                 html, body { margin: 0; padding: 0; }
-                img { display: block; width: ${renderResult.widthMm}mm; }
+                img { display: block; width: ${widthMm}mm; }
             </style>
             </head><body><img src="${dataUrl}"></body></html>`);
         printWindow.document.close();
