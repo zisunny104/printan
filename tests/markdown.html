@@ -188,12 +188,9 @@ test("極長輸入不當機（百萬字純文字、數萬行、數千次重複�
     renderMarkdown("字".repeat(1_000_000));
     renderMarkdown("- 項目\n".repeat(20000));
     renderMarkdown("| a | b |\n|---|---|\n" + "| 1 | 2 |\n".repeat(20000));
-    renderInline("**a".repeat(3000));
-    renderInline("[a](".repeat(3000));
-    renderInline("`".repeat(5000));
-    renderInline("[[a".repeat(3000));
+    for (const unit of ["**a", "*a", "[a](", "`", "[[a", "[a](x"]) renderInline(unit.repeat(50000));
     const ms = performance.now() - t0;
-    assert(ms < 5000, `耗時 ${Math.round(ms)}ms`);
+    assert(ms < 3000, `耗時 ${Math.round(ms)}ms`);
 });
 
 // ---- 執行 ----

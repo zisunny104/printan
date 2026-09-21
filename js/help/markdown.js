@@ -21,17 +21,17 @@ export function renderInline(raw) {
     const held = [];
     const hold = (html) => `${HOLD}${held.push(html) - 1}${HOLD}`;
     let s = escapeHtml(raw.replaceAll(HOLD, ""));
-    s = s.replace(/`([^`]+)`/g, (_, code) => hold(`<code>${code}</code>`));
-    s = s.replace(/\[\[([^\]]+)\]\]/g, (_, key) => hold(`<kbd>${key}</kbd>`));
+    s = s.replace(/`([^`]{1,500})`/g, (_, code) => hold(`<code>${code}</code>`));
+    s = s.replace(/\[\[([^\]]{1,50})\]\]/g, (_, key) => hold(`<kbd>${key}</kbd>`));
     // 網址在跳脫後 & " ' 已變成實體，還原後再檢查，輸出時再跳脫一次（否則 &quot; 會被二次跳脫成 &amp;quot;）
-    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, url) => {
+    s = s.replace(/\[([^\]]{1,300})\]\(([^)\s]{1,500})\)/g, (_, label, url) => {
         const href = safeHref(url.replace(/&(quot|#39|amp);/g, (_m, e) => ENTITY_CHARS[e]));
         if (!href) return label;
         const external = /^https?:/i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : "";
         return hold(`<a href="${escapeHtml(href)}"${external}>${label}</a>`);
     });
-    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    s = s.replace(/\*\*([^*]{1,500})\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/\*([^*]{1,500})\*/g, "<em>$1</em>");
     return s.replace(new RegExp(`${HOLD}(\\d+)${HOLD}`, "g"), (_, i) => held[Number(i)]);
 }
 
