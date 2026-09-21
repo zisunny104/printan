@@ -24,9 +24,10 @@
                      印表機型號不開放使用者選，內部固定用預設規格（見 printer-profiles.js）。 -->
                 <div class="ts-selection is-small" id="paper-width-tabs" role="radiogroup" aria-label="紙寬"></div>
                 <div class="ts-divider is-vertical toolbar-divider"></div>
-                <button type="button" class="ts-button is-small is-outlined is-icon" id="btn-printer-settings"
+                <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-settings"
                     data-tooltip="列印設定（印表機連線、走紙／切紙、可列印點數、測試列印）" aria-label="列印設定">
                     <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
+                    <span class="mobile:has-hidden">列印設定</span>
                     <span class="printer-conn-dot is-on" id="printer-toolbar-dot" aria-hidden="true" hidden></span>
                 </button>
                 <button class="ts-button is-small is-primary is-start-icon" id="btn-print">
