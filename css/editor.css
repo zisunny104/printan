@@ -1013,7 +1013,7 @@ body {
     white-space: nowrap;
 }
 
-/* 印表機連接狀態燈：modal 標題旁的 badge 跟工具列「印表機設定」鈕內的小圓點共用同一個
+/* 印表機連線狀態燈：modal 標題旁的 badge 跟工具列「印表機設定」鈕內的小圓點共用同一個
    元件。都是排在文字流裡的一般行內元素，不用絕對定位貼角——貼角圓點會被按鈕邊框吃掉一半，
    看起來像「有問題」的角標。亮起（.is-on）用綠色加一圈光暈，熄滅是灰色。 */
 .printer-conn-dot {
@@ -1035,7 +1035,7 @@ body {
     margin: 0 0 0 .4rem;
 }
 
-/* 未連接時 badge 是紅底（is-negative），燈用白色才看得到；已連接是綠燈外框（is-outlined）。 */
+/* 未連線時 badge 是紅底（is-negative），燈用白色才看得到；已連線是綠燈外框（is-outlined）。 */
 .ts-badge.is-negative .printer-conn-dot {
     background: rgba(255, 255, 255, .9);
 }
@@ -1069,7 +1069,7 @@ body {
     --accent-color: light-dark(var(--ts-gray-600, #595959), var(--ts-gray-400, #bfbfbf));
 }
 
-/* 印表機資訊表：窄 modal 裡標題欄會被壓成兩行（「連接的／印表機」），不換行、讓值欄吃剩下的寬度 */
+/* 印表機資訊表：窄 modal 裡標題欄會被壓成兩行（「連線的／印表機」），不換行、讓值欄吃剩下的寬度 */
 #printer-info-table td:first-child {
     white-space: nowrap;
 }
