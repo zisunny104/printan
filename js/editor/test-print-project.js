@@ -96,6 +96,33 @@ function buildCutLine(widthDots) {
     return canvas.toDataURL("image/png");
 }
 
+// 品牌 icon：頁首用的是 Tocas 的收據圖示，這裡用畫布畫同樣意象（鋸齒下緣的收據紙＋幾行字），
+// 避免依賴圖示字型；正方形，貼在標題左邊。
+const BRAND_ICON_SIZE = 72;
+function buildBrandIcon() {
+    const s = BRAND_ICON_SIZE;
+    const { canvas, ctx } = makeCanvas(s, s);
+    const x0 = 14;
+    const x1 = s - 14;
+    const top = 6;
+    const bottom = s - 8;
+    const teeth = 5;
+    const tw = (x1 - x0) / teeth;
+    ctx.beginPath();
+    ctx.moveTo(x0, top);
+    ctx.lineTo(x1, top);
+    ctx.lineTo(x1, bottom);
+    for (let i = teeth - 1; i >= 0; i--) {
+        ctx.lineTo(x0 + i * tw + tw / 2, bottom - 7);
+        ctx.lineTo(x0 + i * tw, bottom);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    for (const [y, w] of [[19, 1], [30, 1], [41, 0.6]]) ctx.fillRect(x0 + 6, y, (x1 - x0 - 12) * w, 4);
+    return canvas.toDataURL("image/png");
+}
+
 // 內文字級：buildReceiptElements 依紙寬設定（58mm 用小一級，品項名稱才不會折行）
 let bodySize = 28;
 const text = (runs, overrides = {}) => createTextElement({
@@ -119,9 +146,8 @@ function itemRow(name, qty, amount, style) {
     return row;
 }
 
-// 內容是這個專案自己的「收據」，結構參考台灣常見單據：店名區（主標＋副標＋本店／統編／網址）→
-// 電子發票證明聯抬頭（期別、字軌號碼、時間、隨機碼／總計）→ 品項（含縮排備註行）→ 小計／折扣／合計 →
-// 付款／找零 → 條碼與 QR → 感謝語與頁尾小字 → 技術資訊（小字級）。
+// 內容是這個專案自己的「收據」：標題（icon＋名稱）＋副標＋網址 → 品項（含縮排備註行）→ 小計／優惠／合計 →
+// 找零 → 條碼與 QR → 感謝語與頁尾小字 → 技術資訊（小字級）。
 // 品項是專案的功能與開發過程，金額由程式加總；彩蛋藏在數字與小字裡，純屬玩笑。
 const PROJECT_URL = "https://toka.dev/koilisu/printan";
 const FALLBACK_MODEL = "TM-T82II";
@@ -136,24 +162,24 @@ const EASTER_EGG = {
 
 const money = (n) => `${n < 0 ? "-" : ""}$${Math.abs(n).toLocaleString("en-US")}`;
 
-// [名稱, 數量, 單價, 備註]；數量可放字串（如 "999+"），計價時當 0。加總剛好 1,337（leet）：
-// 42（宇宙的答案）＋914（誕生日）＋3×65（ASCII 的 A）＋165（commit 數）＋20（月費）＋1（Hello World）
+// [名稱, 數量, 單價, 備註]；數量可放字串（如 "999+"），計價時當 0。小計 1,352，扣優惠 15 後合計剛好 1,337（leet）：
+// 42（宇宙的答案）＋914（誕生日）＋3×70（咖啡）＋165（commit 數）＋20（月費）＋1（Hello World）－15（優惠）
 const MENU = [
     ["所見即所得預覽", 1, 42, "宇宙、生命與一切的答案"],
     ["直書排版", 1, Number(EASTER_EGG.birthday.slice(4)), `誕生日紀念款 ${EASTER_EGG.birthday.slice(4)}`],
-    ["續命美式咖啡", 3, 65, "喝茶請洽 HTTP 418"],
+    ["續命美式咖啡", 3, 70, "喝茶請洽 HTTP 418"],
     ["修改次數", EASTER_EGG.commits, 1, `第 ${EASTER_EGG.commits} 次 commit（含這一次）`],
     ["Token 一籮筐", EASTER_EGG.tokens, 0, "實際數不明，大概"],
     ["月費方案", 1, EASTER_EGG.monthlyFeeUsd, "Claude Pro，本月贊助"],
     ["Hello World", 1, 1, "第一行輸出，成功了"],
 ];
-const DISCOUNT = ["後悔折扣（無）", 0];
+const DISCOUNT = ["優惠　一點點……耐心", -15];
 const CHANGE = 0;
 
-function buildReceiptElements(info, model, stripUrl, cutLineUrl, widthDots) {
+function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthDots) {
     // 字級依紙寬取值：80mm 特大，58mm（約 420 點）退一級才放得下
     const wide = widthDots >= 500;
-    const brandSize = wide ? 68 : 48;
+    const brandSize = wide ? 56 : 40;
     const titleSize = wide ? 36 : 28;
     const totalSize = wide ? 40 : 32;
     const noteSize = wide ? 22 : 20;
@@ -162,18 +188,19 @@ function buildReceiptElements(info, model, stripUrl, cutLineUrl, widthDots) {
 
     const subtotal = MENU.reduce((sum, [, qty, price]) => sum + (Number(qty) || 0) * price, 0);
     const total = subtotal + DISCOUNT[1];
-    const now = new Date();
-    const pad2 = (n) => String(n).padStart(2, "0");
-    const dateTime = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
-    const evenMonth = Math.ceil((now.getMonth() + 1) / 2) * 2; // 發票期別：兩個月一期
-    const period = `${now.getFullYear() - 1911}年${pad2(evenMonth - 1)}-${pad2(evenMonth)}月`;
-
     const center = (runs, overrides = {}) => text(runs, { align: "center", ...overrides });
     const gap = () => createSpacerElement({ heightDots: 8 });
     const menuRows = MENU.flatMap(([name, qty, price, remark]) => [
         itemRow(name, String(qty), money((Number(qty) || 0) * price), {}),
         text(`　└ ${remark}`, { fontSize: noteSize }),
     ]);
+    const brandRow = createRowElement([1, 5]);
+    brandRow.columns[0].push(createImageElement({ assetId: iconUrl, fit: "auto", ditherMode: "threshold" }));
+    brandRow.columns[1].push(center([{ text: "Printan ", fontSize: brandSize }, { text: "單仔", fontSize: brandSize + 12 }], { bold: true }));
+    // 優惠字樣較長，名稱欄放寬，58mm 才不會折行
+    const discountRow = createRowElement([2, 1]);
+    discountRow.columns[0].push(text(DISCOUNT[0]));
+    discountRow.columns[1].push(text(money(DISCOUNT[1]), { align: "right" }));
     const infoRows = info.map(([k, v]) => {
         const row = createRowElement([1, 2]);
         row.columns[0].push(text(k, { fontSize: smallSize }));
@@ -182,29 +209,20 @@ function buildReceiptElements(info, model, stripUrl, cutLineUrl, widthDots) {
     });
 
     return [
-        // 店名區
-        center([{ text: "Printan ", fontSize: brandSize }, { text: "單仔", fontSize: brandSize + 12 }], { bold: true }),
+        // 標題：icon 與名稱並排
+        brandRow,
         center("小小一張紙，所見即所印", { fontSize: titleSize, italic: true }),
-        center(`KoiLiSu 本店　統編 ${EASTER_EGG.birthday}`, { fontSize: smallSize }),
         center("toka.dev/koilisu/printan", { fontSize: smallSize }),
-        createDividerElement({ style: "dashed" }),
-        // 電子發票證明聯抬頭
-        center("電子發票證明聯", { fontSize: titleSize, bold: true }),
-        center(period, { fontSize: totalSize, bold: true }),
-        center(`PT-${EASTER_EGG.birthday}`, { fontSize: totalSize, bold: true }),
-        line(dateTime, `序號 #${String(EASTER_EGG.commits).padStart(4, "0")}`, { fontSize: smallSize }),
-        line("隨機碼 0404", `總計 ${total}`, { fontSize: smallSize }),
         createDividerElement({ style: "dashed" }),
         // 品項
         ...menuRows,
         createDividerElement(),
         // 小計／折扣／合計
         line("小計", money(subtotal)),
-        line(DISCOUNT[0], money(DISCOUNT[1])),
+        discountRow,
         gap(),
         line({ text: "合計", bold: true, fontSize: totalSize }, { text: money(total), bold: true, fontSize: totalSize }),
         gap(),
-        line("信用卡", "4242 4242 4242 4242", { fontSize: smallSize }),
         line("找零", money(CHANGE), { fontSize: smallSize }),
         gap(),
         // 條碼與 QR
@@ -254,6 +272,7 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
     project.template.elements = buildReceiptElements(
         info,
         model,
+        buildBrandIcon(),
         buildCalibratedStrip(paper.printableWidthDots, dpi),
         buildCutLine(paper.printableWidthDots),
         paper.printableWidthDots,
