@@ -46,7 +46,7 @@ export function renderInspector() {
 const MULTI_FIELDS = [
     { key: "fontSize", label: "字級", kind: "number", types: ["text"], runField: true },
     { key: "bold", label: "粗體", kind: "bool", types: ["text"], runField: true },
-    { key: "inverse", label: "整行反白", kind: "bool", types: ["text"] },
+    { key: "inverse", label: "整行反相", kind: "bool", types: ["text"] },
     { key: "lineHeight", label: "行高", kind: "number", types: ["text"] },
     { key: "letterSpacing", label: "字距", kind: "number", types: ["text"] },
     { key: "align", label: "對齊", kind: "select", options: [["left", "靠左"], ["center", "置中"], ["right", "靠右"]], types: ["text", "image", "barcode"] },
@@ -259,7 +259,7 @@ function buildTextInspector(panel, el) {
         toolbar.appendChild(rangeToggleButton("italic", "斜體", style.italic, hasRange, (v) => applyRangeStyle("italic", v)));
         toolbar.appendChild(rangeToggleButton("underline", "底線", style.underline, hasRange, (v) => applyRangeStyle("underline", v)));
         toolbar.appendChild(rangeToggleButton("strikethrough", "刪除線", style.strikethrough, hasRange, (v) => applyRangeStyle("strikethrough", v)));
-        toolbar.appendChild(rangeToggleButton("circle-half-stroke", "反白", style.inverse, hasRange, (v) => applyRangeStyle("inverse", v)));
+        toolbar.appendChild(rangeToggleButton("circle-half-stroke", "反相", style.inverse, hasRange, (v) => applyRangeStyle("inverse", v)));
 
         styleRow.innerHTML = "";
         styleRow.appendChild(fieldRow([
@@ -308,7 +308,7 @@ function buildTextInspector(panel, el) {
         ["最多行數", textInput(el.maxLines || "", (v) => { el.maxLines = v; onModelChange({ skipInspector: true }); }, "number", "不限")],
     ]));
     panel.appendChild(field(null, checkboxInput(el.bold, (v) => { el.bold = v; onModelChange({ skipInspector: true }); }, "預設粗體")));
-    panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange({ skipInspector: true }); }, "整行反白")));
+    panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange({ skipInspector: true }); }, "整行反相")));
     panel.appendChild(field(null, checkboxInput(el.wrap, (v) => { el.wrap = v; onModelChange({ skipInspector: true }); }, "自動換行")));
     const modeRow = document.createElement("div");
     modeRow.className = "ts-wrap is-compact has-top-spaced-small";
@@ -340,7 +340,7 @@ function buildFloatBlockInspector(panel, el) {
         onModelChange({ skipInspector: true });
     }, "number");
     Object.assign(widthInput.querySelector("input"), { min: 1, max: 100, step: 1 });
-    panel.appendChild(field("圖片寬度 (%)", widthInput));
+    panel.appendChild(field("寬度 (%)", widthInput));
     panel.appendChild(sectionDivider());
     buildTextInspector(panel, el);
 }
@@ -637,7 +637,7 @@ function buildBarcodeInspector(panel, el) {
     }
 
     panel.appendChild(sectionDivider());
-    panel.appendChild(sectionHeader("ruler", "尺寸與對齊"));
+    panel.appendChild(sectionHeader("ruler", "尺寸與版面"));
     panel.appendChild(fieldRow([
         ["高度 (dot)", textInput(el.heightDots, (v) => { el.heightDots = v; onModelChange({ skipInspector: true }); }, "number")],
         ["對齊", selectInput([["left", "靠左"], ["center", "置中"], ["right", "靠右"]], el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })],

@@ -159,7 +159,7 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
 
     const info = [
         ["機型", `${baseProfile.brand} ${baseProfile.model}`],
-        ["連線", connection],
+        ["連接", connection],
         ...(firmware ? [["韌體", firmware]] : []),
         ["紙寬", `${paper.label}　${dpi} dpi`],
         ["可印", `${paper.printableWidthDots} / ${rawWidth} 點`],
@@ -187,7 +187,7 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
     drawEdgeGauge(ctx, rawX, 0, rawWidth, dpi);
     ctx.font = `20px ${FONT}`;
     ctx.textBaseline = "top";
-    ctx.fillText("量左右白邊 mm → 邊距校正", rawX + 4, 64);
+    ctx.fillText("量左右邊距（mm）填入設定", rawX + 4, 64);
 
     // 校正後的內容：位置比照 adapter 的置中＋左補白
     const bodyX = Math.max(0, Math.floor((headWidthDots - (body.canvas.width + pad.left + pad.right)) / 2)) + pad.left;

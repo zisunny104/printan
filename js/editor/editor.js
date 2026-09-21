@@ -20,7 +20,7 @@ import { saveDraft, loadDraft, deleteDraft, listRecent } from "../core/storage.j
 import { wireResizableColumns } from "./resizable-columns.js";
 import { createInlineTextEditor } from "./inline-text-editor.js";
 import { createWorkspaceView } from "./workspace-view.js";
-import { wireHelpDialog } from "./ui-helpers.js";
+import { createInfoIcon, wireHelpDialog } from "./ui-helpers.js";
 import { LAST_DRAFT_KEY, els, rt, state } from "./context.js";
 import {
     attemptSilentPrinterReconnect, bindPrinterSettings, loadPrintPrefs, printCurrent, renderMarginRows,
@@ -122,9 +122,12 @@ export function getEffectiveProfile() {
 function updateFeedLinesHint() {
     const profile = getPrinterProfile(state.project.printerProfile.id);
     const bladeOffsetMm = profile.autocutter?.bladeOffsetMm;
-    els["pref-feed-lines-hint"].textContent = bladeOffsetMm
-        ? `${profile.brand} ${profile.model} 切刀距列印頭約 ${bladeOffsetMm}mm，切到內容請調高行數。`
-        : "切紙前的走紙行數，切到內容請調高。";
+    const label = document.querySelector('label[for="pref-feed-lines"]');
+    label.querySelector(".info-icon")?.remove();
+    label.appendChild(createInfoIcon(bladeOffsetMm
+        ? `${profile.brand} ${profile.model} 切刀距列印頭約 ${bladeOffsetMm}mm，切到內容請調高行數`
+        : "切到內容請調高行數"));
+    els["pref-feed-lines-hint"].hidden = true;
 }
 
 function populatePaperWidthTabs() {

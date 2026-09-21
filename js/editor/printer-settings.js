@@ -8,6 +8,7 @@ import { PRINT_PREFS_KEY, els, serialAdapter, state, usbAdapter } from "./contex
 import { SystemDialogAdapter, describePrinterError, interpretRealtimeStatus, isSelectionCancelled } from "../core/printer-adapter.js";
 import { getBaseProfile, getEffectiveProfile, schedulePreview } from "./editor.js";
 import { confirmFontFallbacks } from "./batch-export.js";
+import { createInfoIcon } from "./ui-helpers.js";
 import { renderCalibrationSheet, renderTestPrint } from "./test-print-project.js";
 import { renderTemplate } from "../core/renderer.js";
 
@@ -126,7 +127,7 @@ function updatePrinterConnectionUi() {
         : "此瀏覽器不支援 WebUSB，請改用 Chrome 或 Edge，或繼續使用系統列印對話框。";
     els["printer-connection-status"].textContent = connected
         ? `已連接：${connectedLabel}`
-        : "尚未連接，列印會走系統列印對話框";
+        : "列印會走系統列印對話框";
     els["btn-printer-connect"].hidden = connected;
     els["btn-printer-connect"].disabled = !supported;
     els["btn-printer-disconnect"].hidden = !connected;
@@ -205,7 +206,8 @@ function updatePrinterInfo() {
         else setInfoCell("printer-info-spec", `無法辨識，使用預設值（${base.brand} ${base.model}）`, "default");
     }
     setInfoCell("printer-info-dpi", `${base.dpi.x} × ${base.dpi.y} dpi`, "default");
-    setInfoCell("printer-info-paper", `${paper.label}（捲紙寬 ${paper.rollWidthMm} mm，由工具列選擇，ESC/POS 讀不到）`);
+    setInfoCell("printer-info-paper", `捲紙寬 ${paper.rollWidthMm} mm`);
+    els["printer-info-paper"].appendChild(createInfoIcon("由工具列選擇，ESC/POS 讀不到"));
     const overridden = paper.printableWidthDots !== basePaper.printableWidthDots;
     setInfoCell("printer-info-printable", `${paper.printableWidthDots} 點（約 ${paper.printableWidthMm.toFixed(1)} mm）`, overridden ? "override" : "default");
     setInfoCell("printer-info-blade", base.autocutter?.bladeOffsetMm ? `約 ${base.autocutter.bladeOffsetMm} mm` : "—", base.autocutter ? "default" : null);
@@ -304,7 +306,7 @@ export function renderMarginRows() {
             input.step = 0.1;
             input.placeholder = name;
             input.value = margins[paper.id]?.[key] ?? "";
-            input.setAttribute("aria-label", `${paper.label} ${name}邊留白（mm）`);
+            input.setAttribute("aria-label", `${paper.label} ${name}邊距（mm）`);
             wrap.appendChild(input);
             row.appendChild(wrap);
             return { key, input };
@@ -449,7 +451,7 @@ async function queryPrinterStatus() {
         const parts = [];
         if (statusByte.length > 0) {
             const { online } = interpretRealtimeStatus(1, statusByte[0]);
-            parts.push(`連線狀態：${online ? "online" : "offline"}`);
+            parts.push(`連接狀態：${online ? "online" : "offline"}`);
         }
         if (paperByte.length > 0) {
             const { paper } = interpretRealtimeStatus(4, paperByte[0]);
@@ -523,7 +525,7 @@ export function bindPrinterSettings() {
             alert("印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次");
             return;
         }
-        if (!confirm("忘記後，瀏覽器不再記得已授權的印表機，目前的連線也會中斷；下次要按「連接印表機」重新選擇裝置。確定要忘記嗎？")) return;
+        if (!confirm("忘記後，瀏覽器不再記得已授權的印表機，目前的連接也會中斷；下次要按「連接印表機」重新選擇裝置。確定要忘記嗎？")) return;
         try {
             const usbCount = await usbAdapter.forgetAuthorizedDevices();
             const serialCount = await serialAdapter.forgetAuthorizedPorts();
