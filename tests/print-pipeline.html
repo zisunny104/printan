@@ -288,9 +288,9 @@ test("USB 傳輸回 stall → 中文錯誤含狀態", async () => {
     assert(err.message.includes("stall"));
     eq(describePrinterError(err), err.message);
 });
-test("尚未連接 → 「尚未連接印表機」", async () => {
+test("尚未連線 → 「尚未連線印表機」", async () => {
     const err = await rejection(new WebUsbEscposAdapter().print(one()));
-    eq(describePrinterError(err), "尚未連接印表機");
+    eq(describePrinterError(err), "尚未連線印表機");
 });
 test("序列埠 write 不回應 → 逾時 reject", async () => {
     const a = new WebSerialEscposAdapter();

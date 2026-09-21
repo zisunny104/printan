@@ -159,7 +159,7 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
 
     const info = [
         ["機型", `${baseProfile.brand} ${baseProfile.model}`],
-        ["連接", connection],
+        ["連線", connection],
         ...(firmware ? [["韌體", firmware]] : []),
         ["紙寬", `${paper.label}　${dpi} dpi`],
         ["可印", `${paper.printableWidthDots} / ${rawWidth} 點`],

@@ -95,12 +95,12 @@ export async function attemptSilentPrinterReconnect() {
         }
     }
     updatePrinterConnectionUi();
-    // 自動重連不送 GS I：只有使用者手動按「連接印表機」才查詢（部分機型會把指令當文字印出）
+    // 自動重連不送 GS I：只有使用者手動按「連線印表機」才查詢（部分機型會把指令當文字印出）
     await identifyConnectedPrinter({ query: false });
 }
 
-// 設定 modal 的連線區塊只有一組連接／中斷按鈕，「目前選哪種連接方式」跟「實際連上哪一種」
-// 要分開看：已連接時以實際連上的為準（方式選項鎖住，要換得先中斷）；未連接時才用使用者選的方式。
+// 設定 modal 的連線區塊只有一組連線／中斷按鈕，「目前選哪種連線方式」跟「實際連上哪一種」
+// 要分開看：已連線時以實際連上的為準（方式選項鎖住，要換得先中斷）；未連線時才用使用者選的方式。
 function currentConnectMethod() {
     if (state.usbConnected) return "usb";
     if (state.serialConnected) return "serial";
@@ -126,33 +126,33 @@ function updatePrinterConnectionUi() {
         ? "此瀏覽器不支援 Web Serial API，請改用 Chrome 或 Edge，或繼續使用系統列印對話框。"
         : "此瀏覽器不支援 WebUSB，請改用 Chrome 或 Edge，或繼續使用系統列印對話框。";
     els["printer-connection-status"].textContent = connected
-        ? `已連接：${connectedLabel}`
+        ? `已連線：${connectedLabel}`
         : "列印會走系統列印對話框";
     els["btn-printer-connect"].hidden = connected;
     els["btn-printer-connect"].disabled = !supported;
     els["btn-printer-disconnect"].hidden = !connected;
 
     // 連線狀態燈：modal 標題旁的 badge 是主要指示，工具列「列印設定」按鈕文字後面的小綠點
-    // 讓不開 modal 也看得出有沒有連接。都是 in-flow 元素，不用絕對定位貼在按鈕角落
+    // 讓不開 modal 也看得出有沒有連線。都是 in-flow 元素，不用絕對定位貼在按鈕角落
     // （貼角的圓點會被邊框吃掉一半，看起來像「有問題」的角標，也不是 .is-active 那種
     // 整顆填色的「目前開啟」語意，見 editor.css .printer-conn-dot）。
-    // 未連接時 badge 用紅底（最搶眼，提醒要連線）；已連接改成綠燈外框。
+    // 未連線時 badge 用紅底（最搶眼，提醒要連線）；已連線改成綠燈外框。
     els["printer-conn-badge"].classList.toggle("is-negative", !connected);
     els["printer-conn-badge"].classList.toggle("is-outlined", connected);
     els["printer-conn-badge"].querySelector(".printer-conn-dot").classList.toggle("is-on", connected);
-    els["printer-conn-badge-text"].textContent = connected ? "已連接" : "未連接";
+    els["printer-conn-badge-text"].textContent = connected ? "已連線" : "未連線";
     els["printer-toolbar-dot"].hidden = !connected;
     els["btn-printer-settings"].dataset.tooltip = connected
-        ? `列印設定（已連接：${connectedLabel}）`
+        ? `列印設定（已連線：${connectedLabel}）`
         : "列印設定";
-    els["btn-printer-settings"].setAttribute("aria-label", connected ? "列印設定（印表機已連接）" : "列印設定（印表機未連接）");
+    els["btn-printer-settings"].setAttribute("aria-label", connected ? "列印設定（印表機已連線）" : "列印設定（印表機未連線）");
 
     // 識別資料只在連線期間有意義，斷線（含裝置被拔掉）就清掉，見 identifyConnectedPrinter()。
     if (!connected) state.printerIdentity = null;
     updatePrinterInfo();
     els["btn-printer-forget"].disabled = !(usbAdapter.canForget() || serialAdapter.canForget());
 
-    // 跟連接／中斷按鈕一樣用狀態控制可用性，不要讓沒接印表機時還能按「測試列印」／
+    // 跟連線／中斷按鈕一樣用狀態控制可用性，不要讓沒接印表機時還能按「測試列印」／
     // 「查詢印表機狀態」再跳 alert 說明——那樣使用者得先點一次才知道不能用，體驗上
     // 比按鈕本身直接變成無法點擊差一截。
     els["btn-printer-test-print"].disabled = !connected;
@@ -186,7 +186,7 @@ function updatePrinterInfo() {
     const identity = state.printerIdentity;
 
     if (!identity) {
-        setInfoCell("printer-info-device", "未連接");
+        setInfoCell("printer-info-device", "未連線");
         setInfoCell("printer-info-firmware", "—");
         setInfoCell("printer-info-spec", `${base.brand} ${base.model}`, "default");
     } else {
@@ -399,7 +399,7 @@ async function identifyConnectedPrinter({ query = true } = {}) {
 // 測試列印／校正紙：canvas 由 test-print-project.js 產生，跟一般列印共用 adapter.print() 與 printerBusy 序列化
 async function printTestSheet(label, build) {
     if (!state.usbConnected && !state.serialConnected) {
-        alert(`請先連接 USB 或序列埠印表機才能${label}`);
+        alert(`請先連線 USB 或序列埠印表機才能${label}`);
         return;
     }
     if (state.printerBusy) {
@@ -436,7 +436,7 @@ async function printTestSheet(label, build) {
 async function queryPrinterStatus() {
     const adapter = state.usbConnected ? usbAdapter : state.serialConnected ? serialAdapter : null;
     if (!adapter) {
-        alert("請先連接 USB 或序列埠印表機才能查詢狀態");
+        alert("請先連線 USB 或序列埠印表機才能查詢狀態");
         return;
     }
     if (state.printerBusy) {
@@ -451,7 +451,7 @@ async function queryPrinterStatus() {
         const parts = [];
         if (statusByte.length > 0) {
             const { online } = interpretRealtimeStatus(1, statusByte[0]);
-            parts.push(`連接狀態：${online ? "online" : "offline"}`);
+            parts.push(`連線狀態：${online ? "online" : "offline"}`);
         }
         if (paperByte.length > 0) {
             const { paper } = interpretRealtimeStatus(4, paperByte[0]);
@@ -502,7 +502,7 @@ export function bindPrinterSettings() {
                 state.usbConnected = true;
             }
         } catch (err) {
-            if (!isSelectionCancelled(err)) alert(`連接失敗：${describePrinterError(err)}`);
+            if (!isSelectionCancelled(err)) alert(`連線失敗：${describePrinterError(err)}`);
         }
         updatePrinterConnectionUi();
         await identifyConnectedPrinter();
@@ -525,7 +525,7 @@ export function bindPrinterSettings() {
             alert("印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次");
             return;
         }
-        if (!confirm("忘記後，瀏覽器不再記得已授權的印表機，目前的連接也會中斷；下次要按「連接印表機」重新選擇裝置。確定要忘記嗎？")) return;
+        if (!confirm("忘記後，瀏覽器不再記得已授權的印表機，目前的連線也會中斷；下次要按「連線印表機」重新選擇裝置。確定要忘記嗎？")) return;
         try {
             const usbCount = await usbAdapter.forgetAuthorizedDevices();
             const serialCount = await serialAdapter.forgetAuthorizedPorts();

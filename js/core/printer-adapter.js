@@ -67,8 +67,8 @@ export function describePrinterError(err) {
     switch (err?.name) {
         case "TimeoutError": return "印表機沒有回應，請檢查紙張、上蓋與電源";
         case "NetworkError": return "傳輸中斷，請檢查連接線與電源";
-        case "NotFoundError": return "印表機已中斷連接";
-        case "InvalidStateError": return "印表機連接已失效，請重新連接";
+        case "NotFoundError": return "印表機已中斷連線";
+        case "InvalidStateError": return "印表機連線已失效，請重新連線";
         case "NotAllowedError":
         case "SecurityError": return "沒有存取印表機的權限";
         default: return "無法傳送資料到印表機";
@@ -251,7 +251,7 @@ export class WebUsbEscposAdapter {
 
     /**
      * 嘗試沿用瀏覽器記住的裝置授權直接重新連線，不跳出選擇對話框。
-     * 給頁面載入時用，不需要使用者手勢就能恢復「已連接」狀態。
+     * 給頁面載入時用，不需要使用者手勢就能恢復「已連線」狀態。
      * 已授權的裝置優先挑 vendorId 相符的（規格檔指定的廠牌），其次才是宣告 USB Printer Class 的其他廠牌。
      * @returns {Promise<boolean>} 是否成功恢復連線
      */
@@ -324,13 +324,13 @@ export class WebUsbEscposAdapter {
         this.inEndpointNumber = claimed.inEndpointNumber;
     }
 
-    /** 目前連接裝置的顯示名稱，尚未連接時回傳空字串。 */
+    /** 目前連線裝置的顯示名稱，尚未連線時回傳空字串。 */
     get deviceLabel() {
         if (!this.device) return "";
         return [this.device.manufacturerName, this.device.productName].filter(Boolean).join(" ") || "USB 印表機";
     }
 
-    /** 目前連接裝置的識別資訊（VID:PID），給印表機資訊顯示用，尚未連接時回傳空字串。 */
+    /** 目前連線裝置的識別資訊（VID:PID），給印表機資訊顯示用，尚未連線時回傳空字串。 */
     get deviceDetail() {
         if (!this.device) return "";
         return `USB ${formatUsbId(this.device.vendorId)}:${formatUsbId(this.device.productId)}`;
@@ -341,7 +341,7 @@ export class WebUsbEscposAdapter {
      * @param {{feedLines?: number, cutPaper?: boolean}} options
      */
     async print(renderResult, options = {}) {
-        if (!this.device) throw new Error("尚未連接印表機");
+        if (!this.device) throw new Error("尚未連線印表機");
         const bytes = buildEscposJob(renderResult, options);
         for (let offset = 0; offset < bytes.length; offset += ESCPOS_CHUNK_SIZE) {
             const chunk = bytes.subarray(offset, offset + ESCPOS_CHUNK_SIZE);
@@ -359,7 +359,7 @@ export class WebUsbEscposAdapter {
      * @returns {Promise<Uint8Array>}
      */
     async queryStatus(n) {
-        if (!this.device) throw new Error("尚未連接印表機");
+        if (!this.device) throw new Error("尚未連線印表機");
         await this.device.transferOut(this.endpointNumber, new Uint8Array([0x10, 0x04, n]));
         if (this.inEndpointNumber == null) return new Uint8Array();
         const transferPromise = this.device.transferIn(this.inEndpointNumber, 64).catch(() => null);
@@ -379,7 +379,7 @@ export class WebUsbEscposAdapter {
      * @returns {Promise<string|null>}
      */
     async queryPrinterId(n) {
-        if (!this.device) throw new Error("尚未連接印表機");
+        if (!this.device) throw new Error("尚未連線印表機");
         if (this.inEndpointNumber == null) return null;
         await this.device.transferOut(this.endpointNumber, new Uint8Array([0x1d, 0x49, n]));
         const transferPromise = this.device.transferIn(this.inEndpointNumber, 64).catch(() => null);
@@ -477,14 +477,14 @@ export class WebSerialEscposAdapter {
         this.writer = port.writable.getWriter();
     }
 
-    /** 目前連接序列埠的顯示名稱，尚未連接時回傳空字串。序列埠沒有裝置名稱可讀，只能顯示 VID。 */
+    /** 目前連線序列埠的顯示名稱，尚未連線時回傳空字串。序列埠沒有裝置名稱可讀，只能顯示 VID。 */
     get deviceLabel() {
         if (!this.port) return "";
         const info = this.port.getInfo();
         return info.usbVendorId ? `序列埠印表機（VID 0x${info.usbVendorId.toString(16)}）` : "序列埠印表機";
     }
 
-    /** 目前連接序列埠的識別資訊，給印表機資訊顯示用；非 USB 轉接的 RS-232 埠沒有可讀的識別資料。 */
+    /** 目前連線序列埠的識別資訊，給印表機資訊顯示用；非 USB 轉接的 RS-232 埠沒有可讀的識別資料。 */
     get deviceDetail() {
         if (!this.port) return "";
         const info = this.port.getInfo();
@@ -498,7 +498,7 @@ export class WebSerialEscposAdapter {
      * @param {{feedLines?: number, cutPaper?: boolean}} options
      */
     async print(renderResult, options = {}) {
-        if (!this.writer) throw new Error("尚未連接印表機");
+        if (!this.writer) throw new Error("尚未連線印表機");
         const bytes = buildEscposJob(renderResult, options);
         for (let offset = 0; offset < bytes.length; offset += ESCPOS_CHUNK_SIZE) {
             await withTimeout(this.writer.write(bytes.subarray(offset, offset + ESCPOS_CHUNK_SIZE)), this.transferTimeoutMs);
@@ -513,7 +513,7 @@ export class WebSerialEscposAdapter {
      * @returns {Promise<Uint8Array>}
      */
     async queryStatus(n) {
-        if (!this.writer || !this.port) throw new Error("尚未連接印表機");
+        if (!this.writer || !this.port) throw new Error("尚未連線印表機");
         await this.writer.write(new Uint8Array([0x10, 0x04, n]));
         const reader = this.port.readable.getReader();
         const readPromise = reader.read().catch(() => null);
@@ -535,7 +535,7 @@ export class WebSerialEscposAdapter {
      * @returns {Promise<string|null>}
      */
     async queryPrinterId(n) {
-        if (!this.writer || !this.port) throw new Error("尚未連接印表機");
+        if (!this.writer || !this.port) throw new Error("尚未連線印表機");
         await this.writer.write(new Uint8Array([0x1d, 0x49, n]));
         const reader = this.port.readable.getReader();
         const chunks = [];
