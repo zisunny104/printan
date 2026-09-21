@@ -1290,3 +1290,65 @@ body {
         min-height: 2.5rem;
     }
 }
+
+/* 小螢幕（<768px）版面結構／元素設定改抽屜，畫布置頂佔主要位置：
+   - 版面結構＝dialog.ts-app-drawer.is-bottom（modal，Tocas 提供貼底、遮罩、捲動鎖），只在開啟時顯示；
+   - 元素設定＝#inspectorDock 自訂的非 modal 底部面板（Tocas 沒有非 modal 版本），加 .is-open 才顯示，
+     最高半個螢幕，其上的畫布仍可點選。開關由 JS 控制（見 TODO／給 b3 的介面清單）。 */
+@media (width < 768px) {
+    #inspectorDock {
+        display: none;
+    }
+
+    #inspectorDock.is-open {
+        display: block;
+        position: fixed;
+        inset: auto 0 0;
+        z-index: var(--ts-z-drawer, 100);
+        max-height: 50vh;
+        max-height: 50dvh;
+        overflow-y: auto;
+        padding: .5rem;
+        background: var(--ts-gray-50);
+        border-radius: var(--ts-border-radius-container, .5rem) var(--ts-border-radius-container, .5rem) 0 0;
+        box-shadow: var(--ts-elevated-shadow-drawer, 0 -2px 12px rgb(0 0 0 / .2));
+    }
+
+    #outlineSidebar > .content {
+        max-height: 70vh;
+        max-height: 70dvh;
+        overflow-y: auto;
+    }
+}
+
+/* ≥768px：版面結構的 dialog 不當抽屜用，蓋掉 Tocas 抽屜的定位與遮罩，未開啟也照常顯示成一般側欄 */
+@media (width >= 768px) {
+    dialog.ts-app-drawer.editor-list {
+        display: block;
+        position: static;
+        inset: auto;
+        z-index: auto;
+        width: auto;
+        height: auto;
+        max-width: none;
+        max-height: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .editor-list > .content {
+        display: contents;
+    }
+}
+
+@media (width >= 1024px) {
+    dialog.ts-app-drawer.editor-list {
+        display: flex;
+        width: var(--printan-list-width);
+    }
+}

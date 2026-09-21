@@ -1,4 +1,5 @@
 <?php defined('PRINTAN_VIEW') || exit; ?>
+                <!-- <768px 是底部面板（非 modal、無遮罩，畫布仍可點選）：預設隱藏，加上 .is-open 才顯示；≥768px 為一般欄位 -->
                 <aside class="editor-dock" id="inspectorDock" aria-label="元素設定與批次資料">
                     <div class="ts-box is-rounded">
                         <div class="pane-card-header">
@@ -6,6 +7,10 @@
                                 <span class="ts-icon is-sliders-icon" aria-hidden="true"></span>
                                 <span>元素設定</span>
                             </span>
+                            <button type="button" id="btn-inspector-close" class="ts-button is-icon is-ghost is-small tablet+:has-hidden"
+                                aria-label="關閉元素設定">
+                                <span class="ts-icon is-xmark-icon" aria-hidden="true"></span>
+                            </button>
                         </div>
                         <div class="ts-content is-padded" id="inspector">
                             <div class="pane-empty-state-static">
