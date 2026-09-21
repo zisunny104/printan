@@ -46,6 +46,7 @@ body {
    textarea，改用 flex + CSS 變數，desktop+（≥1024px）才拆三欄，以下維持堆疊。 */
 
 :root {
+    --paper-color: #fff; /* 紙張底色（熱感紙永遠是白的，深色模式也不變）；畫布與兩側不可印區共用 */
     --printan-list-width: 290px;
     --printan-dock-width: 340px;
 }
@@ -672,14 +673,14 @@ body {
 }
 
 /* 不可印區：白底可列印區左右兩側印表機印不到的範圍（寬度由 JS 寫入 --paper-unprintable）。
-   淡斜線，色調與切刀安全線同灰；緊貼白底外側、低於編輯疊層，tooltip 靠 pointer-events:auto */
+   視覺上與紙張同色、無任何標示；只保留 hover 提示（pointer-events 維持 auto） */
 .unprintable-zone {
     position: absolute;
     top: 0;
     bottom: 0;
     z-index: 0;
     width: var(--paper-unprintable, 0);
-    background: repeating-linear-gradient(45deg, light-dark(rgba(120, 120, 120, .18), rgba(200, 200, 200, .22)) 0 4px, transparent 4px 8px);
+    background: var(--paper-color);
 }
 
 .unprintable-zone.is-left {
@@ -692,7 +693,7 @@ body {
 
 .canvas-host {
     position: relative;
-    background: #fff;
+    background: var(--paper-color);
 }
 
 /* 版面還沒有任何元素時，畫布內容高度只有幾個 px，白底看起來像一條裂縫；
