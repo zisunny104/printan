@@ -543,14 +543,36 @@ function renderVariables() {
 
 // 縮放與尺規（見 workspace-view.js）；縮放後紙張的 CSS 寬度變了，編輯疊層座標跟著重算
 const workspace = createWorkspaceView({
-    getPaperWidthMm: () => getPaperWidth(getEffectiveProfile(), state.project.paper.widthId).printableWidthMm,
+    // 「符合寬度」把左右不可印區也算進去，整張紙才看得到
+    getPaperWidthMm: () => getPaperWidth(getEffectiveProfile(), state.project.paper.widthId).printableWidthMm + 2 * unprintableMm(),
     onZoom: () => {
         updatePaperFrame();
         renderEditOverlay();
     },
 });
 
+// 紙寬與可列印寬度之差的一半＝左右各印不到的寬度（左右對稱，用標準值；可列印點數含使用者覆寫，不含邊距校正）
+function unprintableMm() {
+    const paper = getPaperWidth(getBaseProfile(), state.project.paper.widthId);
+    return Math.max(0, ((paper.rollWidthMm ?? paper.printableWidthMm) - paper.printableWidthMm) / 2);
+}
+
+// 白底左右兩側的「不可印區」：純畫面提示（DOM，不在 canvas 內），匯出與列印不含
+function ensureUnprintableZones() {
+    const shadow = els["paper-shadow"];
+    if (shadow.querySelector(".unprintable-zone")) return;
+    for (const side of ["left", "right"]) {
+        const zone = document.createElement("div");
+        zone.className = `unprintable-zone is-${side}`;
+        zone.setAttribute("role", "img");
+        zone.setAttribute("aria-label", "此區印表機印不到");
+        zone.dataset.tooltip = "此區印表機印不到";
+        shadow.appendChild(zone);
+    }
+}
+
 function updatePaperFrame() {
+    ensureUnprintableZones();
     const profile = getEffectiveProfile();
     const paper = getPaperWidth(profile, state.project.paper.widthId);
     // 連續紙沒有實體「上邊界」；下緣的切刀安全線是切刀刀片跟列印頭的實際距離（bladeOffsetMm）——
@@ -559,6 +581,7 @@ function updatePaperFrame() {
     const pxPerMm = workspace.pxPerMm();
     // 畫面上的紙＝可列印區：白底寬度＝printableWidthMm × pxPerMm（對應實際列印的 576 點）
     els["canvas-host"].style.width = `${paper.printableWidthMm * pxPerMm}px`;
+    els["paper-shadow"].style.setProperty("--paper-unprintable", `${unprintableMm() * pxPerMm}px`);
     els["paper-shadow"].style.setProperty("--paper-safe-bottom", `${bladeOffsetMm * pxPerMm}px`);
     // 空白版型的白底＝最短可切下的一張紙（列印頭到切刀的距離），隨縮放與 profile 變動
     els["paper-shadow"].style.setProperty("--paper-min-height", `${bladeOffsetMm * pxPerMm}px`);
