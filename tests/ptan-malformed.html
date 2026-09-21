@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Printan tests：.ptan 壞資料容錯</title>
+<style>
+body { font: 14px/1.6 system-ui, sans-serif; margin: 16px; }
+li { list-style: none; }
+.pass { color: #1a7f37; }
+.fail { color: #cf222e; }
+.known { color: #9a6700; }
+pre { margin: 0 0 0 24px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1 id="summary">執行中…</h1>
+<ul id="list"></ul>
+<script type="module">
+// 壞的 .ptan 匯入：loadProject／serializeProject／readPtanFile 不該丟出未捕獲例外，
+// 要嘛回傳 { ok:false, error }，要嘛回傳可繼續使用的安全預設值。跟 tests/index.html 同一套跑法。
+//
+// known(...) 是「已知的 core 問題」：目前確實會出錯，測試在出錯時標為 KNOWN（不算失敗）；
+// 一旦 core 修好、不再出錯，這項會變成 FAIL 提醒把它改成一般 test()。
+import { loadProject, serializeProject } from "../js/core/schema.js";
+import { walkElements } from "../js/core/document-model.js";
+import { readPtanFile } from "../js/core/ptan-file.js";
+
+const cases = [];
+const test = (name, fn) => cases.push({ name, fn });
+const known = (name, fn) => cases.push({ name, fn, known: true });
+function assert(cond, msg = "assert failed") { if (!cond) throw new Error(msg); }
+function eq(actual, expected, msg = "") {
+    const a = JSON.stringify(actual), b = JSON.stringify(expected);
+    if (a !== b) throw new Error(`${msg}\n預期 ${b}\n實際 ${a}`);
+}
+
+const file = (text, name = "x.ptan") => new File([text], name);
+const withElements = (elements) => ({ format: "ptan", version: 1, template: { elements } });
+/** 匯入後專案要能被其他程式安全使用：走訪元素樹、再序列化。 */
+function useProject(project) {
+    walkElements(project.template.elements, () => {});
+    JSON.parse(serializeProject(project));
+}
+/** 期望：loadProject 不丟例外；失敗時有明確錯誤字串；成功時專案能走訪與序列化。 */
+function survives(raw) {
+    const out = loadProject(raw);
+    if (out.ok) useProject(out.project);
+    else assert(typeof out.error === "string" && out.error.length > 0, "失敗但沒有錯誤訊息");
+    return out;
+}
+const rejects = (raw) => { const out = survives(raw); assert(!out.ok, "應該被拒絕但回傳 ok"); return out; };
+const withTimeout = (promise, ms = 3000) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error(`${ms}ms 內沒有回應（Promise 永遠沒有 resolve）`)), ms))]);
+
+// ---- 不是合法 .ptan：要明確拒絕 ----
+test("非 JSON 文字、空字串、純空白都回傳錯誤", () => {
+    for (const raw of ["not json", "", "   ", "{", "{\"format\":"]) rejects(raw);
+});
+test("JSON 但不是物件（null、數字、字串、布林、陣列）", () => {
+    for (const raw of ["null", "5", "\"ptan\"", "true", "[]", "[1,2]"]) rejects(raw);
+});
+test("format 欄位不符或缺少", () => {
+    rejects({ version: 1 });
+    rejects({ format: "PTAN", version: 1 });
+    rejects({ format: 1, version: 1 });
+});
+test("缺 version、version 型別錯誤", () => {
+    for (const version of [undefined, "1", null, true, [], {}]) rejects({ format: "ptan", version });
+});
+test("未知的較新 version（含 Infinity 與超大數）要求更新 Printan", () => {
+    for (const version of [3, 99, 1e9, Infinity]) {
+        const out = rejects({ format: "ptan", version });
+        assert(out.error.includes("更新"), out.error);
+    }
+});
+test("version 是字串形式的較新版本（JSON 文字內為數字）", () => {
+    const out = rejects('{"format":"ptan","version":99}');
+    assert(out.error.includes("99"), out.error);
+});
+
+// ---- 結構型別錯誤：回傳安全預設值 ----
+test("template／elements 缺少或型別錯誤 → 空的元素列表", () => {
+    for (const template of [undefined, null, "x", 5, [], {}, { elements: null }, { elements: {} }, { elements: "x" }, { elements: 5 }]) {
+        const out = survives({ format: "ptan", version: 1, template });
+        assert(out.ok, "應該成功載入");
+        eq(out.project.template.elements, [], JSON.stringify(template));
+    }
+});
+test("variables／assets／meta／printerProfile／paper 型別錯誤 → 預設值", () => {
+    const out = survives({ format: "ptan", version: 1, variables: "x", assets: 5, meta: "x", printerProfile: null, paper: 5, template: { elements: [] } });
+    assert(out.ok);
+    eq(out.project.variables, []);
+    eq(out.project.assets, []);
+    eq(out.project.printerProfile, {});
+});
+test("元素是數字、字串、無 type、未知 type：不當機", () => {
+    for (const el of [5, "x", true, {}, { type: "alien", id: 1 }, { type: 5 }, []]) survives(withElements([el]));
+});
+test("text 元素：runs 不是陣列、text 是數字、什麼都沒有", () => {
+    for (const el of [{ type: "text", runs: "abc" }, { type: "text", text: 5 }, { type: "text" }, { type: "text", runs: null }]) {
+        const out = survives(withElements([el]));
+        assert(Array.isArray(out.project.template.elements[0].runs), "runs 應被補成陣列：" + JSON.stringify(el));
+    }
+});
+test("row：ratio 不是陣列、columns 是字串或空陣列", () => {
+    for (const el of [{ type: "row", columns: [[], []], ratio: "x" }, { type: "row", columns: "x", ratio: [1] }, { type: "row", columns: [], ratio: [] }]) survives(withElements([el]));
+});
+test("group：children 缺少或不是陣列 → 空 children", () => {
+    for (const el of [{ type: "group" }, { type: "group", children: "x" }, { type: "group", children: 5 }]) {
+        const out = survives(withElements([el]));
+        eq(out.project.template.elements[0].children, []);
+    }
+});
+test("尺寸極端值（超大、負數、NaN 字串）能載入與序列化", () => {
+    survives(withElements([
+        { type: "spacer", heightDots: 1e308 },
+        { type: "spacer", heightDots: -50 },
+        { type: "image", widthPercent: -5, heightDots: -10, assetId: "none" },
+        { type: "barcode", heightDots: "abc" },
+    ]));
+});
+test("極深的巢狀（row／group 各 200 層）不會 stack overflow", () => {
+    let el = { type: "text", runs: [{ text: "x" }] };
+    for (let i = 0; i < 200; i++) el = i % 2 ? { type: "group", children: [el] } : { type: "row", ratio: [1], columns: [[el]] };
+    survives(withElements([el]));
+});
+test("很大的專案（2 萬個元素）能載入", () => {
+    const t0 = performance.now();
+    survives(withElements(Array.from({ length: 20000 }, (_, i) => ({ id: "e" + i, type: "text", text: "行" + i }))));
+    assert(performance.now() - t0 < 5000, "耗時過長");
+});
+test("__proto__／constructor 之類的鍵不會污染 Object.prototype", () => {
+    loadProject('{"format":"ptan","version":1,"__proto__":{"polluted":1},"template":{"elements":[{"type":"text","__proto__":{"polluted":2},"constructor":{"prototype":{"polluted":3}}}]}}');
+    assert(!("polluted" in {}), "Object.prototype 被污染");
+});
+
+// ---- 圖片與字體資料 ----
+test("素材 dataUrl 壞掉（非 base64、空字串、非字串）：載入不檢查內容、不當機", () => {
+    survives({ format: "ptan", version: 1, assets: [{ id: "a", dataUrl: "data:image/png;base64,@@@" }, { id: "b", dataUrl: "" }, { id: "c", dataUrl: 5 }, { id: "d" }], template: { elements: [{ type: "image", assetId: "a" }] } });
+});
+test("素材陣列裡夾雜 null／數字", () => {
+    survives({ format: "ptan", version: 1, assets: [null, 5, "x", { id: "ok", dataUrl: "data:," }], template: { elements: [] } });
+});
+test("readPtanFile：內嵌字體資料異常（非陣列、非 base64、缺欄位、null）仍能開啟，字體不留在專案", async () => {
+    for (const embeddedFonts of ["x", 5, [null, 5, "x"], [{}], [{ family: "不存在的字體", data: "@@@" }], [{ family: "思源黑體", weight: 700, data: "@@@@" }], [{ family: "思源黑體", data: 5 }]]) {
+        const out = await withTimeout(readPtanFile(file(JSON.stringify({ format: "ptan", version: 2, embeddedFonts, template: { elements: [] } }))));
+        assert(out.ok, out.error);
+        assert(!("embeddedFonts" in out.project), "embeddedFonts 應被移除");
+    }
+});
+
+// ---- 檔案層 ----
+test("readPtanFile：空檔、二進位垃圾、非 JSON 都回傳錯誤而不是卡住", async () => {
+    for (const f of [file(""), new File([new Uint8Array([0, 255, 1, 254, 128, 0])], "bin.ptan"), file("<html></html>")]) {
+        const out = await withTimeout(readPtanFile(f));
+        assert(!out.ok && typeof out.error === "string", "應回傳錯誤：" + JSON.stringify(out));
+    }
+});
+test("readPtanFile：UTF-8 BOM 開頭的檔案能正常讀取", async () => {
+    const out = await withTimeout(readPtanFile(file("﻿" + JSON.stringify(withElements([])))));
+    assert(out.ok, out.error);
+});
+test("readPtanFile：內容是合法 .ptan 但夾雜中文、emoji 與換行也能來回", async () => {
+    const out = await withTimeout(readPtanFile(file(JSON.stringify(withElements([{ type: "text", text: "收據 🧾\n第二行" }])))));
+    assert(out.ok, out.error);
+    eq(out.project.template.elements[0].runs[0].text, "收據 🧾\n第二行");
+});
+
+// ---- 已知的 core 問題（回報給 site-e8／b3，此頁不修 core）----
+known("elements 陣列裡有 null：loadProject 丟 TypeError（應回傳錯誤或略過該元素）", () => {
+    survives(withElements([null]));
+});
+known("row 的某一欄是 null／非陣列：loadProject 丟 TypeError", () => {
+    survives(withElements([{ type: "row", ratio: [1, 1], columns: [5, null] }]));
+});
+known("row 的欄內元素是 null：loadProject 丟 TypeError", () => {
+    survives(withElements([{ type: "row", ratio: [1], columns: [[null]] }]));
+});
+known("group 的 children 裡有 null：loadProject 丟 TypeError", () => {
+    survives(withElements([{ type: "group", children: [null] }]));
+});
+known("row 沒有 columns：loadProject 成功，但之後 walkElements／serializeProject 丟 TypeError", () => {
+    survives(withElements([{ type: "row", id: "r" }]));
+});
+known("readPtanFile：含 null 元素的檔案 → onload 內例外，Promise 永遠不 resolve（匯入按鈕看起來卡住）", async () => {
+    const out = await withTimeout(readPtanFile(file(JSON.stringify(withElements([null])))), 1500);
+    assert(!out.ok || out.project, "應回傳結果");
+});
+
+// ---- 執行 ----
+const list = document.getElementById("list");
+let failed = 0;
+let knownCount = 0;
+for (const c of cases) {
+    const li = document.createElement("li");
+    let error = null;
+    try { await c.fn(); } catch (err) { error = err; }
+    if (c.known) {
+        if (error) {
+            knownCount += 1;
+            li.className = "known";
+            li.textContent = "KNOWN  " + c.name;
+            const pre = document.createElement("pre");
+            pre.textContent = error.message;
+            li.append(pre);
+        } else {
+            failed += 1;
+            li.className = "fail";
+            li.textContent = "FAIL  （已修好，請改成一般 test）" + c.name;
+        }
+    } else if (error) {
+        failed += 1;
+        li.className = "fail";
+        li.textContent = "FAIL  " + c.name;
+        const pre = document.createElement("pre");
+        pre.textContent = error.message;
+        li.append(pre);
+    } else {
+        li.className = "pass";
+        li.textContent = "PASS  " + c.name;
+    }
+    list.append(li);
+}
+const summary = document.getElementById("summary");
+const note = knownCount ? `，另有 ${knownCount} 項已知 core 問題` : "";
+summary.textContent = failed ? `${failed} / ${cases.length} 失敗${note}` : `全部通過（${cases.length - knownCount}）${note}`;
+summary.className = failed ? "fail" : "pass";
+document.title = (failed ? "FAIL " : "PASS ") + summary.textContent;
+</script>
+</body>
+</html>
