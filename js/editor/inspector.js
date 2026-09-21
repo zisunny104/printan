@@ -239,9 +239,7 @@ function buildTextInspector(panel, el) {
     const toolbar = document.createElement("div");
     toolbar.className = "pane-toolbar has-top-spaced-small";
     toolbar.addEventListener("mousedown", (e) => e.preventDefault()); // 按工具列不搶走預覽區編輯框的焦點／選取
-    panel.appendChild(toolbar);
     const styleRow = document.createElement("div");
-    panel.appendChild(styleRow);
 
     const textareaWrap = document.createElement("div");
     textareaWrap.className = "ts-input is-small is-fluid has-top-spaced-small";
@@ -250,7 +248,10 @@ function buildTextInspector(panel, el) {
     textarea.setAttribute("aria-label", "文字內容");
     textarea.value = getTextContent(el);
     textareaWrap.appendChild(textarea);
+    // 內容在最上面，選取文字後的樣式（工具列、字體字級）緊接在下
     panel.appendChild(textareaWrap);
+    panel.appendChild(toolbar);
+    panel.appendChild(styleRow);
 
     function renderStyleControls() {
         const hasRange = sel.start !== sel.end;
@@ -300,23 +301,25 @@ function buildTextInspector(panel, el) {
         ["預設字體", fontFamilySelect(el.fontFamily, (v) => { el.fontFamily = v; onModelChange({ skipInspector: true }); }, "跟隨全域預設")],
         ["預設字級 (dot)", textInput(el.fontSize, (v) => { el.fontSize = v; onModelChange({ skipInspector: true }); }, "number")],
     ]));
-    panel.appendChild(fieldRow([
-        ["行高倍數", textInput(el.lineHeight, (v) => { el.lineHeight = v; onModelChange({ skipInspector: true }); }, "number")],
-        ["字距 (dot)", textInput(el.letterSpacing, (v) => { el.letterSpacing = v; onModelChange({ skipInspector: true }); }, "number")],
-    ]));
-    panel.appendChild(fieldRow([
-        ["對齊", selectInput([["left", "靠左"], ["center", "置中"], ["right", "靠右"]], el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })],
-        ["最多行數", textInput(el.maxLines || "", (v) => { el.maxLines = v; onModelChange({ skipInspector: true }); }, "number", "不限")],
-    ]));
+    panel.appendChild(field("對齊", selectInput([["left", "靠左"], ["center", "置中"], ["right", "靠右"]], el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
     panel.appendChild(field(null, checkboxInput(el.bold, (v) => { el.bold = v; onModelChange({ skipInspector: true }); }, "預設粗體")));
     panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange({ skipInspector: true }); }, "整行反相")));
-    panel.appendChild(field(null, checkboxInput(el.wrap, (v) => { el.wrap = v; onModelChange({ skipInspector: true }); }, "自動換行")));
-    const modeRow = document.createElement("div");
-    modeRow.className = "ts-wrap is-compact has-top-spaced-small";
-    const vertical = el.writingMode === "vertical";
-    modeRow.appendChild(iconToggleButton("grip-lines", "橫書", !vertical, () => { el.writingMode = "horizontal"; onModelChange(); }));
-    modeRow.appendChild(iconToggleButton("grip-lines-vertical", "直書", vertical, () => { el.writingMode = "vertical"; onModelChange(); }));
-    if (el.type !== "float-block") panel.appendChild(modeRow); // 圖文段落只支援橫書
+
+    panel.appendChild(foldSection(`${el.type}.layout`, "排版", (body) => {
+        body.appendChild(fieldRow([
+            ["行高倍數", textInput(el.lineHeight, (v) => { el.lineHeight = v; onModelChange({ skipInspector: true }); }, "number")],
+            ["字距 (dot)", textInput(el.letterSpacing, (v) => { el.letterSpacing = v; onModelChange({ skipInspector: true }); }, "number")],
+        ]));
+        body.appendChild(field("最多行數", textInput(el.maxLines || "", (v) => { el.maxLines = v; onModelChange({ skipInspector: true }); }, "number", "不限")));
+        body.appendChild(field(null, checkboxInput(el.wrap, (v) => { el.wrap = v; onModelChange({ skipInspector: true }); }, "自動換行")));
+        if (el.type === "float-block") return; // 圖文段落只支援橫書
+        const modeRow = document.createElement("div");
+        modeRow.className = "ts-wrap is-compact has-top-spaced-small";
+        const vertical = el.writingMode === "vertical";
+        modeRow.appendChild(iconToggleButton("grip-lines", "橫書", !vertical, () => { el.writingMode = "horizontal"; onModelChange(); }));
+        modeRow.appendChild(iconToggleButton("grip-lines-vertical", "直書", vertical, () => { el.writingMode = "vertical"; onModelChange(); }));
+        body.appendChild(modeRow);
+    }));
 }
 
 // 圖文段落：上半是圖片（來源、左右、寬度），下半直接沿用文字元素的內容與段落樣式。
