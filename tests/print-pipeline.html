@@ -16,7 +16,10 @@ pre { margin: 0 0 0 24px; white-space: pre-wrap; }
 <ul id="list"></ul>
 <script type="module">
 // ESC/POS 位元組 golden 測試＋左右邊距校正計算，跟 tests/index.html 同一套跑法（標題顯示 PASS／FAIL）。
-import { buildEscposJob, canvasToEscposRaster, centerCanvasOnWidth } from "../js/core/printer-adapter.js";
+import {
+    WebSerialEscposAdapter, WebUsbEscposAdapter, buildEscposJob, canvasToEscposRaster, centerCanvasOnWidth,
+    describePrinterError, isSelectionCancelled,
+} from "../js/core/printer-adapter.js";
 import {
     getPrinterProfile, marginPadDots, sanitizeMarginCalibration, withMarginCalibration,
     getMarginPad, getPrintHeadWidthDots, PRINTABLE_DOTS_MIN, MARGIN_MM_MAX,
@@ -254,6 +257,65 @@ test("端到端：右側補白（左 5／右 2）→ 內容貼左、右側留白
 test("端到端：58mm 無校正在 576 頭上置中", () => {
     const cols = blackCols(centerCanvasOnWidth(edgeCanvas(420), 576, 0, 0));
     eq([cols[0], cols[cols.length - 1]], [78, 497]);
+});
+
+// ---- 錯誤路徑（stub 裝置）----
+const domErr = (name, message) => Object.assign(new Error(message), { name });
+async function rejection(promise) { try { await promise; } catch (e) { return e; } return null; }
+function usbWith(transferOut) {
+    const a = new WebUsbEscposAdapter();
+    a.device = { transferOut };
+    a.endpointNumber = 1;
+    return a;
+}
+test("USB 傳輸中途拔線（NetworkError）→ print reject，訊息為短中文", async () => {
+    let n = 0;
+    const a = usbWith(async () => { if (++n === 2) throw domErr("NetworkError", "A transfer error has occurred."); return { status: "ok" }; });
+    const big = { canvas: canvasFrom(Array.from({ length: 400 }, () => ".".repeat(576))) };
+    const err = await rejection(a.print(big));
+    assert(err, "應 reject");
+    eq(describePrinterError(err), "傳輸中斷，請檢查連接線與電源");
+});
+test("USB transferOut 一直不回應 → 逾時 reject，不會卡住", async () => {
+    const a = usbWith(() => new Promise(() => {}));
+    a.transferTimeoutMs = 50;
+    const err = await rejection(a.print(one()));
+    eq(err?.name, "TimeoutError");
+    eq(describePrinterError(err), "印表機沒有回應，請檢查紙張、上蓋與電源");
+});
+test("USB 傳輸回 stall → 中文錯誤含狀態", async () => {
+    const err = await rejection(usbWith(async () => ({ status: "stall" })).print(one()));
+    assert(err.message.includes("stall"));
+    eq(describePrinterError(err), err.message);
+});
+test("尚未連接 → 「尚未連接印表機」", async () => {
+    const err = await rejection(new WebUsbEscposAdapter().print(one()));
+    eq(describePrinterError(err), "尚未連接印表機");
+});
+test("序列埠 write 不回應 → 逾時 reject", async () => {
+    const a = new WebSerialEscposAdapter();
+    a.writer = { write: () => new Promise(() => {}) };
+    a.transferTimeoutMs = 50;
+    eq((await rejection(a.print(one())))?.name, "TimeoutError");
+});
+test("不支援 WebUSB 時 connect 丟中文訊息（不呼叫 requestDevice）", async () => {
+    const a = new WebUsbEscposAdapter();
+    a.isSupported = () => false;
+    const err = await rejection(a.connect());
+    eq(describePrinterError(err), "此瀏覽器不支援 WebUSB，請改用 Chrome 或 Edge");
+});
+test("使用者取消裝置選擇（USB／序列埠）視為取消而非錯誤", () => {
+    assert(isSelectionCancelled(domErr("NotFoundError", "Failed to execute 'requestDevice' on 'USB': No device selected.")));
+    assert(isSelectionCancelled(domErr("NotFoundError", "Failed to execute 'requestPort' on 'Serial': No port selected by the user.")));
+    assert(!isSelectionCancelled(domErr("NotFoundError", "The device was disconnected.")));
+    assert(!isSelectionCancelled(domErr("NetworkError", "No device selected.")));
+});
+test("describePrinterError：各 DOMException 對應短中文、未知例外有預設", () => {
+    for (const n of ["NetworkError", "NotFoundError", "InvalidStateError", "NotAllowedError", "SecurityError", "Whatever"]) {
+        const m = describePrinterError(domErr(n, "English message"));
+        assert(/[一-鿿]/.test(m) && m.length <= 20, `${n}：${m}`);
+    }
+    assert(describePrinterError(null).length > 0);
 });
 
 // ---- runner ----

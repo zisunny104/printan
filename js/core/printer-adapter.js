@@ -50,6 +50,36 @@ export class SystemDialogAdapter {
 
 const ESCPOS_CHUNK_SIZE = 4096; // 分段傳輸，避免單次 transferOut 過大
 
+const TRANSFER_TIMEOUT_MS = 15000; // 單段傳輸上限：缺紙、上蓋打開時印表機不再收資料，transferOut／write 會一直不 resolve
+
+function withTimeout(promise, ms = TRANSFER_TIMEOUT_MS) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Object.assign(new Error("傳輸逾時"), { name: "TimeoutError" })), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/** 把瀏覽器丟的英文例外（NetworkError、NotFoundError…）換成一句短的中文；本程式自己丟的中文訊息原樣保留。 */
+export function describePrinterError(err) {
+    const msg = String(err?.message ?? "");
+    if (/[一-鿿]/.test(msg) && err?.name !== "TimeoutError") return msg;
+    switch (err?.name) {
+        case "TimeoutError": return "印表機沒有回應，請檢查紙張、上蓋與電源";
+        case "NetworkError": return "傳輸中斷，請檢查連接線與電源";
+        case "NotFoundError": return "印表機已中斷連接";
+        case "InvalidStateError": return "印表機連接已失效，請重新連接";
+        case "NotAllowedError":
+        case "SecurityError": return "沒有存取印表機的權限";
+        default: return "無法傳送資料到印表機";
+    }
+}
+
+/** 使用者在裝置選擇對話框按取消（USB／序列埠都是 NotFoundError）不算錯誤。 */
+export function isSelectionCancelled(err) {
+    return err?.name === "NotFoundError" && /no (device|port) selected/i.test(String(err.message));
+}
+
 function concatUint8Arrays(chunks) {
     const total = chunks.reduce((sum, c) => sum + c.length, 0);
     const out = new Uint8Array(total);
@@ -206,6 +236,7 @@ export class WebUsbEscposAdapter {
         this.device = null;
         this.endpointNumber = null;
         this.inEndpointNumber = null;
+        this.transferTimeoutMs = TRANSFER_TIMEOUT_MS;
     }
 
     isSupported() {
@@ -314,7 +345,7 @@ export class WebUsbEscposAdapter {
         const bytes = buildEscposJob(renderResult, options);
         for (let offset = 0; offset < bytes.length; offset += ESCPOS_CHUNK_SIZE) {
             const chunk = bytes.subarray(offset, offset + ESCPOS_CHUNK_SIZE);
-            const result = await this.device.transferOut(this.endpointNumber, chunk);
+            const result = await withTimeout(this.device.transferOut(this.endpointNumber, chunk), this.transferTimeoutMs);
             if (result.status !== "ok") throw new Error(`列印資料傳輸失敗（狀態：${result.status}）`);
         }
     }
@@ -385,6 +416,7 @@ export class WebSerialEscposAdapter {
     constructor() {
         this.port = null;
         this.writer = null;
+        this.transferTimeoutMs = TRANSFER_TIMEOUT_MS;
     }
 
     isSupported() {
@@ -469,7 +501,7 @@ export class WebSerialEscposAdapter {
         if (!this.writer) throw new Error("尚未連接印表機");
         const bytes = buildEscposJob(renderResult, options);
         for (let offset = 0; offset < bytes.length; offset += ESCPOS_CHUNK_SIZE) {
-            await this.writer.write(bytes.subarray(offset, offset + ESCPOS_CHUNK_SIZE));
+            await withTimeout(this.writer.write(bytes.subarray(offset, offset + ESCPOS_CHUNK_SIZE)), this.transferTimeoutMs);
         }
     }
 

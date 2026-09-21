@@ -5,7 +5,7 @@ import {
     getPrinterProfile, matchPrinterProfile, sanitizeMarginCalibration, sanitizePrintableDotsOverrides,
 } from "../core/printer-profiles.js";
 import { PRINT_PREFS_KEY, els, serialAdapter, state, usbAdapter } from "./context.js";
-import { SystemDialogAdapter, interpretRealtimeStatus } from "../core/printer-adapter.js";
+import { SystemDialogAdapter, describePrinterError, interpretRealtimeStatus, isSelectionCancelled } from "../core/printer-adapter.js";
 import { getBaseProfile, getEffectiveProfile, schedulePreview } from "./editor.js";
 import { confirmFontFallbacks } from "./batch-export.js";
 import { renderCalibrationSheet, renderTestPrint } from "./test-print-project.js";
@@ -36,7 +36,7 @@ export async function printCurrent() {
             } catch (err) {
                 state.usbConnected = false;
                 updatePrinterConnectionUi();
-                alert(`印表機列印失敗，已改用系統列印對話框：${err.message}`);
+                alert(`列印失敗：${describePrinterError(err)}，改用系統列印`);
             }
         } else if (state.serialConnected) {
             try {
@@ -45,13 +45,15 @@ export async function printCurrent() {
             } catch (err) {
                 state.serialConnected = false;
                 updatePrinterConnectionUi();
-                alert(`印表機列印失敗，已改用系統列印對話框：${err.message}`);
+                alert(`列印失敗：${describePrinterError(err)}，改用系統列印`);
             }
         }
 
         const adapter = new SystemDialogAdapter();
         await adapter.connect();
         await adapter.print(result);
+    } catch (err) {
+        alert(`列印失敗：${describePrinterError(err)}`);
     } finally {
         state.printerBusy = false;
     }
@@ -421,7 +423,7 @@ async function printTestSheet(label, build) {
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
         await adapter.print(renderResult, getEscposPrintOptions());
     } catch (err) {
-        alert(`${label}失敗：${err.message}`);
+        alert(`${label}失敗：${describePrinterError(err)}`);
     } finally {
         state.printerBusy = false;
     }
@@ -457,7 +459,7 @@ async function queryPrinterStatus() {
             ? parts.join("；")
             : "印表機沒有回應";
     } catch (err) {
-        els["printer-status-result"].textContent = `查詢失敗：${err.message}`;
+        els["printer-status-result"].textContent = `查詢失敗：${describePrinterError(err)}`;
     } finally {
         state.printerBusy = false;
     }
@@ -498,7 +500,7 @@ export function bindPrinterSettings() {
                 state.usbConnected = true;
             }
         } catch (err) {
-            alert(`連接印表機失敗：${err.message}`);
+            if (!isSelectionCancelled(err)) alert(`連接失敗：${describePrinterError(err)}`);
         }
         updatePrinterConnectionUi();
         await identifyConnectedPrinter();
@@ -527,7 +529,7 @@ export function bindPrinterSettings() {
             const serialCount = await serialAdapter.forgetAuthorizedPorts();
             els["printer-status-result"].textContent = `已忘記 ${(usbCount ?? 0) + (serialCount ?? 0)} 個已授權的裝置`;
         } catch (err) {
-            els["printer-status-result"].textContent = `忘記裝置失敗：${err.message}`;
+            els["printer-status-result"].textContent = `忘記裝置失敗：${describePrinterError(err)}`;
         }
         state.usbConnected = usbAdapter.device !== null;
         state.serialConnected = serialAdapter.port !== null;
@@ -583,6 +585,7 @@ export function bindPrinterSettings() {
     if (usbAdapter.isSupported()) {
         navigator.usb.addEventListener("disconnect", (e) => {
             if (e.device === usbAdapter.device) {
+                usbAdapter.disconnect().catch(() => {}); // 已拔除的裝置 close() 可能丟錯，狀態照樣清掉
                 state.usbConnected = false;
                 updatePrinterConnectionUi();
             }
