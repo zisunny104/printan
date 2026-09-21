@@ -9,6 +9,7 @@ import {
     createImageElement, createRowElement, createBarcodeElement,
 } from "../core/document-model.js";
 import { dotsPerMm } from "../core/units.js";
+import { renderBarcodeResult } from "../core/barcode.js";
 
 const FONT = DEFAULT_FONT_FAMILY;
 
@@ -211,6 +212,7 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
     const total = subtotal + DISCOUNT[1];
     const center = (runs, overrides = {}) => text(runs, { align: "center", ...overrides });
     const gap = () => createSpacerElement({ heightDots: 8 });
+    const space = () => createSpacerElement({ heightDots: 12 });
     const menuRows = menu.flatMap(([name, qty, price, remark]) => [
         itemRow(name, String(qty), money((Number(qty) || 0) * price), {}),
         text(`　└ ${remark}`, { fontSize: noteSize }),
@@ -229,8 +231,21 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
     const qrs = [[PROJECT_URL, "專案網站"], [TEAPOT_URL, "418 茶壺"]];
     const qrRow = createRowElement([1, 1]);
     const captionRow = createRowElement([1, 1]);
-    qrs.forEach(([value, caption], i) => {
-        qrRow.columns[i].push(createBarcodeElement({ format: "qrcode", value, heightDots: qrSize }));
+    // 兩顆 QR 因內容長度不同模組數不同，畫出來大小不一；先各自畫好，再左右置中、上緣貼齊放進同樣大的外框，說明才會在同一條線上
+    // 兩顆用同樣的模組大小（取較大版本放得下的整數點），符號才不會一大一小
+    const counts = qrs.map(([value]) => {
+        const qr = window.qrcode(0, "M");
+        qr.addData(value);
+        qr.make();
+        return qr.getModuleCount();
+    });
+    const cell = Math.max(1, Math.floor(qrSize / Math.max(...counts)));
+    const qrCanvases = qrs.map(([value], i) => renderBarcodeResult({ format: "qrcode", value, heightDots: cell * counts[i] }, widthDots / 2).canvas);
+    const frame = Math.max(...qrCanvases.map((c) => Math.max(c.width, c.height)));
+    qrs.forEach(([, caption], i) => {
+        const { canvas, ctx } = makeCanvas(frame, frame);
+        ctx.drawImage(qrCanvases[i], Math.floor((frame - qrCanvases[i].width) / 2), 0);
+        qrRow.columns[i].push(createImageElement({ assetId: canvas.toDataURL("image/png"), fit: "auto", ditherMode: "threshold" }));
         captionRow.columns[i].push(center(caption, { fontSize: smallSize }));
     });
     const infoRows = info.map(([k, v]) => {
@@ -264,10 +279,11 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
         gap(),
         qrRow,
         captionRow,
+        space(),
         // 感謝語與頁尾小字
         center("謝謝光臨", { fontSize: titleSize + 8, bold: true }),
         // 撕線：其下的技術資訊像可撕下的存根（視覺撕線；自動切刀仍在整張最後）
-        gap(),
+        space(),
         createImageElement({ assetId: stripUrl, fit: "auto", ditherMode: "threshold" }),
         center("沿此線撕開", { fontSize: smallSize }),
         createImageElement({ assetId: cutLineUrl, fit: "auto", ditherMode: "threshold" }),
