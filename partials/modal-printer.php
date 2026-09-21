@@ -3,7 +3,7 @@
                  → 印表機資訊（唯讀）→ 測試與診斷。「機器讀到的」與「預設／手動覆寫」的值用來源 badge
                  （.src-badge）區分，見 printer-settings.js sourceBadge()。 -->
             <dialog id="printer-settings-dialog" class="ts-modal is-big" aria-labelledby="printer-dialog-title">
-                <div class="content">
+                <div class="content printer-dialog-content">
                     <div class="ts-content">
                         <div class="ts-header is-start-icon" id="printer-dialog-title">
                             <span class="ts-icon is-gear-icon" aria-hidden="true"></span>
@@ -12,7 +12,7 @@
                     </div>
                     <div class="ts-divider"></div>
                     <!-- 寬版分左右兩欄：左＝連線／印表機資訊，右＝列印設定／測試與診斷；窄螢幕堆疊 -->
-                    <div class="ts-grid mobile:is-stacked">
+                    <div class="ts-grid mobile:is-stacked printer-dialog-body">
                         <div class="column is-8-wide">
                         <!-- 連線區塊：連線印表機是這個 modal 的主要動作。總狀態 badge 放大，未連線時用紅底最醒目，
                              已連線改綠燈；同一時間只會有一條連線（USB／序列埠二選一，已連線時方式選項鎖住）。 -->

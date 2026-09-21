@@ -1002,6 +1002,20 @@ body {
     outline-offset: -2px;
 }
 
+/* 列印設定 modal：固定高度，連線狀態／序列埠欄位／查詢結果變動時外框不縮放不位移，超出由內文捲動 */
+.printer-dialog-content {
+    display: flex;
+    flex-direction: column;
+    height: min(50rem, calc(100dvh - 3rem));
+}
+
+.printer-dialog-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    align-content: flex-start;
+}
+
 .help-dialog-content {
     display: flex;
     flex-direction: column;
