@@ -63,6 +63,12 @@ export function iconToggleButton(icon, label, active, onClick) {
     return b;
 }
 
+// 欄位標籤是視覺上的 <label>、沒有 for/id 連到輸入元件，螢幕閱讀器讀不到名稱；直接把標籤文字掛成 aria-label。
+function nameControl(container, text) {
+    const control = container.matches?.("input, select, textarea") ? container : container.querySelector?.("input, select, textarea");
+    if (control && !control.hasAttribute("aria-label")) control.setAttribute("aria-label", text);
+}
+
 export function field(labelText, inputEl, info) {
     const wrap = document.createElement("div");
     wrap.className = "has-top-spaced-small";
@@ -71,6 +77,7 @@ export function field(labelText, inputEl, info) {
         label.className = "ts-text is-label";
         label.textContent = labelText;
         if (info) label.appendChild(createInfoIcon(info));
+        nameControl(inputEl, labelText);
         wrap.appendChild(label);
         const inner = document.createElement("div");
         inner.className = "has-top-spaced-small";
@@ -92,6 +99,7 @@ export function fieldRow(fields) {
         const label = document.createElement("label");
         label.className = "ts-text is-label";
         label.textContent = labelText;
+        nameControl(inputEl, labelText);
         const inner = document.createElement("div");
         inner.className = "has-top-spaced-small";
         inner.appendChild(inputEl);
@@ -144,6 +152,7 @@ export function sliderField(labelText, value, min, max, onInput) {
     sliderWrap.className = "ts-slider is-small is-fluid has-top-spaced-small";
     const input = document.createElement("input");
     input.type = "range";
+    input.setAttribute("aria-label", labelText);
     input.min = String(min);
     input.max = String(max);
     input.value = String(value);

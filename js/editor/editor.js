@@ -514,10 +514,12 @@ function renderVariables() {
 
         const inputCol = document.createElement("div");
         inputCol.className = "column is-fluid";
-        inputCol.appendChild(textInput(state.previewData[name] ?? "", (v) => {
+        const previewInput = textInput(state.previewData[name] ?? "", (v) => {
             state.previewData[name] = v;
             schedulePreview();
-        }));
+        });
+        previewInput.querySelector("input").setAttribute("aria-label", `變數 ${name}`);
+        inputCol.appendChild(previewInput);
 
         row.appendChild(labelCol);
         row.appendChild(inputCol);

@@ -246,6 +246,7 @@ function buildTextInspector(panel, el) {
     textareaWrap.className = "ts-input is-small is-fluid has-top-spaced-small";
     const textarea = document.createElement("textarea");
     textarea.rows = 4;
+    textarea.setAttribute("aria-label", "文字內容");
     textarea.value = getTextContent(el);
     textareaWrap.appendChild(textarea);
     panel.appendChild(textareaWrap);
@@ -475,6 +476,7 @@ function buildImageInspector(panel, el) {
 
     const varInput = textInput(el.assetId || "", (v) => { el.assetId = v; onModelChange({ skipInspector: true }); });
     varInput.querySelector("input").placeholder = "{{image}}";
+    varInput.querySelector("input").setAttribute("aria-label", "圖片變數");
     const varWrap = field(null, varInput);
     varWrap.hidden = !isVariable;
     const varToggle = iconToggleButton("list-check", "改用變數綁定圖片", isVariable, () => {
