@@ -1395,3 +1395,12 @@ body {
         width: var(--printan-list-width);
     }
 }
+
+/* 窄螢幕：Tocas 下拉選單（Floating UI）只把面板推回視窗內，會貼齊視窗右緣（距離 0）；
+   改成固定靠右並保留 8px 以上邊距，寬度仍由內容決定，與觸發鈕保持 8px 垂直間距（Tocas offset） */
+@media (width < 480px) {
+    .ts-dropdown.is-visible {
+        left: auto !important;
+        right: .625rem !important;
+    }
+}
