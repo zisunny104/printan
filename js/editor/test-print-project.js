@@ -100,7 +100,7 @@ function buildCutLine(widthDots) {
 // 避免依賴圖示字型；正方形，貼在標題左邊。
 const BRAND_ICON_SIZE = 72;
 const BRAND_ICON_GAP = 10; // icon 與標題文字的間距（點）
-const brandRuns = (size) => [{ text: "Printan ", fontSize: size }, { text: "單仔", fontSize: size + 12 }];
+const brandRuns = (size) => [{ text: "Printan ", fontSize: size + 6 }, { text: "單仔", fontSize: size + 4 }];
 function measureBrand(size) {
     const { ctx } = makeCanvas(1, 1);
     return brandRuns(size).reduce((sum, r) => {
@@ -156,7 +156,7 @@ function itemRow(name, qty, amount, style) {
 }
 
 // 內容是這個專案自己的「收據」：標題（icon＋名稱）＋副標＋網址 → 品項（含縮排備註行）→ 小計／優惠／合計 →
-// 找零 → 條碼與 QR → 感謝語與頁尾小字 → 技術資訊（小字級）。
+// 條碼與 QR → 感謝語與頁尾小字 → 技術資訊（小字級）。
 // 品項是專案的功能與開發過程，金額由程式加總；彩蛋藏在數字與小字裡，純屬玩笑。
 const PROJECT_URL = "https://toka.dev/koilisu/printan";
 const TEAPOT_URL = "https://http.cat/418"; // 418 I'm a teapot 的貓圖
@@ -165,28 +165,35 @@ const FALLBACK_MODEL = "TM-T82II";
 // 彩蛋數字的來源，要換數字只改這裡
 const EASTER_EGG = {
     birthday: "20260914", // 第一個 commit 的日期（2026-09-14）
-    commits: 172, // 專案 commit 數（171 個＋這一個）
     tokens: "999+", // token 消耗量：實際數不明，玩笑梗
     monthlyFeeUsd: 20, // Claude Pro 月費（美元）
 };
 
 const money = (n) => `${n < 0 ? "-" : ""}$${Math.abs(n).toLocaleString("en-US")}`;
 
-// [名稱, 數量, 單價, 備註]；數量可放字串（如 "999+"），計價時當 0。金額照實填，合計由程式加總：
-// 42（宇宙的答案）、914（誕生日）、3×65（ASCII 的 A）、commit 數、20（月費）、1（Hello World），再減優惠 15
-const MENU = [
-    ["所見即所得預覽", 1, 42, "宇宙、生命與一切的答案"],
-    ["直書排版", 1, Number(EASTER_EGG.birthday.slice(4)), `誕生日紀念款 ${EASTER_EGG.birthday.slice(4)}`],
+// [名稱, 數量, 單價, 備註]；數量可放字串（如 "999+"），計價時當 0。金額照實填，合計由程式加總。
+// 名稱盡量一看就懂（功能名或明顯的玩笑）；42＝宇宙的答案、65＝ASCII 的 A。第 2 項「連線方式」是動態的。
+const menuItems = (connectionItem) => [
+    ["所見即所得預覽", 1, 42, "42：生命、宇宙與一切的答案"],
+    connectionItem,
     ["續命美式咖啡", 3, 65, "喝茶請洽 HTTP 418"],
-    ["修改次數", EASTER_EGG.commits, 1, `第 ${EASTER_EGG.commits} 次 commit（含這一次）`],
-    ["Token 一籮筐", EASTER_EGG.tokens, 0, "實際數不明，大概"],
-    ["月費方案", 1, EASTER_EGG.monthlyFeeUsd, "Claude Pro，本月贊助"],
+    ["Token 一籮筐", EASTER_EGG.tokens, 0, "用量沒算過，反正很多"],
+    ["月費方案", 1, EASTER_EGG.monthlyFeeUsd, "Claude Pro，自掏腰包"],
     ["Hello World", 1, 1, "第一行輸出，成功了"],
 ];
-const DISCOUNT = ["優惠　一點點……耐心", -15];
-const CHANGE = 0;
 
-function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthDots) {
+// 連線方式：備註寫這次的實際連線，單價取最像「埠」的數字——USB 用廠商 ID（十進位）、序列埠用鮑率；
+// 其他連線（或取不到數字）就是 0，連線資訊為空時備註退回固定說明，不印 undefined
+function connectionItem({ connection, vendorId, baudRate }) {
+    const conn = String(connection ?? "").trim();
+    const num = (n) => (Number.isFinite(Number(n)) && Number(n) > 0 ? Math.round(Number(n)) : 0);
+    if (/USB/i.test(conn)) return ["連線方式", 1, num(vendorId), "USB（單價＝廠商 ID）"];
+    if (conn.includes("序列")) return ["連線方式", 1, num(baudRate), `序列埠（單價＝鮑率）`];
+    return ["連線方式", 1, 0, conn || "尚未指定連線"];
+}
+const DISCOUNT = ["優惠　一點點……耐心", -15];
+
+function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthDots, connectionCtx) {
     // 字級依紙寬取值：80mm 特大，58mm（約 420 點）退一級才放得下
     const wide = widthDots >= 500;
     const brandSize = wide ? 56 : 40;
@@ -197,11 +204,12 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
     const qrSize = wide ? 140 : 120;
     bodySize = wide ? 28 : 24;
 
-    const subtotal = MENU.reduce((sum, [, qty, price]) => sum + (Number(qty) || 0) * price, 0);
+    const menu = menuItems(connectionItem(connectionCtx));
+    const subtotal = menu.reduce((sum, [, qty, price]) => sum + (Number(qty) || 0) * price, 0);
     const total = subtotal + DISCOUNT[1];
     const center = (runs, overrides = {}) => text(runs, { align: "center", ...overrides });
     const gap = () => createSpacerElement({ heightDots: 8 });
-    const menuRows = MENU.flatMap(([name, qty, price, remark]) => [
+    const menuRows = menu.flatMap(([name, qty, price, remark]) => [
         itemRow(name, String(qty), money((Number(qty) || 0) * price), {}),
         text(`　└ ${remark}`, { fontSize: noteSize }),
     ]);
@@ -247,8 +255,6 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
         gap(),
         line({ text: "合計", bold: true, fontSize: totalSize }, { text: money(total), bold: true, fontSize: totalSize }, { inverse: true }),
         gap(),
-        line("找零", money(CHANGE), { fontSize: smallSize }),
-        gap(),
         // 條碼與 QR
         // 明碼另用一般文字元素，字級與內文同大（條碼內建明碼太小，熱感應二值化後糊成一團）
         createBarcodeElement({ format: "code128", value: model, heightDots: 64, showText: false }),
@@ -258,7 +264,6 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
         captionRow,
         // 感謝語與頁尾小字
         center("謝謝光臨", { fontSize: titleSize + 8, bold: true }),
-        center("本收據沒有法律效力，但誠意十足", { fontSize: smallSize }),
         // 技術資訊（小字級）
         createDividerElement({ style: "dotted" }),
         ...infoRows,
@@ -283,12 +288,12 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
     const info = [
         ["機型", `${baseProfile.brand} ${baseProfile.model}`],
         ["連線", connection],
-        ...(firmware ? [["韌體", firmware]] : []),
         ["紙寬", `${paper.label}　${dpi} dpi`],
         ["可印", `${paper.printableWidthDots} / ${rawWidth} 點`],
         ["邊距", margin ? `左 ${margin.leftMm}　右 ${margin.rightMm} mm` : "未校正"],
         ["補白", `左 ${pad.left}　右 ${pad.right} 點`],
         ["走紙", `${prefs.feedLines} 行　切紙${prefs.cutPaper ? "開" : "關"}`],
+        ["誕生", `${EASTER_EGG.birthday.replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3")}　第一個 commit`],
         ["時間", new Date().toLocaleString("zh-TW", { hour12: false })],
     ];
 
@@ -302,6 +307,7 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
         buildCalibratedStrip(paper.printableWidthDots, dpi),
         buildCutLine(paper.printableWidthDots),
         paper.printableWidthDots,
+        { connection, vendorId: baseProfile.webUsb?.vendorId, baudRate: prefs.serialBaudRate },
     );
     const body = await renderTemplate(project, {}, { mode: "thermal", profile });
 
