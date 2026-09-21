@@ -30,7 +30,7 @@ export function renderInspector() {
         return;
     }
 
-    const builders = { text: buildTextInspector, image: buildImageInspector, spacer: buildSpacerInspector, divider: buildDividerInspector, row: buildRowInspector, group: buildGroupInspector, barcode: buildBarcodeInspector };
+    const builders = { text: buildTextInspector, image: buildImageInspector, "float-block": buildFloatBlockInspector, spacer: buildSpacerInspector, divider: buildDividerInspector, row: buildRowInspector, group: buildGroupInspector, barcode: buildBarcodeInspector };
     (builders[el.type] || (() => {}))(panel, el);
 
     panel.appendChild(sectionDivider());
@@ -314,7 +314,34 @@ function buildTextInspector(panel, el) {
     const vertical = el.writingMode === "vertical";
     modeRow.appendChild(iconToggleButton("grip-lines", "橫書", !vertical, () => { el.writingMode = "horizontal"; onModelChange(); }));
     modeRow.appendChild(iconToggleButton("grip-lines-vertical", "直書", vertical, () => { el.writingMode = "vertical"; onModelChange(); }));
-    panel.appendChild(modeRow);
+    if (el.type !== "float-block") panel.appendChild(modeRow); // 圖文段落只支援橫書
+}
+
+// 圖文段落：上半是圖片（來源、左右、寬度），下半直接沿用文字元素的內容與段落樣式。
+function buildFloatBlockInspector(panel, el) {
+    panel.appendChild(sectionHeader("image", "圖片"));
+    const sideRow = document.createElement("div");
+    sideRow.className = "ts-wrap is-compact has-top-spaced-small";
+    sideRow.appendChild(mkButton(el.assetId ? "更換圖片" : "選擇圖片", "upload", () => {
+        rt.imageFileInputHandler = (assetId) => {
+            el.assetId = assetId;
+            el.cropRect = null;
+            onModelChange();
+        };
+        els["image-file-input"].click();
+    }, { outlined: true }));
+    sideRow.appendChild(iconToggleButton("arrow-left", "圖片靠左", el.imageSide !== "right", () => { el.imageSide = "left"; onModelChange(); }));
+    sideRow.appendChild(iconToggleButton("arrow-right", "圖片靠右", el.imageSide === "right", () => { el.imageSide = "right"; onModelChange(); }));
+    panel.appendChild(sideRow);
+    const widthInput = textInput(Math.max(1, Math.min(100, el.widthPercent ?? 40)), (v) => {
+        if (!(v > 0)) return;
+        el.widthPercent = Math.min(100, Math.max(1, v));
+        onModelChange({ skipInspector: true });
+    }, "number");
+    Object.assign(widthInput.querySelector("input"), { min: 1, max: 100, step: 1 });
+    panel.appendChild(field("圖片寬度 (%)", widthInput));
+    panel.appendChild(sectionDivider());
+    buildTextInspector(panel, el);
 }
 
 function resolveAssetDataUrl(assetId) {

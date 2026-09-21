@@ -27,7 +27,7 @@ export function renderEditOverlay() {
         if (box.el.type === "spacer" || box.el.type === "image" || box.el.type === "barcode") {
             handleBuilders.push(() => buildHeightResizeHandle(box, scale));
         }
-        if (box.el.type === "image" && item.drawHeight > 0) {
+        if ((box.el.type === "image" || box.el.type === "float-block") && item.drawHeight > 0) {
             for (const spec of imageHandleSpecs(box, item)) handleBuilders.push(() => buildImageResizeHandle(box, item, spec, scale));
         }
         if (box.el.type === "row") {
@@ -257,13 +257,17 @@ function buildHeightResizeHandle(box, scale) {
 }
 
 /** 圖片縮放把手的位置：靠左的圖只有右側（左緣是錨點）、靠右的只有左側、置中則兩側都有；每側一個邊中點＋一個下角。 */
+// 圖文段落的 align 是文字對齊，圖片位置看 imageSide
+const imageAlign = (el) => (el.type === "float-block" ? el.imageSide || "left" : el.align || "center");
+
 function imageHandleSpecs(box, item) {
-    const align = item.el.align || "center";
+    const align = imageAlign(item.el);
     const sides = align === "left" ? ["r"] : align === "right" ? ["l"] : ["l", "r"];
     const imgX = box.x + (align === "left" ? 0 : align === "right" ? box.width - item.drawWidth : (box.width - item.drawWidth) / 2);
     return sides.flatMap((side) => {
         const x = imgX + (side === "r" ? item.drawWidth : 0);
-        return [{ side, corner: false, x, y: box.y + box.height / 2 }, { side, corner: true, x, y: box.y + box.height }];
+        const imgHeight = Math.min(box.height, item.drawHeight);
+        return [{ side, corner: false, x, y: box.y + imgHeight / 2 }, { side, corner: true, x, y: box.y + imgHeight }];
     });
 }
 
@@ -287,14 +291,14 @@ function buildImageResizeHandle(box, item, { side, corner, x, y }, scale) {
         const startWidth = item.drawWidth;
         const startHeight = item.drawHeight;
         const startStretchHeight = realEl.heightDots;
-        const factor = (realEl.align || "center") === "center" ? 2 : 1;
+        const factor = imageAlign(realEl) === "center" ? 2 : 1;
         let moved = false;
         function onMove(ev) {
             moved = true;
             const dx = ((ev.clientX - startX) / scale) * (side === "r" ? 1 : -1) * factor;
             const width = Math.min(box.width, Math.max(box.width * 0.01, startWidth + dx));
             realEl.widthPercent = Math.round((width / box.width) * 1000) / 10;
-            if (corner && ev.shiftKey) {
+            if (corner && ev.shiftKey && realEl.type === "image") {
                 realEl.fit = "stretch";
                 realEl.heightDots = Math.max(1, Math.round(startHeight + (ev.clientY - startY) / scale));
             } else if (realEl.fit === "stretch" && startStretchHeight > 0) {
