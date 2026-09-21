@@ -1,7 +1,6 @@
 # 待辦
 
 ## 需實機／使用者決定
-- [ ] 實機驗證邊距校正與校正紙（640 點寬資料機器是否吃），含 80mm 邊距校正流程（左右偏移已確認是紙捲未固定所致，軟體邊距校正只補固定偏差；固定紙捲後再校正）
 - [ ] 實機驗證 GS L／ESC a／GS I 在不同機型的行為
 - [ ] 非 Epson USB 印表機相容性（WebUSB filter、指令集差異）
 - [ ] 1:1 顯示比例實體尺寸驗證（96 CSS px = 1 inch）
@@ -17,6 +16,7 @@
 - [ ] editor.js 仍有 674 行：已拆出 context／inspector-widgets／inspector／printer-settings／outline／batch-export／element-actions／canvas-overlay／workspace-view，是否再拆待評估
 
 ## 低優先
+- [ ] （選用）實機驗證邊距校正與校正紙（640 點寬資料機器是否吃），含 80mm 邊距校正流程：左右不對稱為印表機機構限制，使用者已接受；邊距校正只用於補固定偏差，非必要
 - [ ] 58mm 紙寬置中假設（commit 23ea7ab）尚未實機驗證（使用者確認紙寬固定 80mm）
 
 ## 無法處理
