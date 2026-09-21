@@ -203,7 +203,7 @@ function writeFold(id, open) {
     try { localStorage.setItem(FOLD_KEY, JSON.stringify({ ...readFolds(), [id]: open })); } catch { /* 無痕視窗等：不記就好 */ }
 }
 
-/** 收合區塊：標題列（▸／▾＋文字）點開才顯示 build(body) 填進去的內容。id 例：`text.layout`。 */
+/** 收合區塊：標題列（chevron 圖示＋文字）點開才顯示 build(body) 填進去的內容。id 例：`text.layout`。 */
 export function foldSection(id, title, build, defaultOpen = false) {
     const details = document.createElement("details");
     details.className = "inspector-fold";
@@ -211,9 +211,10 @@ export function foldSection(id, title, build, defaultOpen = false) {
     const summary = document.createElement("summary");
     summary.className = "has-top-spaced ts-header is-small";
     const mark = document.createElement("span");
-    const setMark = () => { mark.textContent = details.open ? "▾ " : "▸ "; };
+    mark.setAttribute("aria-hidden", "true");
+    const setMark = () => { mark.className = `ts-icon is-small is-chevron-${details.open ? "down" : "right"}-icon`; };
     setMark();
-    summary.append(mark, title);
+    summary.append(mark, " ", title);
     const body = document.createElement("div");
     // 收合時先不建內容（如裁切工具要量尺寸、載入圖片），第一次展開才建
     let built = false;

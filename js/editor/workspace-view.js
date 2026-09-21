@@ -239,9 +239,11 @@ export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
 
         ctx.strokeStyle = ctx.fillStyle = getComputedStyle(box).color;
         ctx.lineWidth = 1 / dpr;
-        ctx.font = "10px system-ui, sans-serif";
+        ctx.font = "11px system-ui, sans-serif";
         ctx.textBaseline = "top";
-        ctx.beginPath();
+        // 主刻度（有數字）用完整顏色、次刻度較淡，層次分明
+        const minorPath = new Path2D();
+        const majorPath = new Path2D();
         const labels = [];
         for (let i = firstIndex; i <= lastIndex; i++) {
             const mm = i * minorStep;
@@ -250,22 +252,26 @@ export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
             const isLabel = mm % labelStep === 0;
             const isMid = !isLabel && (mm * 2) % labelStep === 0;
             const tick = isLabel ? thickness * 0.4 : isMid ? thickness * 0.28 : thickness * 0.18;
+            const path = isLabel ? majorPath : minorPath;
             if (orientation === "h") {
-                ctx.moveTo(pos, thickness);
-                ctx.lineTo(pos, thickness - tick);
+                path.moveTo(pos, thickness);
+                path.lineTo(pos, thickness - tick);
             } else {
-                ctx.moveTo(thickness, pos);
-                ctx.lineTo(thickness - tick, pos);
+                path.moveTo(thickness, pos);
+                path.lineTo(thickness - tick, pos);
             }
             if (isLabel) labels.push({ mm, pos });
         }
         // 水平尺規終點對齊白底右緣：終點不是刻度間距的整數倍時（例如 72mm、間距 20mm）補一條終點刻度
         if (orientation === "h" && extentMm % minorStep > 0.001 && originPx + extentPx <= length) {
             const pos = (Math.round((originPx + extentPx) * dpr) + 0.5) / dpr;
-            ctx.moveTo(pos, thickness);
-            ctx.lineTo(pos, thickness - thickness * 0.4);
+            majorPath.moveTo(pos, thickness);
+            majorPath.lineTo(pos, thickness - thickness * 0.4);
         }
-        ctx.stroke();
+        ctx.globalAlpha = 0.5;
+        ctx.stroke(minorPath);
+        ctx.globalAlpha = 1;
+        ctx.stroke(majorPath);
 
         for (const { mm, pos } of labels) {
             const text = String(mm);
@@ -274,12 +280,12 @@ export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
                 // 靠近右緣放不下時改靠刻度左側
                 const flip = pos + 2 + textW > w;
                 ctx.textAlign = flip ? "right" : "left";
-                ctx.fillText(text, flip ? pos - 2 : pos + 2, 2);
+                ctx.fillText(text, Math.round((flip ? pos - 2 : pos + 2) * dpr) / dpr, 2);
             } else {
                 // 文字旋轉後朝上排；靠近上緣放不下時改朝下排
                 const flip = pos - 2 - textW < 0;
                 ctx.save();
-                ctx.translate(2, flip ? pos + 2 : pos - 2);
+                ctx.translate(2, Math.round((flip ? pos + 2 : pos - 2) * dpr) / dpr);
                 ctx.rotate(-Math.PI / 2);
                 ctx.textAlign = flip ? "right" : "left";
                 ctx.fillText(text, 0, 0);
