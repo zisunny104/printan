@@ -19,7 +19,7 @@
                         <div class="ts-content">
                             <div class="ts-wrap is-middle-aligned is-relaxed">
                                 <div class="ts-text is-label">印表機連線</div>
-                                <span class="ts-badge is-large is-negative" id="printer-conn-badge" role="status">
+                                <span class="ts-badge is-negative" id="printer-conn-badge" role="status">
                                     <span class="printer-conn-dot" aria-hidden="true"></span><span id="printer-conn-badge-text">未連線</span>
                                 </span>
                             </div>
@@ -27,11 +27,11 @@
                             <div class="ts-selection is-small" id="printer-connect-method" role="radiogroup" aria-label="連線方式">
                                 <label class="item">
                                     <input type="radio" name="printer-connect-method" value="usb">
-                                    <div class="text">USB（WebUSB）</div>
+                                    <div class="text" data-tooltip="WebUSB">USB</div>
                                 </label>
                                 <label class="item">
                                     <input type="radio" name="printer-connect-method" value="serial">
-                                    <div class="text">序列埠（RS-232 / Web Serial）</div>
+                                    <div class="text" data-tooltip="RS-232 / Web Serial">序列埠</div>
                                 </label>
                             </div>
                             <div id="printer-connection-unsupported" class="ts-text is-negative has-top-spaced-small" hidden></div>
@@ -73,6 +73,7 @@
                         </div>
                         </div>
                         <div class="column is-8-wide">
+                            <div class="ts-divider tablet+:has-hidden"></div>
                         <div class="ts-content">
                             <div class="ts-text is-label">列印設定<span class="info-icon" tabindex="0" role="img" aria-label="只在 USB／序列埠直連時套用，系統列印不受影響" data-tooltip="只在 USB／序列埠直連時套用，系統列印不受影響"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span></div>
                             <div class="has-top-spaced-small"></div>

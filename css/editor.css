@@ -1047,11 +1047,6 @@ body {
     background: rgba(255, 255, 255, .9);
 }
 
-#printer-conn-badge {
-    font-size: 1.05rem;
-    padding-inline: .9rem;
-}
-
 #printer-conn-badge.is-outlined {
     --accent-color: light-dark(var(--ts-positive-700, #237804), var(--ts-positive-400, #95de64));
 }
@@ -1081,7 +1076,7 @@ body {
     white-space: nowrap;
 }
 
-/* 可列印點數：每個紙寬一列（標籤／輸入框／換算 mm／來源 badge） */
+/* 可列印點數與邊距校正：每個紙寬一列。窄螢幕（<480px）改用格線，換算文字與 badge 固定排在輸入框下方，不各自亂折行 */
 .printer-dots-row {
     display: flex;
     flex-wrap: wrap;
@@ -1100,6 +1095,39 @@ body {
 
 .printer-dots-row .src-badge {
     margin-left: 0;
+}
+
+@media (width < 480px) {
+    #printer-dots-list .printer-dots-row {
+        display: grid;
+        grid-template-columns: 3.5rem 6.5rem 1fr;
+        align-items: center;
+    }
+
+    #printer-dots-list .printer-dots-row > .ts-text.is-description {
+        grid-column: 2 / 4;
+        grid-row: 2;
+    }
+
+    #printer-dots-list .printer-dots-row > span:last-child {
+        grid-column: 3;
+        grid-row: 1;
+    }
+
+    #printer-margin-list .printer-dots-row {
+        display: grid;
+        grid-template-columns: 3.5rem minmax(0, 1fr) minmax(0, 1fr) auto;
+        align-items: center;
+    }
+
+    #printer-margin-list .printer-dots-input {
+        width: auto;
+    }
+}
+
+/* 連線方式選項：文字不折行，選中塊才不會比灰色軌道高 */
+#printer-connect-method .item {
+    white-space: nowrap;
 }
 
 /* ==== 頁首與頁尾 ==== */
