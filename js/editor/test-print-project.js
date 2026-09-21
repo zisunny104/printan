@@ -93,23 +93,29 @@ function itemRow(name, qty, amount, style) {
     return row;
 }
 
-// 內容是這個專案自己的「收據」：品項是設計巧思與操作邏輯，金額都無價；
+// 內容是這個專案自己的「收據」：品項是設計巧思與操作邏輯，金額由程式加總；
 // 底線／刪除線／斜體／粗體各排一列，順便驗證文字樣式。
 const PROJECT_NAME = "Printan 單仔";
 const PROJECT_URL = "https://toka.dev/koilisu/printan";
 const FALLBACK_MODEL = "TM-T82II";
 
 function buildReceiptElements(info, model, stripUrl, endBarUrl) {
-    const items = [
-        itemRow("復原樹　不丟歷史", "1", "無價", { underline: true }),
-        itemRow("Ctrl+滾輪連續縮放", "1", "無價", { italic: true }),
-        itemRow("所見即所得", "1", "無價", { bold: true }),
-        itemRow("尺規對齊白底", "1", "無價"),
-        itemRow("拖曳大綱換層", "1", "無價"),
-        itemRow("Claude 的 token", "很多", "算不完"),
-        itemRow("Claude 思考時間", "好久", "算不完"),
-        itemRow("一次講完的需求", "0", "不存在", { strikethrough: true }),
+    // [名稱, 數量, 單價, 樣式]；金額 = 單價 × 數量，小計／合計由程式加總，不寫死
+    const lines = [
+        ["復原樹　不丟歷史", 1, 120, { underline: true }],
+        ["Ctrl+滾輪連續縮放", 2, 85, { italic: true }],
+        ["所見即所得", 1, 200, { bold: true }],
+        ["尺規對齊白底", 3, 60],
+        ["拖曳大綱換層", 1, 45],
+        ["Claude 的 token", 12, 5],
+        ["Claude 思考時間", 1, 1500],
+        ["一次講完的需求", 0, 300, { strikethrough: true }],
     ];
+    const DISCOUNT = -15;
+    const money = (n) => `$${n.toLocaleString("en-US")}`;
+    const subtotal = lines.reduce((sum, [, qty, price]) => sum + qty * price, 0);
+    const total = subtotal + DISCOUNT;
+    const items = lines.map(([name, qty, price, style]) => itemRow(name, String(qty), money(qty * price), style));
 
     const infoRows = info.map(([k, v]) => {
         const row = createRowElement([1, 2]);
@@ -125,9 +131,9 @@ function buildReceiptElements(info, model, stripUrl, endBarUrl) {
         createDividerElement({ style: "dashed" }),
         ...items,
         createDividerElement(),
-        line("設計巧思", "無價"),
-        line("優惠　一點點……耐心", "無價"),
-        line({ text: "合計", bold: true, fontSize: 32 }, { text: "無價", bold: true, fontSize: 32 }),
+        line("小計", money(subtotal)),
+        line("優惠　一點點……耐心", money(DISCOUNT).replace("$-", "-$")),
+        line({ text: "合計", bold: true, fontSize: 32 }, { text: money(total), bold: true, fontSize: 32 }),
         createSpacerElement({ heightDots: 8 }),
         text("　已付款 / TEST　", { align: "center", inverse: true }),
         text([{ text: "會員 " }, { text: " ★ VIP ★ ", inverse: true }, { text: " 優惠" }], { align: "center" }),
