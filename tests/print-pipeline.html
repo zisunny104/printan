@@ -31,7 +31,7 @@ import {
 import { composeResults } from "../js/core/compose.js";
 import { csvToRecords } from "../js/core/csv.js";
 import { renderElements } from "../js/core/renderer.js";
-import { createTextElement, createTextRun, createRowElement, createBarcodeElement } from "../js/core/document-model.js";
+import { createTextElement, createTextRun, createRowElement, createBarcodeElement, resolveImageFit } from "../js/core/document-model.js";
 import { renderBarcodeResult } from "../js/core/barcode.js";
 import { normalizeRowGap, splitDotsByRatio } from "../js/core/units.js";
 
@@ -392,6 +392,26 @@ test("圖片網址：data: 與 assets 內圖片不受影響、不列入清單", 
 test("合併：imageFailures 去重合併", () => {
     const out = composeResults([{ ...res(["#"]), imageFailures: ["a", "b"] }, { ...res(["#"]), imageFailures: ["b"] }]);
     eq(out.imageFailures, ["a", "b"]);
+});
+
+// ---- 圖片縮放（fit：none 原尺寸／auto 符合寬度／stretch 填滿） ----
+const pngOf = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c.toDataURL("image/png"); };
+const fitItem = async (w, h, patch) => (await runEls([{ ...imgEl(pngOf(w, h)), ...patch }])).items[0];
+test("圖片縮放：resolveImageFit 舊檔（無 fit）依 heightDots 判斷，不認得的值當 auto", () => {
+    eq([{}, { heightDots: 50 }, { fit: "none" }, { fit: "auto", heightDots: 50 }, { fit: "stretch" }, { fit: "bogus", heightDots: 50 }, { fit: 5 }].map(resolveImageFit),
+        ["auto", "stretch", "none", "auto", "stretch", "auto", "auto"]);
+});
+test("圖片縮放：none 用原尺寸（不看 widthPercent），超過欄寬縮小；auto／壞值維持依寬度等比", async () => {
+    const small = await fitItem(30, 20, { fit: "none", widthPercent: 50 });
+    eq([small.drawWidth, small.drawHeight], [30, 20]);
+    const wide = await fitItem(200, 100, { fit: "none" });
+    eq([wide.drawWidth, wide.drawHeight], [100, 50]);
+    const auto = await fitItem(30, 20, { fit: "auto", widthPercent: 50 });
+    eq([auto.drawWidth, auto.drawHeight], [50, 33]);
+    const bogus = await fitItem(30, 20, { fit: "bogus", widthPercent: 50 });
+    eq([bogus.drawWidth, bogus.drawHeight], [50, 33]);
+    const stretch = await fitItem(30, 20, { fit: "stretch", heightDots: 80 });
+    eq([stretch.drawWidth, stretch.drawHeight], [100, 80]);
 });
 
 // ---- 多欄欄距 ----

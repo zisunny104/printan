@@ -56,6 +56,17 @@ const textsOf = (project) => {
     return out;
 };
 
+// ---- 圖片 fit 新值 ----
+test("圖片 fit：none／auto／stretch 與不認得的值載入後原樣保留（渲染端負責退回 auto）", () => {
+    for (const fit of ["none", "auto", "stretch", "bogus"]) {
+        const file = clone(V1_FILE);
+        file.template.elements[3].fit = fit;
+        const out = loadProject(file);
+        assert(out.ok, out.error);
+        eq(out.project.template.elements[3].fit, fit);
+    }
+});
+
 // ---- v1 → 目前版本 遷移 ----
 test("v1 檔遷移：扁平 text 變 runs，其餘欄位與非文字元素原樣保留", () => {
     const out = loadProject(clone(V1_FILE));

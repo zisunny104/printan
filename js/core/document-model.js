@@ -196,6 +196,14 @@ export function replaceFullText(el, newText) {
     replaceTextRange(el, prefix, oldText.length - suffix, newText.slice(prefix, newText.length - suffix));
 }
 
+/** 圖片縮放方式：none＝原尺寸（1 像素＝1 點，超過欄寬才縮小）｜auto＝符合寬度（依 widthPercent、高度等比）｜stretch＝填滿（指定高度，可能變形）。
+ * 舊檔沒有 fit：heightDots > 0 視為 stretch，否則 auto；不認得的值一律當 auto（與新增 none 之前的行為相同）。 */
+export const IMAGE_FITS = ["none", "auto", "stretch"];
+export function resolveImageFit(el) {
+    const fit = el.fit || (el.heightDots > 0 ? "stretch" : "auto");
+    return IMAGE_FITS.includes(fit) ? fit : "auto";
+}
+
 export function createImageElement(overrides = {}) {
     return {
         id: nextId("image"),
@@ -204,7 +212,7 @@ export function createImageElement(overrides = {}) {
         heightDots: 0, // 0 = 依欄寬等比縮放；fit === "stretch" 時作為指定高度
         align: "center", // left | center | right，drawWidth < 欄寬時（widthPercent < 100）決定圖片框水平位置
         widthPercent: 100, // 1-100，圖片框寬度 = 欄寬 × widthPercent/100
-        fit: "auto", // "auto"：依裁切後內容比例縮放高度｜"stretch"：改用 heightDots 指定高度（可能變形）
+        fit: "auto", // "none" 原尺寸｜"auto" 符合寬度（依裁切後內容比例縮放高度）｜"stretch" 填滿（改用 heightDots 指定高度，可能變形），見 resolveImageFit
         rotation: 0, // 0 | 90 | 180 | 270，順時針
         cropRect: null, // null 或 { x, y, w, h }（0-1 正規化座標，相對「旋轉後」的圖片）
         brightness: 0, // -100..100

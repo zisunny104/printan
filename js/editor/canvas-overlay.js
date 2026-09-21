@@ -296,6 +296,7 @@ function buildImageResizeHandle(box, item, { side, corner, x, y }, scale) {
             const dx = ((ev.clientX - startX) / scale) * (side === "r" ? 1 : -1) * factor;
             const width = Math.min(box.width, Math.max(box.width * 0.01, startWidth + dx));
             realEl.widthPercent = Math.round((width / box.width) * 1000) / 10;
+            if (realEl.fit === "none") realEl.fit = "auto"; // 原尺寸不看寬度百分比，拖寬度就切回符合寬度
             if (corner && ev.shiftKey && realEl.type === "image") {
                 realEl.fit = "stretch";
                 realEl.heightDots = Math.max(1, Math.round(startHeight + (ev.clientY - startY) / scale));

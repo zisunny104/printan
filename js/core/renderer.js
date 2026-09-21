@@ -13,7 +13,7 @@
 
 import { getPrinterProfile, getPaperWidth } from "./printer-profiles.js";
 import { applyDataToElements } from "./merge.js";
-import { FLOAT_GAP_DOTS } from "./document-model.js";
+import { FLOAT_GAP_DOTS, resolveImageFit } from "./document-model.js";
 import { dotsToMm, splitRowColumns } from "./units.js";
 import { applyThermalSimulation, toGrayscale, applyDither } from "./dithering.js";
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
@@ -163,9 +163,10 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, show
         } else if (el.type === "image") {
             const img = await resolveImage(el, assetCtx);
             const { contentWidth, contentHeight } = measureImageContent(el, img);
+            const fit = resolveImageFit(el);
             const widthPercent = clampNumber(el.widthPercent ?? 100, 1, 100);
-            const drawWidth = Math.round((widthDots * widthPercent) / 100);
-            const fit = el.fit || (el.heightDots > 0 ? "stretch" : "auto"); // 未指定 fit 的舊資料：heightDots > 0 視為 stretch，否則沿用舊的等比縮放行為
+            // 原尺寸：內容寬度就是繪製寬度（超過欄寬才縮小），不看 widthPercent
+            const drawWidth = fit === "none" ? Math.min(widthDots, Math.max(1, Math.round(contentWidth))) : Math.round((widthDots * widthPercent) / 100);
             const drawHeight = fit === "stretch" && el.heightDots > 0
                 ? el.heightDots
                 : (contentWidth > 0 ? Math.round((drawWidth * contentHeight) / contentWidth) : 0);

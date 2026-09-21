@@ -1,7 +1,7 @@
 // 右側檢視器：依選取的元素類型組出對應的編輯面板。
 
 import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
-import { DEFAULT_ROW_GAP, MIXED, applyStyleToRange, getRangeStyle, getTextContent, replaceFullText } from "../core/document-model.js";
+import { DEFAULT_ROW_GAP, MIXED, resolveImageFit, applyStyleToRange, getRangeStyle, getTextContent, replaceFullText } from "../core/document-model.js";
 import { MAX_ROW_GAP, normalizeRowGap } from "../core/units.js";
 import { WEB_FONTS, findWebFont, isWebFontFailed } from "../core/web-fonts.js";
 import { applyFieldToElements, findElementById, setRowRatio, splitRowColumn, MAX_ROW_COLUMNS } from "../core/element-tree.js";
@@ -11,7 +11,7 @@ import {
     primaryFamilyName,
 } from "../core/fonts.js";
 import {
-    alignGroup, checkboxInput, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, sectionDivider,
+    alignGroup, IMAGE_FIT_OPTIONS, IMAGE_SIDE_OPTIONS, checkboxInput, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, sectionDivider,
     sectionHeader, selectInput, sliderField, textInput,
 } from "./inspector-widgets.js";
 import { inlineEditor, onModelChange, textSel } from "./editor.js";
@@ -346,8 +346,7 @@ function buildFloatBlockInspector(panel, el) {
         els["image-file-input"].click();
     }, { outlined: true }));
     panel.appendChild(sideRow);
-    panel.appendChild(field("圖片位置", alignGroup(el.imageSide === "right" ? "right" : "left", (v) => { el.imageSide = v; onModelChange({ skipInspector: true }); }, "圖片位置",
-        [["left", "圖片在左", "arrow-left"], ["right", "圖片在右", "arrow-right"]])));
+    panel.appendChild(field("圖片位置", alignGroup(el.imageSide === "right" ? "right" : "left", (v) => { el.imageSide = v; onModelChange({ skipInspector: true }); }, "圖片位置", IMAGE_SIDE_OPTIONS)));
     const widthInput = textInput(Math.max(1, Math.min(100, el.widthPercent ?? 40)), (v) => {
         if (!(v > 0)) return;
         el.widthPercent = Math.min(100, Math.max(1, v));
@@ -513,7 +512,7 @@ function buildImageInspector(panel, el) {
         onModelChange({ skipInspector: true });
     }, "number");
     Object.assign(widthInput.querySelector("input"), { min: 1, max: 100, step: 1 });
-    panel.appendChild(field("寬度 (%)", widthInput));
+    if (resolveImageFit(el) !== "none") panel.appendChild(field("寬度 (%)", widthInput)); // 原尺寸不看寬度
 
     const layoutRow = document.createElement("div");
     layoutRow.className = "ts-wrap is-compact has-top-spaced-small";
@@ -522,14 +521,16 @@ function buildImageInspector(panel, el) {
         el.cropRect = null; // 旋轉後舊裁切窗格的座標系不再對應原圖，重置避免裁到錯的地方
         onModelChange();
     }));
-    layoutRow.appendChild(iconToggleButton("arrows-up-down", "拉伸至指定高度", el.fit === "stretch", () => {
-        el.fit = el.fit === "stretch" ? "auto" : "stretch";
-        onModelChange();
-    }));
+    const fit = resolveImageFit(el);
+    panel.appendChild(field("縮放", alignGroup(fit, (v) => {
+        el.fit = v;
+        onModelChange(); // 寬度／指定高度欄位隨之增減，整個檢視器會重畫，焦點要接回選中的那顆（方向鍵連續切換）
+        document.querySelector('#inspector [role=radiogroup][aria-label="縮放"] [aria-checked="true"]')?.focus();
+    }, "縮放", IMAGE_FIT_OPTIONS)));
     panel.appendChild(field("對齊", alignGroup(el.align || "center", (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
     panel.appendChild(layoutRow);
 
-    if (el.fit === "stretch") {
+    if (fit === "stretch") {
         panel.appendChild(field("指定高度 (dot)", textInput(el.heightDots || 0, (v) => { el.heightDots = v; onModelChange({ skipInspector: true }); }, "number")));
     }
 

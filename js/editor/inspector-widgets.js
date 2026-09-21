@@ -230,6 +230,21 @@ export function foldSection(id, title, build, defaultOpen = false) {
 
 const ALIGN_OPTIONS = [["left", "靠左", "align-left"], ["center", "置中", "align-center"], ["right", "靠右", "align-right"]];
 
+const svgIcon = (body) => `<svg viewBox="0 0 16 16" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
+
+/** 圖片縮放：原尺寸（小方塊在框內）／符合寬度（等寬、高度依比例）／填滿（整個框填滿） */
+export const IMAGE_FIT_OPTIONS = [
+    ["none", "原尺寸", svgIcon('<rect x="1.5" y="1.5" width="13" height="13" rx="1.5" stroke-dasharray="2 2"/><rect x="5.5" y="5.5" width="5" height="5" fill="currentColor"/>')],
+    ["auto", "符合寬度", svgIcon('<rect x="1.5" y="1.5" width="13" height="13" rx="1.5" stroke-dasharray="2 2"/><rect x="1.5" y="4.5" width="13" height="7" fill="currentColor"/>')],
+    ["stretch", "填滿", svgIcon('<rect x="1.5" y="1.5" width="13" height="13" rx="1.5" fill="currentColor"/>')],
+];
+
+/** 圖文段落的圖片位置：左（左邊方塊＋右側文字行）／右（相反） */
+export const IMAGE_SIDE_OPTIONS = [
+    ["left", "圖在左", svgIcon('<rect x="1.5" y="2.5" width="5" height="6" rx="1" fill="currentColor"/><path d="M9 3.5h5.5M9 6.5h5.5M1.5 11.5h13M1.5 14h9"/>')],
+    ["right", "圖在右", svgIcon('<rect x="9.5" y="2.5" width="5" height="6" rx="1" fill="currentColor"/><path d="M1.5 3.5H7M1.5 6.5H7M1.5 11.5h13M5.5 14h9"/>')],
+];
+
 /** 對齊按鈕組（靠左／置中／靠右）：單選 radiogroup，左右方向鍵切換；current 為 null 表示混合（都不選）。 */
 export function alignGroup(current, onChange, label = "對齊", options = ALIGN_OPTIONS) {
     const group = document.createElement("div");
@@ -244,7 +259,8 @@ export function alignGroup(current, onChange, label = "對齊", options = ALIGN_
         b.setAttribute("aria-label", text);
         b.dataset.tooltip = text;
         b.dataset.value = value;
-        b.innerHTML = `<span class="ts-icon is-${icon}-icon" aria-hidden="true"></span>`;
+        // icon 是 "<svg" 開頭就直接用（自製的版面示意圖），否則當 Tocas 圖示名稱
+        b.innerHTML = icon.startsWith("<svg") ? icon : `<span class="ts-icon is-${icon}-icon" aria-hidden="true"></span>`;
         return b;
     });
     const select = (value, focus) => {
