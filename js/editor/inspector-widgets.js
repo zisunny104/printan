@@ -193,3 +193,33 @@ export function checkboxInput(checked, onChange, labelText) {
     label.appendChild(text);
     return label;
 }
+
+// 可收合的進階區塊：收合狀態依「元素類型＋區塊」各自記在 localStorage（純 UI 偏好，讀寫失敗就用預設值）。
+const FOLD_KEY = "printan.inspectorFolds";
+function readFolds() {
+    try { return JSON.parse(localStorage.getItem(FOLD_KEY)) || {}; } catch { return {}; }
+}
+function writeFold(id, open) {
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify({ ...readFolds(), [id]: open })); } catch { /* 無痕視窗等：不記就好 */ }
+}
+
+/** 收合區塊：標題列（▸／▾＋文字）點開才顯示 build(body) 填進去的內容。id 例：`text.layout`。 */
+export function foldSection(id, title, build, defaultOpen = false) {
+    const details = document.createElement("details");
+    details.className = "inspector-fold";
+    details.open = readFolds()[id] ?? defaultOpen;
+    const summary = document.createElement("summary");
+    summary.className = "has-top-spaced ts-header is-small";
+    const mark = document.createElement("span");
+    const setMark = () => { mark.textContent = details.open ? "▾ " : "▸ "; };
+    setMark();
+    summary.append(mark, title);
+    const body = document.createElement("div");
+    build(body);
+    details.append(summary, body);
+    details.addEventListener("toggle", () => {
+        setMark();
+        writeFold(id, details.open);
+    });
+    return details;
+}

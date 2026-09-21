@@ -11,7 +11,7 @@ import {
     primaryFamilyName,
 } from "../core/fonts.js";
 import {
-    checkboxInput, emptyState, field, fieldRow, iconButton, iconToggleButton, mkButton, sectionDivider,
+    checkboxInput, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, sectionDivider,
     sectionHeader, selectInput, sliderField, textInput,
 } from "./inspector-widgets.js";
 import { inlineEditor, onModelChange, textSel } from "./editor.js";
@@ -641,24 +641,25 @@ function buildBarcodeInspector(panel, el) {
     }), VARIABLE_INFO));
     panel.appendChild(valueHint);
     refreshValueHint();
-    if (el.format !== "qrcode") {
-        panel.appendChild(field(null, checkboxInput(el.showText !== false, (v) => {
-            el.showText = v;
-            onModelChange({ skipInspector: true });
-        }, "顯示明碼")));
-        if (el.showText !== false) {
-            panel.appendChild(field("明碼字級 (dot)", textInput(el.textSize || "", (v) => {
-                if (Number(v) > 0) el.textSize = Number(v);
-                else delete el.textSize;
-                onModelChange({ skipInspector: true });
-            }, "number"), "留空＝自動。熱感應列印字小容易糊，建議 20 以上"));
-        }
-    }
 
     panel.appendChild(sectionDivider());
-    panel.appendChild(sectionHeader("ruler", "尺寸與版面"));
+    panel.appendChild(sectionHeader("ruler", "版面"));
     panel.appendChild(fieldRow([
         ["高度 (dot)", textInput(el.heightDots, (v) => { el.heightDots = v; onModelChange({ skipInspector: true }); }, "number")],
         ["對齊", selectInput([["left", "靠左"], ["center", "置中"], ["right", "靠右"]], el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })],
     ]));
+
+    if (el.format !== "qrcode") {
+        panel.appendChild(foldSection("barcode.text", "明碼", (body) => {
+            body.appendChild(field(null, checkboxInput(el.showText !== false, (v) => {
+                el.showText = v;
+                onModelChange({ skipInspector: true });
+            }, "顯示明碼")));
+            body.appendChild(field("明碼字級 (dot)", textInput(el.textSize || "", (v) => {
+                if (Number(v) > 0) el.textSize = Number(v);
+                else delete el.textSize;
+                onModelChange({ skipInspector: true });
+            }, "number"), "留空＝自動。熱感應列印字小容易糊，建議 20 以上"));
+        }));
+    }
 }
