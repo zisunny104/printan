@@ -18,7 +18,8 @@ Thumbs.db
 # PHP
 *.log
 *.tmp
-/vendor/
+/vendor/*
+!/vendor/libheif/
 composer.phar
 composer.lock
 
