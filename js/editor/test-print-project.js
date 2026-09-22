@@ -10,6 +10,7 @@ import {
 } from "../core/document-model.js";
 import { dotsPerMm } from "../core/units.js";
 import { renderBarcodeResult } from "../core/barcode.js";
+import { applyDither } from "../core/dithering.js";
 
 const FONT = DEFAULT_FONT_FAMILY;
 
@@ -97,6 +98,59 @@ function buildCutLine(widthDots) {
     return canvas.toDataURL("image/png");
 }
 
+// 細線／細字辨識：1～4 點粗細的橫線各畫 6 條（間距等於線寬，測試印字頭能否分辨相鄰細線是否糊在一起），
+// 下面接一行由大到小的字級，測試熱感紙在這台印表機上實際能看清的最小字級。
+const FINE_DETAIL_HEIGHT = 96;
+function buildFineDetailStrip(widthDots) {
+    const { canvas, ctx } = makeCanvas(widthDots, FINE_DETAIL_HEIGHT);
+    ctx.font = `14px ${FONT}`;
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+    ctx.fillText("細線／細字辨識", 0, 0);
+    let y = 20;
+    for (let w = 1; w <= 4; w++) {
+        for (let n = 0; n < 8; n++) ctx.fillRect(n * w * 3, y, w, 12);
+        y += 16;
+    }
+    let x = 0;
+    for (const size of [18, 15, 12, 10, 9, 8]) {
+        ctx.font = `${size}px ${FONT}`;
+        const label = `${size}px`;
+        ctx.fillText(label, x, y + 2);
+        x += Math.ceil(ctx.measureText(`${label}　`).width);
+        if (x > widthDots - 40) break;
+    }
+    return canvas.toDataURL("image/png");
+}
+
+// 抖色模式比較：把同一段由白到黑的漸層分別餵給三種抖色演算法（誤差擴散／網點／閾值），
+// 並排比較密度過渡的效果與網點紋理差異（熱感紙沒有真正的灰階，看的就是這個）。
+const DITHER_SWATCH_H = { grad: 56, label: 18 };
+function buildDitherSwatch(widthDots) {
+    const modes = [["floyd-steinberg", "誤差擴散"], ["ordered", "網點"], ["threshold", "閾值"]];
+    const { grad: gradH, label: labelH } = DITHER_SWATCH_H;
+    const { canvas, ctx } = makeCanvas(widthDots, gradH + labelH);
+    const cellW = Math.floor(widthDots / modes.length);
+    modes.forEach(([mode, label], i) => {
+        const x0 = i * cellW;
+        const w = i === modes.length - 1 ? widthDots - x0 : cellW;
+        const grad = ctx.createLinearGradient(x0, 0, x0 + w, 0);
+        grad.addColorStop(0, "#fff");
+        grad.addColorStop(1, "#000");
+        ctx.fillStyle = grad;
+        ctx.fillRect(x0, 0, w, gradH);
+        const imageData = ctx.getImageData(x0, 0, w, gradH);
+        applyDither(imageData, mode, 128);
+        ctx.putImageData(imageData, x0, 0);
+        ctx.fillStyle = "#000";
+        ctx.font = `13px ${FONT}`;
+        ctx.textBaseline = "top";
+        ctx.textAlign = "left";
+        ctx.fillText(label, x0, gradH + 2);
+    });
+    return canvas.toDataURL("image/png");
+}
+
 // 品牌 icon：頁首用的是 Tocas 的收據圖示，這裡用畫布畫同樣意象（鋸齒下緣的收據紙＋幾行字），
 // 避免依賴圖示字型；正方形，貼在標題左邊。
 const BRAND_ICON_DRAW = 72; // 下面的座標都以 72 點方格設計，實際大小依標題字級縮放
@@ -167,7 +221,6 @@ const FALLBACK_MODEL = "TM-T82II";
 
 // 彩蛋數字的來源，要換數字只改這裡
 const EASTER_EGG = {
-    birthday: "20260914", // 第一個 commit 的日期（2026-09-14）
     tokens: "999+", // token 消耗量：實際數不明，玩笑梗
     monthlyFeeUsd: 20, // Claude Pro 月費（美元）
 };
@@ -175,28 +228,18 @@ const EASTER_EGG = {
 const money = (n) => `${n < 0 ? "-" : ""}$${Math.abs(n).toLocaleString("en-US")}`;
 
 // [名稱, 數量, 單價, 備註]；數量可放字串（如 "999+"），計價時當 0。金額照實填，合計由程式加總。
-// 名稱盡量一看就懂（功能名或明顯的玩笑）；42＝宇宙的答案、65＝ASCII 的 A。第 2 項「連線方式」是動態的。
-const menuItems = (connectionItem) => [
+// 名稱盡量一看就懂（功能名或明顯的玩笑）；42＝宇宙的答案、65＝ASCII 的 A。
+const menuItems = () => [
     ["所見即所得預覽", 1, 42, "42：生命、宇宙與一切的答案"],
-    connectionItem,
     ["續命美式咖啡", 3, 65, "喝茶請洽 HTTP 418"],
     ["Token 一籮筐", EASTER_EGG.tokens, 0, "用量沒算過，反正很多"],
     ["月費方案", 1, EASTER_EGG.monthlyFeeUsd, "Claude Pro，自掏腰包"],
     ["Hello World", 1, 1, "第一行輸出，成功了"],
 ];
 
-// 連線方式：備註只寫這次的實際連線；單價取最像「埠」的數字（USB 用廠商 ID 十進位、序列埠用鮑率），不加說明；
-// 其他連線（或取不到數字）就是 0，連線資訊為空時備註退回固定說明，不印 undefined
-function connectionItem({ connection, vendorId, baudRate }) {
-    const conn = String(connection ?? "").trim();
-    const num = (n) => (Number.isFinite(Number(n)) && Number(n) > 0 ? Math.round(Number(n)) : 0);
-    if (/USB/i.test(conn)) return ["連線方式", 1, num(vendorId), "USB"];
-    if (conn.includes("序列")) return ["連線方式", 1, num(baudRate), "序列埠"];
-    return ["連線方式", 1, 0, conn || "尚未指定連線"];
-}
 const DISCOUNT = ["優惠　一點點……耐心", -15];
 
-function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthDots, connectionCtx) {
+function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDetailUrl, ditherUrl, widthDots) {
     // 字級依紙寬取值：80mm 特大，58mm（約 420 點）退一級才放得下
     const wide = widthDots >= 500;
     const brandSize = wide ? 56 : 40;
@@ -207,7 +250,7 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
     const qrSize = wide ? 140 : 120;
     bodySize = wide ? 28 : 24;
 
-    const menu = menuItems(connectionItem(connectionCtx));
+    const menu = menuItems();
     const subtotal = menu.reduce((sum, [, qty, price]) => sum + (Number(qty) || 0) * price, 0);
     const total = subtotal + DISCOUNT[1];
     const center = (runs, overrides = {}) => text(runs, { align: "center", ...overrides });
@@ -227,24 +270,20 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
     const discountRow = createRowElement([2, 1]);
     discountRow.columns[0].push(text(DISCOUNT[0]));
     discountRow.columns[1].push(text(money(DISCOUNT[1]), { align: "right" }));
-    // 兩個 QR 左右並列；內容長度不同、QR 格數（尺寸）也不同，說明另開一列，兩行字才會對齊在同一條線上
+    // 兩個 QR 左右並列；內容長度不同、QR 格數也不同，說明另開一列，兩行字才會對齊在同一條線上
     const qrs = [[PROJECT_URL, "專案網站"], [TEAPOT_URL, "418 茶壺"]];
     const qrRow = createRowElement([1, 1]);
     const captionRow = createRowElement([1, 1]);
-    // 兩顆 QR 因內容長度不同模組數不同，畫出來大小不一；先各自畫好，再左右置中、上緣貼齊放進同樣大的外框，說明才會在同一條線上
-    // 兩顆用同樣的模組大小（取較大版本放得下的整數點），符號才不會一大一小
-    const counts = qrs.map(([value]) => {
-        const qr = window.qrcode(0, "M");
-        qr.addData(value);
-        qr.make();
-        return qr.getModuleCount();
-    });
-    const cell = Math.max(1, Math.floor(qrSize / Math.max(...counts)));
-    const qrCanvases = qrs.map(([value], i) => renderBarcodeResult({ format: "qrcode", value, heightDots: cell * counts[i] }, widthDots / 2).canvas);
-    const frame = Math.max(...qrCanvases.map((c) => Math.max(c.width, c.height)));
+    // 兩顆 QR 內容長度不同、模組數也不同：renderBarcodeResult 內部用「模組像素大小」取整數點，就算兩顆都要求同一個
+    // heightDots，模組數不同時取整後的實際外框邊長還是可能不一樣大（例如 29×29 跟 25×25 模組取同樣的整數格寬，
+    // 兩者外框相差可到一成多）——使用者反映的「看起來一大一小」就是這個。改成畫好各自原生大小後，
+    // 用 drawImage 明確縮放成同一個邊長（qrSize）＋關掉平滑（保持方塊邊緣銳利，避免縮放糊成灰階影響二值化辨識）。
+    const qrCanvases = qrs.map(([value]) => renderBarcodeResult({ format: "qrcode", value, heightDots: qrSize }, widthDots / 2).canvas);
+    const frame = qrSize;
     qrs.forEach(([, caption], i) => {
         const { canvas, ctx } = makeCanvas(frame, frame);
-        ctx.drawImage(qrCanvases[i], Math.floor((frame - qrCanvases[i].width) / 2), 0);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(qrCanvases[i], 0, 0, frame, frame);
         qrRow.columns[i].push(createImageElement({ assetId: canvas.toDataURL("image/png"), fit: "auto", ditherMode: "threshold" }));
         captionRow.columns[i].push(center(caption, { fontSize: smallSize }));
     });
@@ -282,11 +321,17 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, widthD
         space(),
         // 感謝語與頁尾小字
         center("謝謝光臨", { fontSize: titleSize + 8, bold: true }),
-        // 撕線：其下的技術資訊像可撕下的存根（視覺撕線；自動切刀仍在整張最後）
+        // 撕線：其下的技術資訊像可撕下的存根（視覺撕線本身已表達「沿此撕開」，不再多一行說明；自動切刀仍在整張最後）
         space(),
         createImageElement({ assetId: stripUrl, fit: "auto", ditherMode: "threshold" }),
-        center("沿此線撕開", { fontSize: smallSize }),
         createImageElement({ assetId: cutLineUrl, fit: "auto", ditherMode: "threshold" }),
+        // 細線／細字辨識：測印字頭能分辨的最細線寬、最小可讀字級
+        createImageElement({ assetId: fineDetailUrl, fit: "auto", ditherMode: "threshold" }),
+        gap(),
+        // 抖色模式比較：同一段漸層分別跑三種演算法，比較密度過渡與網點紋理
+        center("抖色模式比較　誤差擴散／網點／閾值", { fontSize: smallSize }),
+        createImageElement({ assetId: ditherUrl, fit: "auto", ditherMode: "threshold" }),
+        gap(),
         // 技術資訊（小字級）
         ...infoRows,
         gap(),
@@ -312,7 +357,6 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
         ["邊距", margin ? `左 ${margin.leftMm}　右 ${margin.rightMm} mm` : "未校正"],
         ["補白", `左 ${pad.left}　右 ${pad.right} 點`],
         ["走紙", `${prefs.feedLines} 行　切紙${prefs.cutPaper ? "開" : "關"}`],
-        ["誕生", `${EASTER_EGG.birthday.replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3")}　第一個 commit`],
         ["時間", new Date().toLocaleString("zh-TW", { hour12: false })],
     ];
 
@@ -325,8 +369,9 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
         buildBrandIcon(brandIconSize(paper.printableWidthDots >= 500 ? 56 : 40)),
         buildCalibratedStrip(paper.printableWidthDots, dpi),
         buildCutLine(paper.printableWidthDots),
+        buildFineDetailStrip(paper.printableWidthDots),
+        buildDitherSwatch(paper.printableWidthDots),
         paper.printableWidthDots,
-        { connection, vendorId: baseProfile.webUsb?.vendorId, baudRate: prefs.serialBaudRate },
     );
     const body = await renderTemplate(project, {}, { mode: "thermal", profile });
 
