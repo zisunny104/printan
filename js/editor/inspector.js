@@ -17,9 +17,20 @@ import {
     alignGroup, IMAGE_FIT_OPTIONS, IMAGE_SIDE_OPTIONS, checkboxInput, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, sectionDivider,
     sectionHeader, selectInput, sliderField, textInput,
 } from "./inspector-widgets.js";
-import { inlineEditor, onModelChange, textSel } from "./editor.js";
+import { getEffectiveProfile, inlineEditor, onModelChange, textSel } from "./editor.js";
 import { deleteElement, deleteElements, duplicateElement, duplicateElements, ungroupElements } from "./element-actions.js";
 import { els, rt, state } from "./context.js";
+
+// 字級輸入介面單位：內部資料模型（fontSize/textSize）維持 dots 不動——渲染公式（renderer.js 一堆
+// style.fontSize 相關換算）與 .ptan 舊檔都假設 dots，目前也只有單一印表機 profile／固定 DPI，沒有多
+// DPI 情境要處理。只在「輸入框顯示」這個邊界做 pt↔dots 換算，兩個方向都四捨五入到整數，這樣使用者
+// 打一個 pt 整數、存回 dots、再讀出顯示，看到的還是同一個數字，不會有「明明打 12 怎麼變 11.9」的觀感問題。
+function dotsToPt(dots) {
+    return Math.round((dots * 72) / getEffectiveProfile().dpi.x);
+}
+function ptToDots(pt) {
+    return Math.round((pt * getEffectiveProfile().dpi.x) / 72);
+}
 
 // 選取對象改變時通知訂閱者（小螢幕抽屜據此打開元素設定面板）；同一個元素重繪不會重發
 let announcedSelection = null;
@@ -56,7 +67,7 @@ export function renderInspector() {
 
 // 多選：只列出「所有選取元素都有」的欄位，值不同時顯示「混合」，改了就套用到全部。
 const MULTI_FIELDS = [
-    { key: "fontSize", label: "字級", kind: "number", types: ["text"], runField: true },
+    { key: "fontSize", label: "字級 (pt)", kind: "number", types: ["text"], runField: true },
     { key: "bold", label: "粗體", kind: "bool", types: ["text"], runField: true },
     { key: "inverse", label: "整行反相", kind: "bool", types: ["text"] },
     { key: "lineHeight", label: "行高", kind: "number", types: ["text"] },
@@ -85,10 +96,11 @@ function buildMultiInspector(panel, ids) {
         const mixed = values.some((v) => v !== values[0]);
         let input;
         if (spec.kind === "number") {
-            input = textInput(mixed ? "" : values[0], () => {}, "number");
+            const isFontSize = spec.key === "fontSize"; // 字級用 pt 顯示，其餘 dot 數值欄位不動，見上方 dotsToPt/ptToDots 說明
+            input = textInput(mixed ? "" : (isFontSize ? dotsToPt(values[0]) : values[0]), () => {}, "number");
             const box = input.querySelector("input");
             box.placeholder = mixed ? "混合" : "";
-            box.addEventListener("input", () => { if (box.value !== "") apply(spec, Number(box.value)); });
+            box.addEventListener("input", () => { if (box.value !== "") apply(spec, isFontSize ? ptToDots(Number(box.value)) : Number(box.value)); });
         } else if (spec.kind === "align") {
             input = alignGroup(mixed ? null : values[0], (v) => apply(spec, v));
         } else {
@@ -235,9 +247,9 @@ function rangeFontSizeInput(value, hasRange, onChange) {
         input.value = "";
         input.placeholder = "混合";
     } else {
-        input.value = value || "";
+        input.value = value ? dotsToPt(value) : "";
     }
-    input.addEventListener("input", () => onChange(input.value ? Number(input.value) : null));
+    input.addEventListener("input", () => onChange(input.value ? ptToDots(Number(input.value)) : null));
     wrap.appendChild(input);
     return wrap;
 }
@@ -298,7 +310,7 @@ function buildTextInspector(panel, el) {
         styleRow.innerHTML = "";
         styleRow.appendChild(fieldRow([
             ["字體", rangeFontFamilySelect(style.fontFamily, hasRange, (v) => applyRangeStyle("fontFamily", v))],
-            ["字級 (dot)", rangeFontSizeInput(style.fontSize, hasRange, (v) => applyRangeStyle("fontSize", v))],
+            ["字級 (pt)", rangeFontSizeInput(style.fontSize, hasRange, (v) => applyRangeStyle("fontSize", v))],
         ]));
         const localEntry = localFontEntry();
         if (localEntry) styleRow.appendChild(localEntry);
@@ -331,7 +343,7 @@ function buildTextInspector(panel, el) {
     panel.appendChild(sectionHeader("font", "段落樣式"));
     panel.appendChild(fieldRow([
         ["預設字體", fontFamilySelect(el.fontFamily, (v) => { el.fontFamily = v; onModelChange({ skipInspector: true }); }, "跟隨全域預設")],
-        ["預設字級 (dot)", textInput(el.fontSize, (v) => { el.fontSize = v; onModelChange({ skipInspector: true }); }, "number")],
+        ["預設字級 (pt)", textInput(dotsToPt(el.fontSize), (v) => { el.fontSize = ptToDots(v); onModelChange({ skipInspector: true }); }, "number")],
     ]));
     panel.appendChild(field("對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
     panel.appendChild(field(null, checkboxInput(el.bold, (v) => { el.bold = v; onModelChange({ skipInspector: true }); }, "預設粗體")));
@@ -730,11 +742,11 @@ function buildBarcodeInspector(panel, el) {
                 el.showText = v;
                 onModelChange({ skipInspector: true });
             }, "顯示明碼")));
-            body.appendChild(field("明碼字級 (dot)", textInput(el.textSize || "", (v) => {
-                if (Number(v) > 0) el.textSize = Number(v);
+            body.appendChild(field("明碼字級 (pt)", textInput(el.textSize ? dotsToPt(el.textSize) : "", (v) => {
+                if (Number(v) > 0) el.textSize = ptToDots(Number(v));
                 else delete el.textSize;
                 onModelChange({ skipInspector: true });
-            }, "number"), "留空＝自動。熱感應列印字小容易糊，建議 20 以上"));
+            }, "number"), "留空＝自動。熱感應列印字小容易糊，建議 7pt 以上"));
         }));
     }
 }

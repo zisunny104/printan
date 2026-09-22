@@ -99,25 +99,49 @@ function buildCutLine(widthDots) {
 }
 
 // 細線／細字辨識：1～4 點粗細的橫線各畫 6 條（間距等於線寬，測試印字頭能否分辨相鄰細線是否糊在一起），
-// 下面接一行由大到小的字級，測試熱感紙在這台印表機上實際能看清的最小字級。不寫標題文字，線條與字級樣本本身就看得出來在測什麼。
-const FINE_DETAIL_HEIGHT = 88;
+// 下面接兩行字級樣本：第一行由大到小，測試熱感紙在這台印表機上實際能看清的最小字級下限；
+// 第二行是本文～標題常用的正常／偏大字級參考。第一行窄紙常常提早遇到防呆 break 停止、右側留白，
+// 與其留白不用，乾脆多開一行把正常／較大字級也秀出來。不寫標題文字，線條與字級樣本本身就看得出來在測什麼。
+const FINE_DETAIL_BARS_HEIGHT = 4 * 16; // 1～4 點粗細橫線各佔一列 16 高
+const FONT_SIZE_TEST_SMALL_PT = [12, 10, 9, 8, 7, 6, 5, 4]; // 由大到小找可讀下限
+const FONT_SIZE_TEST_LARGE_PT = [12, 16, 20, 24]; // 本文～標題常用尺寸參考
+
+function ptToDots(pt) {
+    // 這個檔案沒有 profile context 可讀，目前也只有單一印表機、固定 203 dpi，直接寫死換算；
+    // 跟 inspector.js 輸入框顯示用的 pt↔dots 換算是同一套公式，之後真的有多 DPI 情境再一起抽成共用函式。
+    return Math.round((pt * 203) / 72);
+}
+
+function drawPtSizeRow(ctx, sizes, y, widthDots) {
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+    let x = 0;
+    for (const pt of sizes) {
+        const dots = ptToDots(pt);
+        ctx.font = `${dots}px ${FONT}`;
+        const label = `${pt}pt`;
+        ctx.fillText(label, x, y);
+        x += Math.ceil(ctx.measureText(`${label}　`).width);
+        if (x > widthDots - 40) break;
+    }
+}
+
 function buildFineDetailStrip(widthDots) {
-    const { canvas, ctx } = makeCanvas(widthDots, FINE_DETAIL_HEIGHT);
-    let y = 4;
+    const barsTop = 4;
+    const smallRowTop = barsTop + FINE_DETAIL_BARS_HEIGHT + 2;
+    const smallRowMaxDots = ptToDots(Math.max(...FONT_SIZE_TEST_SMALL_PT));
+    const largeRowTop = smallRowTop + smallRowMaxDots + 8;
+    const largeRowMaxDots = ptToDots(Math.max(...FONT_SIZE_TEST_LARGE_PT));
+    const height = largeRowTop + largeRowMaxDots + 6;
+
+    const { canvas, ctx } = makeCanvas(widthDots, height);
+    let y = barsTop;
     for (let w = 1; w <= 4; w++) {
         for (let n = 0; n < 8; n++) ctx.fillRect(n * w * 3, y, w, 12);
         y += 16;
     }
-    let x = 0;
-    ctx.textBaseline = "top";
-    ctx.textAlign = "left";
-    for (const size of [18, 15, 12, 10, 9, 8]) {
-        ctx.font = `${size}px ${FONT}`;
-        const label = `${size}px`;
-        ctx.fillText(label, x, y + 2);
-        x += Math.ceil(ctx.measureText(`${label}　`).width);
-        if (x > widthDots - 40) break;
-    }
+    drawPtSizeRow(ctx, FONT_SIZE_TEST_SMALL_PT, smallRowTop, widthDots);
+    drawPtSizeRow(ctx, FONT_SIZE_TEST_LARGE_PT, largeRowTop, widthDots);
     return canvas.toDataURL("image/png");
 }
 
