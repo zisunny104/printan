@@ -37,6 +37,11 @@ export function createTextElement(overrides = {}) {
         wrap: true,
         writingMode: "horizontal", // horizontal | vertical（直書：由上而下、行由右而左；舊檔沒有此欄位＝horizontal）
         maxLines: 0, // 0 = 不限制；>0 時超出以「…」截斷
+        widthMode: "column", // column＝沿用欄寬（舊檔行為）｜fixed＝改用 widthDots 指定絕對寬度（可小於欄寬），見 resolveTextWidthMode
+        widthDots: 0, // widthMode==="fixed" 時的框寬（dots），0 或未設時視同 column
+        heightMode: "auto", // auto＝高度完全由內容決定（舊檔行為）｜fixed＝改用 heightDots，見 resolveTextHeightMode
+        heightDots: 0, // heightMode==="fixed" 時的框高（dots）
+        overflow: "grow", // heightMode==="fixed" 時：grow＝heightDots 當最小高度、內容較高則自動變高｜clip＝固定高度、超出內容真的不印出，見 resolveTextOverflow
         ...overrides,
     };
 }
@@ -202,6 +207,31 @@ export const IMAGE_FITS = ["none", "auto", "stretch"];
 export function resolveImageFit(el) {
     const fit = el.fit || (el.heightDots > 0 ? "stretch" : "auto");
     return IMAGE_FITS.includes(fit) ? fit : "auto";
+}
+
+/** 文字框寬度模式：column＝沿用欄寬（舊檔沒有 widthMode 一律視為 column）｜fixed＝改用 widthDots（需 >0 才生效，否則退回 column）。 */
+export const TEXT_WIDTH_MODES = ["column", "fixed"];
+export function resolveTextWidthMode(el) {
+    const mode = el.widthMode || "column";
+    if (!TEXT_WIDTH_MODES.includes(mode)) return "column";
+    if (mode === "fixed" && !(el.widthDots > 0)) return "column"; // 沒有有效寬度就退回欄寬，避免 0 寬
+    return mode;
+}
+
+/** 文字框高度模式：auto＝內容決定高度（舊檔沒有 heightMode 一律視為 auto）｜fixed＝改用 heightDots（需 >0 才生效，否則退回 auto）。 */
+export const TEXT_HEIGHT_MODES = ["auto", "fixed"];
+export function resolveTextHeightMode(el) {
+    const mode = el.heightMode || "auto";
+    if (!TEXT_HEIGHT_MODES.includes(mode)) return "auto";
+    if (mode === "fixed" && !(el.heightDots > 0)) return "auto";
+    return mode;
+}
+
+/** heightMode==="fixed" 時的溢出處理：grow＝當最小高度、內容較高則自動變高｜clip＝固定高度、真的裁掉超出內容。舊檔沒有 overflow 預設 grow（貼近舊行為，不會無預警少印）。 */
+export const TEXT_OVERFLOWS = ["grow", "clip"];
+export function resolveTextOverflow(el) {
+    const overflow = el.overflow || "grow";
+    return TEXT_OVERFLOWS.includes(overflow) ? overflow : "grow";
 }
 
 export function createImageElement(overrides = {}) {

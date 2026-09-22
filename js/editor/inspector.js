@@ -1,7 +1,10 @@
 // 右側檢視器：依選取的元素類型組出對應的編輯面板。
 
 import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
-import { DEFAULT_ROW_GAP, MIXED, resolveImageFit, applyStyleToRange, getRangeStyle, getTextContent, replaceFullText } from "../core/document-model.js";
+import {
+    DEFAULT_ROW_GAP, MIXED, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow,
+    applyStyleToRange, getRangeStyle, getTextContent, replaceFullText,
+} from "../core/document-model.js";
 import { MAX_ROW_GAP, normalizeRowGap } from "../core/units.js";
 import { WEB_FONTS, findWebFont, isWebFontFailed } from "../core/web-fonts.js";
 import { applyFieldToElements, findElementById, setRowRatio, splitRowColumn, MAX_ROW_COLUMNS } from "../core/element-tree.js";
@@ -239,6 +242,17 @@ function rangeFontSizeInput(value, hasRange, onChange) {
     return wrap;
 }
 
+// 文字自由寬高的 icon group 選項（比照 IMAGE_FIT_OPTIONS 的自製示意圖風格；svgIcon 是 inspector-widgets.js 內部私有函式，這裡不共用，直接寫死小張 SVG）。
+const textSvgIcon = (body) => `<svg viewBox="0 0 16 16" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
+const TEXT_WIDTH_MODE_OPTIONS = [
+    ["column", "沿用欄寬", textSvgIcon('<path d="M1.5 1.5v13M14.5 1.5v13"/><rect x="4" y="4.5" width="8" height="3" fill="currentColor"/><rect x="4" y="9" width="5" height="3" fill="currentColor"/>')],
+    ["fixed", "固定寬度", textSvgIcon('<path d="M2 1.5v13M9 1.5v13" stroke-dasharray="2 1.5"/><rect x="2" y="4.5" width="7" height="3" fill="currentColor"/><rect x="2" y="9" width="7" height="3" fill="currentColor"/>')],
+];
+const TEXT_OVERFLOW_OPTIONS = [
+    ["grow", "自動變高", textSvgIcon('<rect x="2" y="1.5" width="12" height="7" rx="1" stroke-dasharray="2 1.5"/><path d="M8 5v7M5.5 9.5 8 12l2.5-2.5"/>')],
+    ["clip", "裁切", textSvgIcon('<rect x="2" y="1.5" width="12" height="6" rx="1" fill="currentColor" fill-opacity=".15"/><path d="M2 7.5h12" stroke-dasharray="1.5 1.5"/>')],
+];
+
 function buildTextInspector(panel, el) {
     panel.appendChild(sectionHeader("align-left", "內容", VARIABLE_INFO));
 
@@ -330,6 +344,46 @@ function buildTextInspector(panel, el) {
         modeRow.appendChild(iconToggleButton("grip-lines-vertical", "直書", vertical, () => { el.writingMode = "vertical"; onModelChange(); }));
         body.appendChild(modeRow);
     }));
+
+    // 自由寬高：只給純文字元素用，圖文段落（float-block）版面是圖＋文繞排的另一套邏輯，這兩個欄位對它沒作用，不顯示避免誤導。
+    if (el.type === "text") {
+        panel.appendChild(foldSection("text.box", "寬高", (body) => {
+            const widthMode = resolveTextWidthMode(el);
+            body.appendChild(field("寬度", alignGroup(widthMode, (v) => {
+                el.widthMode = v;
+                if (v === "fixed" && !(el.widthDots > 0)) el.widthDots = 300; // 第一次切到固定寬度給個非 0 起始值
+                onModelChange();
+            }, "寬度模式", TEXT_WIDTH_MODE_OPTIONS)));
+            if (widthMode === "fixed") {
+                const wInput = textInput(el.widthDots || 0, (v) => {
+                    if (!(v > 0)) return;
+                    el.widthDots = Math.round(v);
+                    onModelChange({ skipInspector: true });
+                }, "number");
+                Object.assign(wInput.querySelector("input"), { min: 1, step: 1 });
+                body.appendChild(field("寬度 (dot)", wInput));
+            }
+            const heightFixed = resolveTextHeightMode(el) === "fixed";
+            body.appendChild(field(null, checkboxInput(heightFixed, (checked) => {
+                el.heightMode = checked ? "fixed" : "auto";
+                if (checked && !(el.heightDots > 0)) el.heightDots = 200;
+                onModelChange();
+            }, "固定高度")));
+            if (heightFixed) {
+                const hInput = textInput(el.heightDots || 0, (v) => {
+                    if (!(v > 0)) return;
+                    el.heightDots = Math.round(v);
+                    onModelChange({ skipInspector: true });
+                }, "number");
+                Object.assign(hInput.querySelector("input"), { min: 1, step: 1 });
+                body.appendChild(field("高度 (dot)", hInput));
+                body.appendChild(field("超出處理", alignGroup(resolveTextOverflow(el), (v) => {
+                    el.overflow = v;
+                    onModelChange();
+                }, "超出處理", TEXT_OVERFLOW_OPTIONS)));
+            }
+        }));
+    }
 }
 
 // 圖文段落：上半是圖片（來源、左右、寬度），下半直接沿用文字元素的內容與段落樣式。

@@ -13,7 +13,7 @@
 
 import { getPrinterProfile, getPaperWidth } from "./printer-profiles.js";
 import { applyDataToElements } from "./merge.js";
-import { FLOAT_GAP_DOTS, resolveImageFit } from "./document-model.js";
+import { FLOAT_GAP_DOTS, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow } from "./document-model.js";
 import { dotsToMm, splitRowColumns } from "./units.js";
 import { applyThermalSimulation, toGrayscale, applyDither } from "./dithering.js";
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
@@ -146,9 +146,19 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, show
     let y = 0;
     for (const el of elements) {
         if (el.type === "text") {
-            const { lines, totalHeight, vertical } = layoutText(el, widthDots, ctx, fontFamily);
-            items.push({ el, y, height: totalHeight, widthDots, lines, vertical });
-            y += totalHeight;
+            // widthMode "fixed"：文字框寬度可小於欄寬（比照圖片 widthPercent／widthDots 覆寫繪製寬度），
+            // 換行、置中/靠右錨點都改用這個框寬；align 同時兼作「框在欄內的水平位置」（同圖片 align 的雙重用途）。
+            const boxWidth = resolveTextWidthMode(el) === "fixed" ? Math.max(1, Math.min(widthDots, el.widthDots)) : widthDots;
+            const { lines, totalHeight, vertical } = layoutText(el, boxWidth, ctx, fontFamily);
+            // heightMode "fixed"：grow＝heightDots 當最小高度（內容較高時照樣完整顯示、自動變高）；
+            // clip＝固定 heightDots，超出內容在 paintText／paintVerticalText 用 ctx.clip() 真的裁掉，不只是視覺提示。
+            const heightMode = resolveTextHeightMode(el);
+            const clip = heightMode === "fixed" && resolveTextOverflow(el) === "clip";
+            const height = heightMode === "fixed" ? (clip ? el.heightDots : Math.max(el.heightDots, totalHeight)) : totalHeight;
+            const clipHeight = clip ? el.heightDots : null;
+            const clipped = clip && totalHeight > el.heightDots; // 供編輯疊層畫裁切提示用
+            items.push({ el, y, height, widthDots, boxWidth, contentHeight: totalHeight, clipHeight, clipped, lines, vertical });
+            y += height;
         } else if (el.type === "float-block") {
             const item = await layoutFloatBlock(el, widthDots, ctx, fontFamily, assetCtx);
             items.push({ el, y, widthDots, ...item });
@@ -456,8 +466,9 @@ function layoutVerticalText(el, ctx, fallbackFontFamily) {
     return { lines: [], totalHeight, vertical: { columns } };
 }
 
-function paintVerticalText(ctx, item, x, y) {
-    const { el, widthDots, height, vertical } = item;
+function paintVerticalText(ctx, item, x, y, widthOverride) {
+    const { el, height, vertical } = item;
+    const widthDots = widthOverride ?? item.widthDots; // widthMode "fixed" 時傳入較窄的框寬，只影響對齊錨點（直書換行本來就不吃欄寬）
     const total = vertical.columns.reduce((sum, c) => sum + c.width, 0);
     const right = el.align === "right" ? x + widthDots : el.align === "center" ? x + (widthDots + total) / 2 : x + total;
     ctx.save();
@@ -578,18 +589,29 @@ function paintFloatBlock(ctx, item, x, y, mode) {
 }
 
 function paintText(ctx, item, x, y) {
-    if (item.vertical) return paintVerticalText(ctx, item, x, y);
-    const { el, lines, widthDots } = item;
+    const { el, widthDots, boxWidth, clipHeight } = item;
+    // widthMode "fixed" 時 boxWidth < widthDots（欄寬）：align 兼作框在欄內的水平位置（同圖片 align 雙重用途），
+    // "left" 框貼欄左緣、"right" 貼欄右緣、"center" 置中；boxWidth 未設（一般 text／float-block 內文）退回整欄寬、boxX=0，行為不變。
+    const effWidth = boxWidth ?? widthDots;
+    const boxX = el.align === "center" ? (widthDots - effWidth) / 2 : el.align === "right" ? (widthDots - effWidth) : 0;
+    if (item.vertical) return paintVerticalText(ctx, item, x + boxX, y, effWidth);
+    const { lines } = item;
     ctx.save();
     ctx.fillStyle = "#000";
     ctx.textBaseline = "top";
     if ("letterSpacing" in ctx) ctx.letterSpacing = `${el.letterSpacing || 0}px`;
+    // heightMode "fixed" + overflow "clip"：真的裁掉框外內容（不是畫面提示），比照 paintVerticalText 既有的 ctx.clip() 手法
+    if (clipHeight != null) {
+        ctx.beginPath();
+        ctx.rect(x + boxX, y, effWidth, clipHeight);
+        ctx.clip();
+    }
     let lineY = y;
     for (const line of lines) {
         // 圖文段落的行帶有 offsetX／availWidth／skipBefore，純文字沒有這些欄位、行為不變
         lineY += line.skipBefore || 0;
-        const lineX = x + (line.offsetX || 0);
-        const lineW = line.availWidth ?? widthDots;
+        const lineX = x + boxX + (line.offsetX || 0);
+        const lineW = line.availWidth ?? effWidth;
         if (el.inverse) {
             ctx.fillStyle = "#000";
             ctx.fillRect(lineX, lineY, lineW, line.lineHeightDots);

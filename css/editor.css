@@ -820,6 +820,17 @@ body {
     z-index: 20;
 }
 
+/* 文字「固定高度＋裁切」時內容真的超出框高的提示（暫定樣式，之後請 89 調整）：
+   半透明紅色遮罩貼在框底部＋上緣虛線，比照 .unprintable-zone 的「只在邊界畫參考線」手法，
+   只在編輯疊層顯示（canvas-overlay.js buildTextClipIndicator），不進 canvas、不影響列印／匯出。 */
+.text-clip-indicator {
+    position: absolute;
+    box-sizing: border-box;
+    border-top: 1px dashed var(--ts-negative-500, #e0433f);
+    background: repeating-linear-gradient(135deg, rgba(224, 67, 63, .12) 0 6px, transparent 6px 12px);
+    pointer-events: none;
+}
+
 /* 預覽區行內文字編輯（js/editor/inline-text-editor.js）：蓋在選取中的文字元素上，
    字型／字級／對齊由 JS 依元素設定與畫布縮放比例寫入；用整圈外框標示編輯中，不用單邊色條 */
 .inline-text-editor {

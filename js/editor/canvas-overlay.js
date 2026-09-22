@@ -24,11 +24,15 @@ export function renderEditOverlay() {
 
     walkItems(items, 0, 0, (box, item) => {
         overlay.appendChild(buildEditBlock(box, scale));
-        if (box.el.type === "spacer" || box.el.type === "image" || box.el.type === "barcode") {
+        if (item.clipped) overlay.appendChild(buildTextClipIndicator(box, scale));
+        if (box.el.type === "spacer" || box.el.type === "image" || box.el.type === "barcode" || box.el.type === "text") {
             handleBuilders.push(() => buildHeightResizeHandle(box, scale));
         }
         if ((box.el.type === "image" || box.el.type === "float-block") && item.drawHeight > 0) {
             for (const spec of imageHandleSpecs(box, item)) handleBuilders.push(() => buildImageResizeHandle(box, item, spec, scale));
+        }
+        if (box.el.type === "text" && !item.vertical) {
+            for (const spec of textWidthHandleSpecs(box, item)) handleBuilders.push(() => buildTextWidthResizeHandle(box, item, spec, scale));
         }
         if (box.el.type === "row") {
             item.columns.forEach((col, i) => {
@@ -50,9 +54,18 @@ export function renderEditOverlay() {
     revealPendingElement();
 }
 
+// widthMode "fixed" 的文字框比欄寬窄：外框／把手要貼著實際框位置，不是整欄（同 renderer.js paintText 的 boxX 算法）
+function textBoxOffset(item) {
+    if (item.el.type !== "text" || item.boxWidth == null || item.boxWidth >= item.widthDots) return { x: 0, width: item.widthDots };
+    const gap = item.widthDots - item.boxWidth;
+    const dx = item.el.align === "center" ? gap / 2 : item.el.align === "right" ? gap : 0;
+    return { x: dx, width: item.boxWidth };
+}
+
 function walkItems(items, offsetX, offsetY, visit) {
     for (const item of items) {
-        const box = { el: item.el, x: offsetX, y: offsetY + item.y, width: item.widthDots, height: item.height };
+        const { x: dx, width: boxW } = textBoxOffset(item);
+        const box = { el: item.el, x: offsetX + dx, y: offsetY + item.y, width: boxW, height: item.height };
         visit(box, item);
         if (item.el.type === "row") {
             for (const col of item.columns) {
@@ -235,10 +248,13 @@ function buildHeightResizeHandle(box, scale) {
         if (!realEl) return;
         const startY = e.clientY;
         // 圖片預設是依比例縮放（fit=auto，heightDots 不生效）：從目前畫出的高度起算，並自動切成「拉伸」
-        const startHeight = realEl.type === "image" && realEl.fit !== "stretch" ? box.height : realEl.heightDots;
+        // 文字預設是 heightMode=auto（高度隨內容）：同樣從目前畫出的高度起算，拖曳才切成 fixed
+        const startHeight = (realEl.type === "image" && realEl.fit !== "stretch") || (realEl.type === "text" && realEl.heightMode !== "fixed")
+            ? box.height : realEl.heightDots;
         function onMove(ev) {
             const deltaDots = (ev.clientY - startY) / scale;
             if (realEl.type === "image") realEl.fit = "stretch";
+            if (realEl.type === "text") realEl.heightMode = "fixed"; // overflow 沿用原本值（預設 grow，不會無預警少印）
             realEl.heightDots = Math.max(1, Math.round(startHeight + deltaDots));
             schedulePreviewLive();
         }
@@ -315,6 +331,65 @@ function buildImageResizeHandle(box, item, { side, corner, x, y }, scale) {
         document.addEventListener("pointerup", onUp);
     });
     return handle;
+}
+
+/** 文字寬度把手位置：比照 imageHandleSpecs，但文字用絕對點數（widthDots）不是百分比，也沒有下角等比縮放，
+ * 只有側邊、框垂直中點各一個。align="left" 只留右側（左緣是錨點）、"right" 只留左側、"center" 兩側都有。 */
+function textWidthHandleSpecs(box, item) {
+    const align = item.el.align || "left";
+    const sides = align === "left" ? ["r"] : align === "right" ? ["l"] : ["l", "r"];
+    return sides.map((side) => ({ side, x: box.x + (side === "r" ? box.width : 0), y: box.y + box.height / 2 }));
+}
+
+/** 文字自由寬度拖曳：直接存成 widthDots（絕對點數，可小於欄寬），拖曳即切到 widthMode="fixed"。
+ * 視覺上沿用圖片把手同一顆小方塊（is-img class），比照 e8 轉達的「沿用圖片縮放把手樣式」。 */
+function buildTextWidthResizeHandle(box, item, { side, x, y }, scale) {
+    const handle = document.createElement("div");
+    handle.className = "edit-resize-handle is-img";
+    const size = 10;
+    handle.style.cssText = `left:${x * scale - size / 2}px;top:${y * scale - size / 2}px;width:${size}px;height:${size}px;`
+        + `background:#fff;border:1.5px solid currentColor;border-radius:2px;color:var(--ts-primary-500,#2b7de9);cursor:ew-resize`;
+    handle.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const realEl = findElementById(state.project.template.elements, box.el.id);
+        if (!realEl) return;
+        handle.classList.add("is-dragging");
+        const startX = e.clientX;
+        const colWidth = item.widthDots;
+        const startWidth = item.boxWidth ?? colWidth;
+        const factor = (realEl.align || "left") === "center" ? 2 : 1; // 置中時兩側同時外擴，位移要乘 2 才跟手
+        let moved = false;
+        function onMove(ev) {
+            moved = true;
+            const dx = ((ev.clientX - startX) / scale) * (side === "r" ? 1 : -1) * factor;
+            realEl.widthMode = "fixed";
+            realEl.widthDots = Math.max(8, Math.min(colWidth, Math.round(startWidth + dx)));
+            schedulePreviewLive();
+        }
+        function onUp() {
+            document.removeEventListener("pointermove", onMove);
+            document.removeEventListener("pointerup", onUp);
+            handle.classList.remove("is-dragging");
+            if (moved) onModelChange();
+        }
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+    });
+    return handle;
+}
+
+/** 文字「高度固定＋裁切」時，內容真的超出框高的視覺提示（半透明遮罩＋虛線，比照不可印區疊層）：
+ * 只在編輯疊層顯示，不進 canvas 畫面、不影響列印／匯出。CSS 是暫定樣式（.text-clip-indicator，見 editor.css），之後由 89 調整。 */
+function buildTextClipIndicator(box, scale) {
+    const div = document.createElement("div");
+    div.className = "text-clip-indicator";
+    div.style.left = `${box.x * scale}px`;
+    div.style.top = `${box.y * scale}px`;
+    div.style.width = `${box.width * scale}px`;
+    div.style.height = `${Math.max(box.height, 1) * scale}px`;
+    div.dataset.tooltip = "內容超出固定高度，多出的部分不會印出";
+    return div;
 }
 
 /** 欄寬拖曳把手：把兩欄的目前點寬直接當比例使用，拖曳時即時換算成新的 ratio。
