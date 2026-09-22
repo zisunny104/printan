@@ -99,20 +99,18 @@ function buildCutLine(widthDots) {
 }
 
 // 細線／細字辨識：1～4 點粗細的橫線各畫 6 條（間距等於線寬，測試印字頭能否分辨相鄰細線是否糊在一起），
-// 下面接一行由大到小的字級，測試熱感紙在這台印表機上實際能看清的最小字級。
-const FINE_DETAIL_HEIGHT = 96;
+// 下面接一行由大到小的字級，測試熱感紙在這台印表機上實際能看清的最小字級。不寫標題文字，線條與字級樣本本身就看得出來在測什麼。
+const FINE_DETAIL_HEIGHT = 88;
 function buildFineDetailStrip(widthDots) {
     const { canvas, ctx } = makeCanvas(widthDots, FINE_DETAIL_HEIGHT);
-    ctx.font = `14px ${FONT}`;
-    ctx.textBaseline = "top";
-    ctx.textAlign = "left";
-    ctx.fillText("細線／細字辨識", 0, 0);
-    let y = 20;
+    let y = 4;
     for (let w = 1; w <= 4; w++) {
         for (let n = 0; n < 8; n++) ctx.fillRect(n * w * 3, y, w, 12);
         y += 16;
     }
     let x = 0;
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
     for (const size of [18, 15, 12, 10, 9, 8]) {
         ctx.font = `${size}px ${FONT}`;
         const label = `${size}px`;
@@ -328,8 +326,7 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
         // 細線／細字辨識：測印字頭能分辨的最細線寬、最小可讀字級
         createImageElement({ assetId: fineDetailUrl, fit: "auto", ditherMode: "threshold" }),
         gap(),
-        // 抖色模式比較：同一段漸層分別跑三種演算法，比較密度過渡與網點紋理
-        center("抖色模式比較　誤差擴散／網點／閾值", { fontSize: smallSize }),
+        // 抖色模式比較：同一段漸層分別跑三種演算法（誤差擴散／網點／閾值，各欄下方已有文字標籤），比較密度過渡與網點紋理
         createImageElement({ assetId: ditherUrl, fit: "auto", ditherMode: "threshold" }),
         gap(),
         // 技術資訊（小字級）
