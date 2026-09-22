@@ -48,6 +48,8 @@ async function init() {
     bindBatchPanel();
     bindPrinterSettings();
     bindEditorShortcuts();
+    bindProjectName();
+    renderProjectName();
     wireResizableColumns();
     wireToolbarOverflow();
     workspace.mount();
@@ -80,6 +82,7 @@ function cacheDom() {
         "btn-printer-forget", "printer-dots-list", "btn-printer-dots-reset", "printer-margin-list", "btn-printer-margin-reset", "btn-printer-margin-sheet",
         "printer-info-device", "printer-info-firmware", "printer-info-spec", "printer-info-dpi",
         "printer-info-paper", "printer-info-printable", "printer-info-blade", "export-embed-fonts", "export-embed-fonts-row",
+        "btn-project-name", "project-name-input", "project-name-text",
     ].forEach((id) => (els[id] = document.getElementById(id)));
 }
 
@@ -425,6 +428,7 @@ function loadProjectIntoEditor(project) {
     renderMarginRows();
     populatePaperWidthTabs();
     populateRecentDrafts();
+    renderProjectName();
     onModelChange();
 }
 
@@ -433,6 +437,61 @@ function startNewProject() {
         printerProfileId: state.project.printerProfile.id,
         paperWidthId: state.project.paper.widthId,
     }));
+}
+
+// ---- 工具列「專案名稱」欄位：平時是 ts-button，點擊／Enter 切成 ts-input ----
+// 顯示與輸入框共用 state.project.meta.name；儲存草稿／匯出 .ptan／匯出 PDF 檔名
+// 已經直接讀這個欄位（見 btn-save-ptan、batch-export.js），這裡不用另外接。
+function renderProjectName() {
+    const name = state.project.meta.name || "未命名專案";
+    els["project-name-text"].textContent = name;
+    els["project-name-text"].title = name; // 名稱太長被裁切時，滑鼠停留看得到完整名稱
+}
+
+function bindProjectName() {
+    const btn = els["btn-project-name"];
+    const input = els["project-name-input"];
+    let cancelling = false;
+
+    function enterEdit() {
+        input.value = state.project.meta.name || "";
+        btn.hidden = true;
+        input.hidden = false;
+        input.focus();
+        input.select();
+    }
+    function exitEdit() {
+        input.hidden = true;
+        btn.hidden = false;
+    }
+    // Enter／blur（含點別處、Tab 走焦點）都算確認；Esc 用 cancelling 旗標跳過這裡的寫入，只還原顯示
+    function commit() {
+        if (cancelling) {
+            cancelling = false;
+            exitEdit();
+            return;
+        }
+        const next = input.value.trim().slice(0, 60) || "未命名專案";
+        if (next !== state.project.meta.name) {
+            state.project.meta.name = next;
+            renderProjectName();
+            onModelChange();
+        }
+        exitEdit();
+    }
+
+    btn.addEventListener("click", enterEdit);
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            input.blur(); // 交給 blur 監聽器統一處理，避免兩套 commit 邏輯
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            cancelling = true;
+            input.blur();
+        }
+    });
+    input.addEventListener("blur", commit);
 }
 
 function populateRecentDrafts() {
