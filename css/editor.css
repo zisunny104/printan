@@ -47,6 +47,7 @@ body {
 
 :root {
     --paper-color: #fff; /* 紙張底色（熱感紙永遠是白的，深色模式也不變）；畫布與兩側不可印區共用 */
+    --printan-guide-color: rgba(120, 120, 120, .55); /* 畫布上不會列印的輔助虛線統一色（切刀安全線／不可印區邊界）；線永遠畫在白紙上，不用深色模式變體 */
     --printan-list-width: 290px;
     --printan-dock-width: 340px;
 }
@@ -670,7 +671,7 @@ body {
     left: 0;
     right: 0;
     bottom: var(--paper-safe-bottom, 0px);
-    border-top: 2px dashed rgba(120, 120, 120, .55);
+    border-top: 1px dashed var(--printan-guide-color);
 }
 
 .safe-area-guide .ts-icon {
@@ -697,12 +698,12 @@ body {
 
 .unprintable-zone.is-left {
     right: 100%;
-    border-right: 1px dashed rgba(120, 120, 120, .55);
+    border-right: 1px dashed var(--printan-guide-color);
 }
 
 .unprintable-zone.is-right {
     left: 100%;
-    border-left: 1px dashed rgba(120, 120, 120, .55);
+    border-left: 1px dashed var(--printan-guide-color);
 }
 
 .canvas-host {
@@ -799,7 +800,7 @@ body {
 .edit-block {
     position: absolute;
     box-sizing: border-box;
-    border: 1px dashed var(--ts-gray-300, #ddd);
+    border: 1px dashed var(--printan-guide-color); /* 未選取元素邊界：固定淺灰，跟安全線／不可印區一致，不隨深色模式變 */
     pointer-events: auto;
     cursor: grab;
     touch-action: none;
