@@ -545,6 +545,7 @@ function renderVariables() {
 const workspace = createWorkspaceView({
     // 「符合寬度」把左右不可印區也算進去，整張紙才看得到
     getPaperWidthMm: () => getPaperWidth(getEffectiveProfile(), state.project.paper.widthId).printableWidthMm + 2 * unprintableMm(),
+    getUnprintableMm: () => unprintableMm(),
     onZoom: () => {
         updatePaperFrame();
         renderEditOverlay();

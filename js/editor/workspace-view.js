@@ -1,9 +1,11 @@
 // 工作區檢視：縮放（−／＋／符合寬度／實際大小 1:1）與 mm 尺規。
 // 縮放只改「紙張在螢幕上佔多少 CSS px」（pxPerMm），排版跟渲染結果都不變；
 // zoom = 1 是實際大小：96 CSS px = 1 吋，所以 80mm 紙的 576 點（72mm）在螢幕上就是 72mm。
-// 畫面上的「紙」就是白底可列印區（printableWidthMm，對應實際 576 點），沒有紙捲邊距。
-// 尺規畫在 canvas 上：水平尺規以白底左緣為 0、右緣為終點，垂直尺規以白底上緣為 0；
-// 跟著縮放與工作區捲動重畫。
+// 畫面上的「紙」就是白底可列印區（printableWidthMm，對應實際 576 點），沒有紙捲邊距；
+// 左右另有印表機印不到的不可印區（純畫面提示，見 editor.js 的 unprintable-zone）。
+// 尺規畫在 canvas 上：0 點固定在可列印區左緣（水平）／上緣（垂直）不變；水平尺規橫跨整張紙寬
+// （含左右不可印區，各露出負值／超出可印範圍的刻度），不可印區的刻度較淡較短，跟著縮放、
+// 工作區捲動、紙寬或邊距校正變動重畫。
 
 import { safeGetItem, safeSetItem } from "../core/storage.js";
 
@@ -27,9 +29,11 @@ function saveRulersPref(value) {
 /**
  * @param {object} options
  * @param {() => number} options.getPaperWidthMm 目前可列印寬度的 mm（白底範圍），「符合寬度」用
+ * @param {() => number} [options.getUnprintableMm] 白底左右各側不可印區的 mm（左右對稱）；水平尺規會把刻度
+ *   延伸進這個範圍畫出紙張實際全寬。省略或回傳 0 時尺規只畫可印區（等同原本行為）。
  * @param {() => void} options.onZoom 縮放比例變了：呼叫端負責更新紙張尺寸、重畫編輯疊層
  */
-export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
+export function createWorkspaceView({ getPaperWidthMm, getUnprintableMm, onZoom }) {
     let zoom = 1;
     let zoomEditing = false; // 百分比欄位正在輸入：先不要用縮放值蓋掉使用者打的字
     let fitLocked = false; // 「符合寬度」啟用中：視窗大小改變時要跟著重算
@@ -275,12 +279,15 @@ export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
     function redraw() {
         if (!dom || !showRulers) return;
         const sr = dom.shadow.getBoundingClientRect();
-        drawRuler(dom.rulerH, "h", sr.left - dom.rulerH.getBoundingClientRect().left, sr.width);
-        drawRuler(dom.rulerV, "v", sr.top - dom.rulerV.getBoundingClientRect().top, sr.height);
+        const marginMm = Math.max(0, getUnprintableMm?.() || 0);
+        drawRuler(dom.rulerH, "h", sr.left - dom.rulerH.getBoundingClientRect().left, sr.width, marginMm);
+        drawRuler(dom.rulerV, "v", sr.top - dom.rulerV.getBoundingClientRect().top, sr.height, 0);
     }
 
-    // originPx：白底 0mm 在尺規座標系裡的位置；extentPx：白底在這個方向上的長度（只在白底上畫刻度）
-    function drawRuler(box, orientation, originPx, extentPx) {
+    // originPx：白底（可列印區）0mm 在尺規座標系裡的位置；extentPx：白底在這個方向上的長度；
+    // marginMm：0 點左右各側要多畫出去的不可印區 mm 數（只有水平尺規會收到非 0 值）——
+    // 刻度範圍變成 [-marginMm, extentMm + marginMm]，落在可印區外的刻度改用較淡、較短的樣式。
+    function drawRuler(box, orientation, originPx, extentPx, marginMm = 0) {
         const canvas = box.firstElementChild;
         const w = box.clientWidth;
         const h = box.clientHeight;
@@ -303,25 +310,33 @@ export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
         const length = orientation === "h" ? w : h;
         const thickness = orientation === "h" ? h : w;
         const extentMm = extentPx / ppm;
-        const firstIndex = Math.max(0, Math.floor((0 - originPx) / ppm / minorStep));
-        const lastIndex = Math.min(Math.floor((extentMm + 0.001) / minorStep), Math.ceil((length - originPx) / ppm / minorStep));
+        // 刻度範圍是 [-marginMm, extentMm + marginMm]（垂直尺規 marginMm 固定 0，範圍不變）；
+        // 同時仍要被畫面可見範圍（0..length 這段 canvas 像素）夾住，避免算出一堆畫不到的刻度
+        const minMm = -marginMm;
+        const maxMm = extentMm + marginMm;
+        const firstIndex = Math.max(Math.ceil((minMm - 0.001) / minorStep), Math.floor((0 - originPx) / ppm / minorStep));
+        const lastIndex = Math.min(Math.floor((maxMm + 0.001) / minorStep), Math.ceil((length - originPx) / ppm / minorStep));
 
         ctx.strokeStyle = ctx.fillStyle = getComputedStyle(box).color;
         ctx.lineWidth = 1 / dpr;
         ctx.font = "11px system-ui, sans-serif";
         ctx.textBaseline = "top";
-        // 主刻度（有數字）用完整顏色、次刻度較淡，層次分明
+        // 主刻度（有數字）用完整顏色、次刻度較淡，層次分明；落在可印區外（不可印區）的刻度另外歸類，畫得更淡更短
         const minorPath = new Path2D();
         const majorPath = new Path2D();
+        const minorZonePath = new Path2D();
+        const majorZonePath = new Path2D();
         const labels = [];
         for (let i = firstIndex; i <= lastIndex; i++) {
             const mm = i * minorStep;
+            const inZone = mm < -0.001 || mm > extentMm + 0.001;
             // 刻度線對齊裝置像素，dpr 非整數時才不會糊
             const pos = (Math.round((originPx + mm * ppm) * dpr) + 0.5) / dpr;
             const isLabel = mm % labelStep === 0;
             const isMid = !isLabel && (mm * 2) % labelStep === 0;
-            const tick = isLabel ? thickness * 0.4 : isMid ? thickness * 0.28 : thickness * 0.18;
-            const path = isLabel ? majorPath : minorPath;
+            const zoneScale = inZone ? 0.7 : 1;
+            const tick = (isLabel ? thickness * 0.4 : isMid ? thickness * 0.28 : thickness * 0.18) * zoneScale;
+            const path = isLabel ? (inZone ? majorZonePath : majorPath) : (inZone ? minorZonePath : minorPath);
             if (orientation === "h") {
                 path.moveTo(pos, thickness);
                 path.lineTo(pos, thickness - tick);
@@ -329,9 +344,10 @@ export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
                 path.moveTo(thickness, pos);
                 path.lineTo(thickness - tick, pos);
             }
-            if (isLabel) labels.push({ mm, pos });
+            if (isLabel) labels.push({ mm, pos, inZone });
         }
-        // 水平尺規終點對齊白底右緣：終點不是刻度間距的整數倍時（例如 72mm、間距 20mm）補一條終點刻度
+        // 水平尺規在可印區右緣加一條終點刻度：終點不是刻度間距的整數倍時（例如 72mm、間距 20mm）
+        // 仍讓可印範圍的邊界看得出來（不可印區從這裡開始）
         if (orientation === "h" && extentMm % minorStep > 0.001 && originPx + extentPx <= length) {
             const pos = (Math.round((originPx + extentPx) * dpr) + 0.5) / dpr;
             majorPath.moveTo(pos, thickness);
@@ -339,12 +355,18 @@ export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
         }
         ctx.globalAlpha = 0.5;
         ctx.stroke(minorPath);
+        ctx.globalAlpha = 0.2;
+        ctx.stroke(minorZonePath);
         ctx.globalAlpha = 1;
         ctx.stroke(majorPath);
+        ctx.globalAlpha = 0.45;
+        ctx.stroke(majorZonePath);
+        ctx.globalAlpha = 1;
 
-        for (const { mm, pos } of labels) {
+        for (const { mm, pos, inZone } of labels) {
             const text = String(mm);
             const textW = ctx.measureText(text).width;
+            ctx.globalAlpha = inZone ? 0.45 : 1;
             if (orientation === "h") {
                 // 靠近右緣放不下時改靠刻度左側
                 const flip = pos + 2 + textW > w;
@@ -361,6 +383,7 @@ export function createWorkspaceView({ getPaperWidthMm, onZoom }) {
                 ctx.restore();
             }
         }
+        ctx.globalAlpha = 1;
     }
 
     return { mount, pxPerMm, redraw: scheduleRedraw };
