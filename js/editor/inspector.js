@@ -280,6 +280,9 @@ function buildTextInspector(panel, el) {
     function renderStyleControls() {
         const hasRange = sel.start !== sel.end;
         const style = getRangeStyle(el, sel.start, sel.end);
+        // 工具列按鈕點擊時焦點仍留在 textarea（見上面 mousedown 的 preventDefault），
+        // 所以這裡照常整個重建沒問題；只有 styleRow 底下自己的欄位（字級 input 等）
+        // 才可能在使用者打字中途、欄位本身持有焦點時被呼叫到。
         toolbar.innerHTML = "";
         toolbar.appendChild(rangeToggleButton("bold", "粗體", style.bold, hasRange, (v) => applyRangeStyle("bold", v)));
         toolbar.appendChild(rangeToggleButton("italic", "斜體", style.italic, hasRange, (v) => applyRangeStyle("italic", v)));
@@ -287,6 +290,11 @@ function buildTextInspector(panel, el) {
         toolbar.appendChild(rangeToggleButton("strikethrough", "刪除線", style.strikethrough, hasRange, (v) => applyRangeStyle("strikethrough", v)));
         toolbar.appendChild(rangeToggleButton("circle-half-stroke", "反相", style.inverse, hasRange, (v) => applyRangeStyle("inverse", v)));
 
+        // 目前有焦點的欄位（例如正在打字的字級 input）就不整個重建 styleRow：
+        // innerHTML = "" 會把使用者正在輸入、持有焦點的 DOM node 整個摧毀重建，
+        // 新節點不會拿到焦點，導致打字被截斷、焦點跑掉後下一個按鍵變成取代到別處的選取內容。
+        // 欄位失焦後下一次選取／編輯事件會再觸發一次完整重繪，資料仍會同步。
+        if (styleRow.contains(document.activeElement)) return;
         styleRow.innerHTML = "";
         styleRow.appendChild(fieldRow([
             ["字體", rangeFontFamilySelect(style.fontFamily, hasRange, (v) => applyRangeStyle("fontFamily", v))],

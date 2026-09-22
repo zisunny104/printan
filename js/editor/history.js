@@ -79,9 +79,16 @@ function pasteElements() {
 
 function handleEditorShortcut(e) {
     if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
-    if (e.target.closest?.("input, textarea, select, [contenteditable], [role=\"tab\"]") && e.key !== "Escape") return;
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
+    if (e.target.closest?.("input, textarea, select, [contenteditable], [role=\"tab\"]") && e.key !== "Escape") {
+        // 復原／重做例外：數字、下拉等「值由程式設定」欄位（例如樣式工具列的字級 input）
+        // 沒有有意義的瀏覽器原生復原可用，讓 Ctrl+Z／Ctrl+Y 照常呼叫 app 自己的 stepHistory()；
+        // 純自由文字輸入（textarea、文字框、contenteditable）與分頁鍵盤操作則維持交給瀏覽器／元件本身處理。
+        const isFreeText = e.target.closest?.("textarea, input[type=\"text\"], input:not([type]), [contenteditable], [role=\"tab\"]");
+        const isUndoShortcut = mod && (key === "z" || key === "y");
+        if (isFreeText || !isUndoShortcut) return;
+    }
     const ids = getSelectedIds();
     const root = state.project.template.elements;
 
