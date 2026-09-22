@@ -664,7 +664,7 @@ export const inlineEditor = createInlineTextEditor({
     getElement: (id) => findElementById(state.project.template.elements, id),
     getBlockNode: (id) => els["edit-overlay"]?.querySelector(`.edit-block[data-id="${id}"]`),
     getScale: () => (rt.lastRenderResult ? rt.lastRenderResult.canvas.clientWidth / rt.lastRenderResult.widthDots : 1) || 1,
-    onInput: () => onModelChange(),
+    onInput: () => onModelChange({ live: true }),
     onSelection: (id, start, end) => {
         if (id !== state.selectedId) return;
         textSel.start = start;
@@ -680,12 +680,14 @@ export const inlineEditor = createInlineTextEditor({
 // ---- 變更彙整：儲存草稿 + 重新渲染 ----
 
 let saveTimer = null;
-export function onModelChange({ skipInspector = false } = {}) {
+// live=true：畫布／安全線等視覺跟手（rAF 節流，同拖曳把手），不用 schedulePreview() 的 120ms
+// debounce——那個 debounce 會被連續輸入（打字、貼上、按住刪除）不斷重置，畫面卡在舊高度直到停手。
+export function onModelChange({ skipInspector = false, live = false } = {}) {
     recordHistory();
     renderOutline();
     if (!skipInspector) renderInspector();
     renderVariables();
-    schedulePreview();
+    if (live) schedulePreviewLive(); else schedulePreview();
     scheduleSave();
 }
 
