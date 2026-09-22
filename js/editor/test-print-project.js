@@ -245,7 +245,9 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
     const totalSize = wide ? 40 : 32;
     const noteSize = wide ? 22 : 20;
     const smallSize = wide ? 22 : 20;
-    const qrSize = wide ? 140 : 120;
+    // 縮小 20%（PROJECT_URL 29 模組／TEAPOT_URL 25 模組，見下方統一縮放註解）：
+    // 58mm 最差情況 96px÷29 模組 ≈ 3.31px/模組，仍在「≥3px/模組」的可靠掃描門檻之上
+    const qrSize = wide ? 112 : 96;
     bodySize = wide ? 28 : 24;
 
     const menu = menuItems();
@@ -316,9 +318,6 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
         gap(),
         qrRow,
         captionRow,
-        space(),
-        // 感謝語與頁尾小字
-        center("謝謝光臨", { fontSize: titleSize + 8, bold: true }),
         // 撕線：其下的技術資訊像可撕下的存根（視覺撕線本身已表達「沿此撕開」，不再多一行說明；自動切刀仍在整張最後）
         space(),
         createImageElement({ assetId: stripUrl, fit: "auto", ditherMode: "threshold" }),
