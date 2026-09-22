@@ -284,7 +284,10 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
         const { canvas, ctx } = makeCanvas(frame, frame);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(qrCanvases[i], 0, 0, frame, frame);
-        qrRow.columns[i].push(createImageElement({ assetId: canvas.toDataURL("image/png"), fit: "auto", ditherMode: "threshold" }));
+        // fit 用 "none"：renderer.js 的 "auto" 一律撐滿欄寬（widthPercent 預設 100%，不看來源畫布實際大小），
+        // qrSize 只會改到來源畫布解析度、印不出真正縮小的效果；"none" 才會照內容原始寬度（qrSize）畫，
+        // 欄寬夠寬時就是 qrSize 本身。align 用預設值 "center"，欄寬 > qrSize 時置中對齊下方 captionRow 文字。
+        qrRow.columns[i].push(createImageElement({ assetId: canvas.toDataURL("image/png"), fit: "none", ditherMode: "threshold" }));
         captionRow.columns[i].push(center(caption, { fontSize: smallSize }));
     });
     const infoRows = info.map(([k, v]) => {
