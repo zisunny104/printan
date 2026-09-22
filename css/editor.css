@@ -1598,64 +1598,48 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
     border-color: var(--ts-gray-600, #666);
 }
 
-/* 專案名稱（頁首、app 標題下方）：平時是文字按鈕，切換到輸入框時 JS 互相 hidden／focus。
-   截斷用 max-width＋ellipsis，完整名稱靠 JS 寫入 title 屬性顯示。 */
-.project-name-row {
-    margin-top: .125rem;
-}
-
-.project-name-button {
-    display: inline-flex;
+/* 專案名稱（工具列，新增／開啟／匯出旁）：平時是 ts-button，切換到 ts-input 時 JS 互相 hidden／focus。
+   按鈕本身沿用 Tocas 樣式，這裡只加文字截斷（max-width＋ellipsis，完整名稱靠 JS 寫入 title 屬性）
+   與輸入框寬度，跟其他工具列按鈕視覺一致。 */
+.project-name-group {
+    display: flex;
     align-items: center;
-    max-width: 100%;
-    gap: .375rem;
-    margin-inline-start: -.375rem;
-    padding: .125rem .375rem;
-    border: 1px solid transparent;
-    border-radius: .4rem;
-    background: none;
-    color: var(--ts-gray-600, #666);
-    font: inherit;
-    font-size: .875rem;
-    cursor: text;
+    min-width: 0;
 }
 
-.project-name-button:hover,
-.project-name-button:focus-visible {
-    background: var(--ts-gray-100, #f2f2f2);
-    border-color: var(--ts-gray-300, #ddd);
+#btn-project-name {
+    min-width: 0;
 }
 
-.project-name-button:focus-visible {
-    outline: 2px solid light-dark(#1d4ed8, #93c5fd);
-    outline-offset: 1px;
-}
-
-.project-name-text {
+#btn-project-name .project-name-text {
     overflow: hidden;
-    max-width: 16rem;
+    max-width: 10rem;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.project-name-button .ts-icon {
-    flex: none;
-    font-size: .75rem;
-    opacity: .7;
-}
-
 .project-name-input {
     box-sizing: border-box;
-    width: 16rem;
+    width: 10rem;
     max-width: 100%;
 }
 
-@media (width < 480px) {
-    .project-name-text {
-        max-width: 50vw;
+/* 小螢幕工具列每組各自整行（見上方 #toolbar > .ts-buttons 規則），專案名稱跟著同一套排法 */
+@media (width < 768px) {
+    .project-name-group {
+        flex: 1 0 100%;
+    }
+
+    #btn-project-name {
+        flex: 1;
+    }
+
+    #btn-project-name .project-name-text {
+        flex: 1;
+        max-width: none;
     }
 
     .project-name-input {
-        width: 50vw;
+        width: 100%;
     }
 }
