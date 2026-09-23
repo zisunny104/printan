@@ -1643,3 +1643,96 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
         width: 100%;
     }
 }
+
+/* ==== Kiosk 模式（網址帶 kiosk=1，js/editor/kiosk.js 同步在 <html> 加 .is-kiosk） ====
+   外部系統（測驗機、配對後的售票機等）用網址直接指定版型＋自動列印，畫面不能看出是
+   printan 編輯器：工具列、版面結構、元素設定、頁首頁尾全部藏起來，只留畫布／預覽區，
+   並讓它填滿整個視窗（不分斷點，kiosk 螢幕尺寸不定，直接比照桌面版三欄的滿版高度作法）。
+   隱藏用的選擇器盡量抓既有 id（#app-header／#toolbar／#outlineSidebar／#inspectorDock／
+   #colResizerLeft／#colResizerRight／#app-footer），specificity 天然贏過原本斷點規則，
+   不用 !important；只有 .mobile-panel-bar 底下是 Tocas 斷點工具類（tablet+:has-hidden），
+   不確定其 specificity，用 !important 保險。 */
+.is-kiosk #app-header,
+.is-kiosk #toolbar,
+.is-kiosk #outlineSidebar,
+.is-kiosk #inspectorDock,
+.is-kiosk #colResizerLeft,
+.is-kiosk #colResizerRight,
+.is-kiosk #app-footer,
+.is-kiosk .editor-canvas-pane .canvas-floating-toolbar,
+.is-kiosk #paper-viewport .pane-card-header,
+.is-kiosk #safe-area-guide {
+    display: none;
+}
+
+.is-kiosk nav.mobile-panel-bar {
+    display: none !important;
+}
+
+/* 頁首上面那條分隔線是 view.php 裡緊接在 #editorShell 之前的獨立元素，沒有另外掛 id；
+   用 :has() 抓「後面接著 #editorShell 的分隔線」，跟本檔其他地方（如 .paper-viewport-stage:has(...)）
+   同一套寫法，不用為了這一條線去改 view.php 結構。 */
+.is-kiosk .ts-divider:has(+ #editorShell) {
+    display: none;
+}
+
+/* 畫布／預覽區滿版：不分斷點都比照桌面三欄版的滿版高度寫法，藏起來的頁首／工具列／
+   分隔線／頁尾不占位後，editor-shell 的 flex:1 自然把整個視窗高度讓給畫布。 */
+.is-kiosk .main-content {
+    flex: none;
+    height: 100vh;
+    height: 100dvh;
+}
+
+.is-kiosk .main-content > .ts-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 0;
+    max-width: none;
+    margin: 0;
+}
+
+.is-kiosk .main-content > .ts-container > * {
+    flex-shrink: 0;
+}
+
+.is-kiosk .editor-shell {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.is-kiosk .editor-canvas-pane {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.is-kiosk .editor-canvas-pane > #paper-viewport {
+    flex: 1 1 0;
+    min-height: 0;
+    /* 卡片外框／陰影／圓角是編輯器的「面板感」，kiosk 只留白紙本身 */
+    border: 0;
+    box-shadow: none;
+    background: none;
+    border-radius: 0;
+}
+
+.is-kiosk .paper-viewport-stage {
+    flex: 1 1 0;
+}
+
+/* 紙張比螢幕小很多時，置中填滿整個畫面（一般編輯模式是靠上方便長紙捲動，kiosk 沒有這個顧慮） */
+.is-kiosk .paper-viewport-body {
+    max-height: none;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+/* kiosk 沒有使用者會去點掉，錯誤提示（見 js/editor/kiosk.js showKioskNotice）
+   跟版面留點呼吸空間，訊息本身沒有提到 printan，不會露餡 */
+.is-kiosk .ts-notice {
+    margin: 1rem;
+}
