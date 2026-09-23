@@ -7,7 +7,7 @@ import {
 import { PRINT_PREFS_KEY, els, serialAdapter, state, usbAdapter } from "./context.js";
 import { SystemDialogAdapter, describePrinterError, interpretRealtimeStatus, isSelectionCancelled } from "../core/printer-adapter.js";
 import { getBaseProfile, getEffectiveProfile, schedulePreview } from "./editor.js";
-import { confirmFontFallbacks } from "./batch-export.js";
+import { confirmFontFallbacks, describeFontFallbackIssues } from "./batch-export.js";
 import { safeGetItem, safeSetItem } from "../core/storage.js";
 import { createInfoIcon } from "./ui-helpers.js";
 import { renderCalibrationSheet, renderTestPrint } from "./test-print-project.js";
@@ -56,6 +56,34 @@ export async function printCurrent() {
         await adapter.print(result);
     } catch (err) {
         alert(`列印失敗：${describePrinterError(err)}`);
+    } finally {
+        state.printerBusy = false;
+    }
+}
+
+/**
+ * kiosk.js 自動列印用：跟 printCurrent 一樣送印，但兩個地方刻意不一樣——
+ * 1. 不呼叫 confirmFontFallbacks() 的 confirm()，kiosk 沒有人在旁邊可以點確認；
+ * 2. USB／Serial 失敗時不像 printCurrent 退回 SystemDialogAdapter（跳系統列印對話框一樣要人手動
+ *    操作，對 kiosk 沒有意義），直接回報失敗給呼叫端自己決定怎麼顯示。
+ * 只印已授權裝置：沒有已授權裝置時呼叫端會自己判斷、不呼叫這個函式（見 kiosk.js）。
+ * 回傳 { ok, issues } 或 { ok:false, reason, error? }，不在這裡動畫面。
+ */
+export async function printSilently() {
+    if (state.printerBusy) return { ok: false, reason: "busy" };
+    if (!state.usbConnected && !state.serialConnected) return { ok: false, reason: "not-connected" };
+    state.printerBusy = true;
+    try {
+        const result = await renderTemplate(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
+        const issues = describeFontFallbackIssues(result);
+        const adapter = state.usbConnected ? usbAdapter : serialAdapter;
+        await adapter.print(result, getEscposPrintOptions());
+        return { ok: true, issues };
+    } catch (err) {
+        state.usbConnected = false;
+        state.serialConnected = false;
+        updatePrinterConnectionUi();
+        return { ok: false, reason: "print-failed", error: err };
     } finally {
         state.printerBusy = false;
     }

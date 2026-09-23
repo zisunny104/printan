@@ -35,6 +35,7 @@ import { renderOutline, wireOutlineKeyboard } from "./outline.js";
 import { bindBatchPanel, endBatchPreview, exportBatchPdf, exportSinglePdf } from "./batch-export.js";
 import { bindEditorShortcuts, recordHistory, resetHistory } from "./history.js";
 import { addElement, insertElement, wireAddMenu } from "./element-actions.js";
+import { bootKioskFromQuery } from "./kiosk.js";
 
 async function init() {
     cacheDom();
@@ -59,6 +60,8 @@ async function init() {
     onWebFontStatusChange(() => renderInspector()); // 字體載入失敗／恢復時，選單上的標示要跟著更新
     restoreLocalFontsIfGranted().then((restored) => { if (restored) renderInspector(); });
     await attemptSilentPrinterReconnect();
+    // kiosk.js：網址帶 tpl= 才會動作，一般開啟編輯器（沒有這個參數）完全不受影響
+    await bootKioskFromQuery(loadProjectIntoEditor, schedulePreview);
 }
 
 function cacheDom() {
@@ -415,7 +418,7 @@ function bindFileInputs() {
 // 「新增」不會刪除目前版型：目前版型早就被 scheduleSave 自動存進 IndexedDB 了，
 // 換成空白版型後舊的還在，可以從「開啟」下拉選單的「最近編輯」清單找回來。
 
-function loadProjectIntoEditor(project) {
+export function loadProjectIntoEditor(project) {
     state.project = project;
     state.selectedId = null;
     state.multi = [];

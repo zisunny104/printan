@@ -16,6 +16,18 @@ export function confirmFontFallbacks(results) {
     return !failedImages.size || confirm(`有 ${failedImages.size} 張圖片無法載入，已略過，仍要輸出？`);
 }
 
+// confirmFontFallbacks 檢查的同三件事，但只回傳文字清單、不彈 confirm()——給 kiosk.js 自動列印用，
+// 沒有人在旁邊可以點確認，問題改用畫面上的提示列顯示，不擋著不印。
+export function describeFontFallbackIssues(results) {
+    const list = [].concat(results);
+    const issues = [];
+    if (list.some((r) => r.fontFallbacks?.length)) issues.push("字體未載入，改用系統字體");
+    if (list.some((r) => r.truncated)) issues.push("內容太長，超出部分被截掉");
+    const failedImages = new Set(list.flatMap((r) => r.imageFailures || []));
+    if (failedImages.size) issues.push(`有 ${failedImages.size} 張圖片無法載入`);
+    return issues;
+}
+
 export async function exportSinglePdf() {
     const result = await renderTemplate(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
     if (!confirmFontFallbacks(result)) return;
