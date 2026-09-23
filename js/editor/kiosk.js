@@ -10,7 +10,9 @@
 //                      （實際隱藏規則不在這裡，這裡只掛 class）
 //   autoprint=1        印表機先前已被瀏覽器授權過，就不需要使用者手勢直接印；
 //                      沒授權過的裝置本來就一定要跳系統選擇窗（WebUSB／Serial 規格要求使用者手勢），
-//                      這種情況不強求全自動，留著列印鍵讓人手動點一次（一般的 confirm 流程照舊）
+//                      這種情況不強求全自動，改顯示 #kiosk-connect-print 候補配對按鈕讓人點一次
+//                      （工具列被 kiosk CSS 藏起來，原本的列印鍵點不到）；配對成功後接著印，
+//                      這台裝置之後再開同一個網址就會被上面的靜默重連直接接上，不用再點第二次
 //   其餘參數：比照版型內用到的變數名稱，自動填進 state.previewData（見 editor.js renderVariables）
 //
 // 已知限制：如果版型剛好有變數叫 tpl／kiosk／autoprint，會被當保留字吃掉、進不了 previewData，
@@ -21,7 +23,7 @@ import { loadProject } from "../core/schema.js";
 import { registerEmbeddedFonts } from "../core/web-fonts.js";
 import { describePrinterError } from "../core/printer-adapter.js";
 import { els, state } from "./context.js";
-import { attemptSilentPrinterReconnect, printSilently } from "./printer-settings.js";
+import { attemptSilentPrinterReconnect, connectPrinter, printSilently } from "./printer-settings.js";
 
 const KIOSK_CLASS = "is-kiosk";
 const RESERVED_PARAMS = new Set(["tpl", "kiosk", "autoprint"]);
@@ -40,6 +42,41 @@ function showKioskNotice(message) {
     }
     notice.hidden = false;
     notice.firstChild.textContent = message;
+}
+
+/**
+ * autoprint=1 但沒有已授權裝置時顯示：WebUSB／Serial 規格要求配對一定要使用者手勢，
+ * 工具列整組被 .is-kiosk 的 CSS 隱藏，畫面上沒有東西可點，所以另外準備一顆 kiosk 專用按鈕。
+ * id：#kiosk-connect-print，樣式（大小、位置）給 89 接手，這裡只做行為：
+ * 點下去走跟「連線印表機」按鈕（printer-settings.js 的 connectPrinter）同一套配對流程，
+ * 配對成功後接著印——之後這台裝置再開同一個 kiosk 網址，attemptSilentPrinterReconnect 會直接接上，
+ * 不用再點第二次。
+ */
+function showKioskConnectButton() {
+    let button = els["kiosk-connect-print"];
+    if (!button) {
+        button = document.createElement("button");
+        button.id = "kiosk-connect-print";
+        button.type = "button";
+        button.className = "ts-button is-primary";
+        button.textContent = "連線印表機並列印";
+        const stage = els["paper-shadow"].parentElement.parentElement;
+        stage.parentElement.insertBefore(button, stage);
+        button.addEventListener("click", async () => {
+            button.disabled = true;
+            await connectPrinter();
+            if (!state.usbConnected && !state.serialConnected) {
+                button.disabled = false; // 使用者取消選擇裝置或連線失敗，留著讓人可以再點一次
+                return;
+            }
+            button.hidden = true;
+            const outcome = await printSilently();
+            if (outcome.ok && outcome.issues.length) showKioskNotice(outcome.issues.join("；"));
+            else if (!outcome.ok && outcome.reason === "print-failed") showKioskNotice(`自動列印失敗：${describePrinterError(outcome.error)}，請改用列印鍵`);
+        });
+        els["kiosk-connect-print"] = button;
+    }
+    button.hidden = false;
 }
 
 // tpl= 只接受同源網址：印表機是實體輸出，風險不算高，但沒必要開放任意第三方網址當版型來源。
@@ -114,12 +151,14 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
 
     if (params.get("autoprint") === "1") {
         await attemptSilentPrinterReconnect();
-        // 沒有已授權裝置：WebUSB／Serial 規格要求跳選擇窗一定要使用者手勢，做不到全自動，
-        // 這裡不強求，留著列印鍵讓人手動點一次（走 printCurrent 原本的 confirm 流程）。
         if (state.usbConnected || state.serialConnected) {
             const outcome = await printSilently();
             if (outcome.ok && outcome.issues.length) showKioskNotice(outcome.issues.join("；"));
             else if (!outcome.ok && outcome.reason === "print-failed") showKioskNotice(`自動列印失敗：${describePrinterError(outcome.error)}，請改用列印鍵`);
+        } else {
+            // 沒有已授權裝置：WebUSB／Serial 規格要求跳選擇窗一定要使用者手勢，做不到全自動，
+            // 顯示候補配對按鈕讓人點一次；工具列被 .is-kiosk 隱藏，原本的列印鍵點不到。
+            showKioskConnectButton();
         }
     }
     return true;

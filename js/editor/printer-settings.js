@@ -108,6 +108,27 @@ function currentWebUsbVendorId() {
     return getPrinterProfile(state.project.printerProfile.id).webUsb?.vendorId;
 }
 
+/**
+ * 「連線印表機」的實際連線動作：用目前選定的連線方式跳裝置選擇窗（WebUSB／Serial 規格要求使用者手勢），
+ * 更新連線狀態與畫面。設定 modal 裡的「連線印表機」按鈕、kiosk 沒有已授權裝置時的候補配對按鈕共用同一套邏輯。
+ */
+export async function connectPrinter() {
+    const method = currentConnectMethod();
+    try {
+        if (method === "serial") {
+            await serialAdapter.connect({ vendorId: currentWebUsbVendorId(), baudRate: state.printPrefs.serialBaudRate });
+            state.serialConnected = true;
+        } else {
+            await usbAdapter.connect({ vendorId: currentWebUsbVendorId() });
+            state.usbConnected = true;
+        }
+    } catch (err) {
+        if (!isSelectionCancelled(err)) alert(`連線失敗：${describePrinterError(err)}`);
+    }
+    updatePrinterConnectionUi();
+    await identifyConnectedPrinter();
+}
+
 export async function attemptSilentPrinterReconnect() {
     if (usbAdapter.isSupported()) {
         try {
@@ -520,22 +541,7 @@ export function bindPrinterSettings() {
         });
     }
 
-    els["btn-printer-connect"].addEventListener("click", async () => {
-        const method = currentConnectMethod();
-        try {
-            if (method === "serial") {
-                await serialAdapter.connect({ vendorId: currentWebUsbVendorId(), baudRate: state.printPrefs.serialBaudRate });
-                state.serialConnected = true;
-            } else {
-                await usbAdapter.connect({ vendorId: currentWebUsbVendorId() });
-                state.usbConnected = true;
-            }
-        } catch (err) {
-            if (!isSelectionCancelled(err)) alert(`連線失敗：${describePrinterError(err)}`);
-        }
-        updatePrinterConnectionUi();
-        await identifyConnectedPrinter();
-    });
+    els["btn-printer-connect"].addEventListener("click", connectPrinter);
 
     els["btn-printer-disconnect"].addEventListener("click", async () => {
         if (state.usbConnected) {
