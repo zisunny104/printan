@@ -258,7 +258,7 @@ const menuItems = () => {
     const previewCount = now.getDate();
     const coffeeCount = now.getHours() || 24;
     return [
-        ["輪班不加班助手", monthCount, EASTER_EGG.monthlyFeeUsd, "Claude Pro，自掏腰包"],
+        ["輪班不加班助手", monthCount, EASTER_EGG.monthlyFeeUsd, "Claude Pro，自動續訂"],
         ["所見即所得預覽", previewCount, 42, "42：生命、宇宙與一切的答案"],
         ["續命美式咖啡", coffeeCount, 95, "喝茶請洽 HTTP 418"],
         ["Token 一籮筐", EASTER_EGG.tokens, 0, "用量沒算過，反正很多"],
