@@ -53,11 +53,11 @@ export function createTextElement(overrides = {}) {
 // 情況，本來就是合法狀態。
 // 數值以 203 dpi 收據紙為準（printer-profiles.js 預設 profile）：body 用一般內文常見的字級，
 // heading 明顯放大＋粗體但控制在 body 的 1.5 倍，收據紙寬有限，字放太大會超出可印範圍；
-// caption 縮小到 0.75 倍，用在輔助說明文字。
+// caption 維持在約 10pt——低於這個尺寸在 203dpi 搭配熱感抖色模擬下，筆畫較多的中文字容易糊在一起。
 export const TEXT_STYLE_PRESETS = {
     heading: { fontSize: 48, bold: true, letterSpacing: 0, lineHeight: 1.2 },
     body: { fontSize: 32, bold: false, letterSpacing: 0, lineHeight: 1.3 },
-    caption: { fontSize: 24, bold: false, letterSpacing: 0, lineHeight: 1.2 },
+    caption: { fontSize: 28, bold: false, letterSpacing: 0, lineHeight: 1.2 },
 };
 
 /** 套用樣式預設：展開成具體欄位並記錄 stylePreset 供 UI 顯示目前選的是哪個。
