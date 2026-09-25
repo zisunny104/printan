@@ -2,7 +2,7 @@
 
 import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
 import {
-    DEFAULT_ROW_GAP, MIXED, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow,
+    DEFAULT_ROW_GAP, MIXED, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow, resolveTextVAlign,
     resolveDividerDrawMode, resolveFill,
     applyStyleToRange, applyTextStylePreset, getRangeStyle, getTextContent, replaceFullText, TEXT_STYLE_PRESETS,
 } from "../core/document-model.js";
@@ -282,6 +282,12 @@ const TEXT_OVERFLOW_OPTIONS = [
     ["grow", "自動變高", textSvgIcon('<rect x="2" y="1.5" width="12" height="7" rx="1" stroke-dasharray="2 1.5"/><path d="M8 5v7M5.5 9.5 8 12l2.5-2.5"/>')],
     ["clip", "裁切", textSvgIcon('<rect x="2" y="1.5" width="12" height="6" rx="1" fill="currentColor" fill-opacity=".15"/><path d="M2 7.5h12" stroke-dasharray="1.5 1.5"/>')],
 ];
+// 框內容垂直位置：外框虛線示意固定高度的框，實心色塊代表內容貼齊的位置（頂／中／底）
+const TEXT_VALIGN_OPTIONS = [
+    ["top", "靠上", textSvgIcon('<rect x="2" y="1.5" width="12" height="13" rx="1" stroke-dasharray="2 1.5"/><rect x="4" y="3.5" width="8" height="3" fill="currentColor"/>')],
+    ["middle", "置中", textSvgIcon('<rect x="2" y="1.5" width="12" height="13" rx="1" stroke-dasharray="2 1.5"/><rect x="4" y="6.5" width="8" height="3" fill="currentColor"/>')],
+    ["bottom", "靠下", textSvgIcon('<rect x="2" y="1.5" width="12" height="13" rx="1" stroke-dasharray="2 1.5"/><rect x="4" y="9.5" width="8" height="3" fill="currentColor"/>')],
+];
 
 // 樣式預設選單：每個選項直接秀縮小後的實際樣子（字級比例／粗細），不用純文字標籤，
 // 這樣不用先套用才知道「H2」長怎樣。標籤直接用 H1-H5／P（見 document-model.js TEXT_STYLE_PRESETS
@@ -511,6 +517,10 @@ function buildTextInspector(panel, el) {
                     el.overflow = v;
                     onModelChange();
                 }, "超出處理", TEXT_OVERFLOW_OPTIONS)));
+                body.appendChild(field("垂直位置", alignGroup(resolveTextVAlign(el), (v) => {
+                    el.vAlign = v;
+                    onModelChange();
+                }, "垂直位置", TEXT_VALIGN_OPTIONS)));
             }
         }));
     }
