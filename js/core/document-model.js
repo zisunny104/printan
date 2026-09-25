@@ -46,16 +46,51 @@ export function createTextElement(overrides = {}) {
     };
 }
 
+// 語意化文字樣式：套用時一次展開成底下的具體欄位（fontSize/bold/letterSpacing/lineHeight），
+// 欄位本身才是渲染依據，renderer.js 完全不需要認得 stylePreset，只吃展開後的具體欄位，
+// 公開 API 維持單純（見 schema.js 開頭關於 renderer.js 是 render-core 公開 API 的說明）。
+// stylePreset 欄位是選用的：沒有這個欄位就代表自訂（手動設定），不需要另外處理沒有這個欄位的
+// 情況，本來就是合法狀態。
+// 數值以 203 dpi 收據紙為準（printer-profiles.js 預設 profile）：body 用一般內文常見的字級，
+// heading 明顯放大＋粗體但控制在 body 的 1.5 倍，收據紙寬有限，字放太大會超出可印範圍；
+// caption 縮小到 0.75 倍，用在輔助說明文字。
+export const TEXT_STYLE_PRESETS = {
+    heading: { fontSize: 48, bold: true, letterSpacing: 0, lineHeight: 1.2 },
+    body: { fontSize: 32, bold: false, letterSpacing: 0, lineHeight: 1.3 },
+    caption: { fontSize: 24, bold: false, letterSpacing: 0, lineHeight: 1.2 },
+};
+
+/** 套用樣式預設：展開成具體欄位並記錄 stylePreset 供 UI 顯示目前選的是哪個。
+ * preset 傳 null／不認得的值＝自訂，只清掉標記、不動現有欄位值，讓使用者能繼續拿目前這組
+ * 數值手動調整，不會被覆寫掉。 */
+export function applyTextStylePreset(el, preset) {
+    if (preset && TEXT_STYLE_PRESETS[preset]) {
+        Object.assign(el, TEXT_STYLE_PRESETS[preset]);
+        el.stylePreset = preset;
+    } else {
+        delete el.stylePreset;
+    }
+}
+
 /** 把文字元素的所有 run 接成單一字串（大綱標籤預覽、變數掃描等用途）。 */
 export function getTextContent(el) {
     if (!Array.isArray(el.runs)) return "";
     return el.runs.map((r) => r.text || "").join("");
 }
 
-/** 把舊版（v1 之前）扁平 text 欄位的文字元素轉成 runs 陣列，供 schema migrate() 呼叫。 */
+/** 把舊版（v1 之前）扁平 text 欄位的文字元素轉成 runs 陣列，供 schema migrate() 呼叫。
+ * 順便清掉不認得的 stylePreset 值（壞檔／未來版本新增的預設名稱）——留著會讓 UI 選字樣式時
+ * 查不到對應的具體欄位組合，這裡當它沒設，退回「自訂」，不影響其餘既有欄位。 */
 export function normalizeTextElement(el) {
-    if (Array.isArray(el.runs)) return el;
-    const { text, ...rest } = el;
+    const preset = el.stylePreset;
+    const badPreset = preset !== undefined && !TEXT_STYLE_PRESETS[preset];
+    if (Array.isArray(el.runs)) {
+        if (!badPreset) return el;
+        const { stylePreset, ...rest } = el;
+        return rest;
+    }
+    const { text, stylePreset, ...rest } = el;
+    if (!badPreset && stylePreset !== undefined) rest.stylePreset = stylePreset;
     return { ...rest, runs: [createTextRun({ text: text || "" })] };
 }
 
