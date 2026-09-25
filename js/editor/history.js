@@ -194,7 +194,10 @@ export function bindEditorShortcuts() {
     els["paper-scroll"].addEventListener("pointerdown", (e) => {
         if (e.button !== 0 || state.viewMode !== "edit") return;
         const t = e.target;
-        if (t === els["paper-scroll"] || t === els["paper-shadow"] || t === els["canvas-host"] || t.tagName === "CANVAS") startMarquee(e);
+        // 非作用中頁面的縮圖是「點一下切過去」，不是框選的起點（見 page-board.js）
+        if (t.closest(".page-frame:not(.is-active)")) return;
+        const onBoardBackground = t === els["page-board"] || t.classList.contains("page-group") || t.classList.contains("page-frame");
+        if (t === els["paper-scroll"] || onBoardBackground || t === els["paper-shadow"] || t === els["canvas-host"] || t.tagName === "CANVAS") startMarquee(e);
     });
 }
 
