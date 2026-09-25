@@ -40,16 +40,25 @@ const DIVIDER_LINE_THICKNESS_PRESETS_MM = [
 const DIVIDER_FILL_THICKNESS_PRESETS_MM = [
     ["細", 2], ["普通", 4], ["粗", 8], ["特粗", 12],
 ];
+// 預設選單快速選常用粗細，下面永遠留一個 mm 數字輸入框可以打精確值（不用先選「自訂」才看得到、
+// 也不會因為目前值剛好卡在某個預設值上就找不到自訂輸入框——兩者一直並存，改其中一個兩邊都會同步）。
 function dividerThicknessSelect(el, presets) {
     const dpiX = getEffectiveProfile().dpi.x;
     const options = presets.map(([name, mm]) => [String(mmToDots(mm, dpiX)), `${name}（${mm} mm）`]);
     const current = String(el.thicknessDots);
-    // 舊檔或手動存過的值可能不在預設清單裡：多插一個選項讓目前的值看得到、也不會一開面板就被
-    // 悄悄改成清單第一項（<select> 找不到相符 option 時瀏覽器行為不一定，這裡明確處理掉）。
     if (!options.some(([v]) => v === current)) {
         options.unshift([current, `目前（${dotsToMm(el.thicknessDots, dpiX).toFixed(1)} mm）`]);
     }
-    return selectInput(options, current, (v) => { el.thicknessDots = Number(v); onModelChange({ skipInspector: true }); });
+    const wrap = document.createElement("div");
+    wrap.appendChild(selectInput(options, current, (v) => { el.thicknessDots = Number(v); onModelChange(); }));
+    const mmInput = textInput(Number(dotsToMm(el.thicknessDots, dpiX).toFixed(2)), (v) => {
+        if (v > 0) { el.thicknessDots = mmToDots(v, dpiX); onModelChange({ skipInspector: true }); }
+    }, "number");
+    const mmBox = mmInput.querySelector("input");
+    mmBox.step = "0.1";
+    mmBox.min = "0.1";
+    wrap.appendChild(field("自訂 (mm)", mmInput));
+    return wrap;
 }
 
 // 選取對象改變時通知訂閱者（小螢幕抽屜據此打開元素設定面板）；同一個元素重繪不會重發
