@@ -19,7 +19,7 @@ import {
 } from "./inspector-widgets.js";
 import { getEffectiveProfile, inlineEditor, onModelChange, textSel } from "./editor.js";
 import { deleteElement, deleteElements, duplicateElement, duplicateElements, ungroupElements } from "./element-actions.js";
-import { els, rt, state } from "./context.js";
+import { currentElements, els, rt, state } from "./context.js";
 
 // 字級輸入介面單位：內部資料模型（fontSize/textSize）維持 dots 不動——渲染公式（renderer.js 一堆
 // style.fontSize 相關換算）與 .ptan 舊檔都假設 dots，目前也只有單一印表機 profile／固定 DPI，沒有多
@@ -47,7 +47,7 @@ export function renderInspector() {
         buildMultiInspector(panel, state.multi);
         return;
     }
-    const el = state.selectedId ? findElementById(state.project.template.elements, state.selectedId) : null;
+    const el = state.selectedId ? findElementById(currentElements(), state.selectedId) : null;
     if (!el) {
         panel.appendChild(emptyState("sliders", "尚未選取元素"));
         return;
@@ -82,7 +82,7 @@ const MULTI_FIELDS = [
 ];
 
 function buildMultiInspector(panel, ids) {
-    const selected = ids.map((id) => findElementById(state.project.template.elements, id)).filter(Boolean);
+    const selected = ids.map((id) => findElementById(currentElements(), id)).filter(Boolean);
     panel.appendChild(sectionHeader("shapes", `已選 ${selected.length} 個元素`));
     const apply = (spec, value) => {
         applyFieldToElements(selected, spec.key, value, { runField: spec.runField }); // 片段自己的覆寫要一併清掉才看得到效果

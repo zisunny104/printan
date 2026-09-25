@@ -6,6 +6,7 @@ export const LAST_DRAFT_KEY = "printan:lastDraftId";
 
 export const state = {
     project: null,
+    currentPageIndex: 0, // 目前在畫布上編輯的頁面索引（見 pages.js）；CRUD／拖曳／選取／復原一律作用在這一頁的 elements
     selectedId: null,
     multi: [], // 多選時的全部 id（同一層內，含 selectedId）；單選時是空陣列
     insertionTarget: null, // null = 根目錄；{ rowId, colIndex } = 某個 row 的某一欄
@@ -30,6 +31,18 @@ export const state = {
     // 是「切紙前」需要應用程式自己走紙走過這段距離，走不夠切刀就會切在剛印完、還沒通過
     // 切刀位置的內容上，見 updateFeedLinesHint()。
 };
+
+// 目前作用中的頁面／該頁 elements 陣列：所有 CRUD／拖曳／選取／大綱／檢視器一律透過這兩個
+// 函式取用，不要直接寫 state.project.template.pages[...]——多頁支援的整個重點就是把「畫布只有
+// 一個 elements 陣列」這個假設收斂到這一處間接層，其餘程式碼幾乎不用知道專案有多頁。
+// currentPageIndex 超出範圍（例如切專案後沒重置、或頁面被刪光只剩防呆的一頁）一律退回第 0 頁。
+export function currentPage() {
+    const pages = state.project.template.pages;
+    return pages[state.currentPageIndex] || pages[0];
+}
+export function currentElements() {
+    return currentPage().elements;
+}
 
 export const usbAdapter = new WebUsbEscposAdapter(); // 整個編輯器共用同一個連線實例
 

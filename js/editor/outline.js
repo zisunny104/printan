@@ -1,7 +1,7 @@
 import { getTextContent } from "../core/document-model.js";
 import { childArrays, resolveTargetArray, findContainerOf, isSameTarget, containerToTarget as containerToTargetIn } from "../core/element-tree.js";
 import { BARCODE_FORMATS } from "../core/barcode.js";
-import { els, state } from "./context.js";
+import { currentElements, els, state } from "./context.js";
 import { iconButton } from "./inspector-widgets.js";
 import { renderInspector } from "./inspector.js";
 import { deleteElement, duplicateElement, getSelectedIds, moveElement, moveElementToContainer, openAddMenu, selectElementById } from "./element-actions.js";
@@ -14,7 +14,7 @@ export function renderOutline() {
     document.querySelectorAll("body > .ts-tooltip").forEach((tip) => tip.remove());
     const focusKey = root.contains(document.activeElement) ? document.activeElement.closest(".outline-row")?.dataset.rowKey : null;
     root.innerHTML = "";
-    root.appendChild(buildElementList(state.project.template.elements, 0, "root"));
+    root.appendChild(buildElementList(currentElements(), 0, "root"));
     const rows = Array.from(root.querySelectorAll(".outline-row"));
     const active = rows.find((r) => r.dataset.rowKey === focusKey) || root.querySelector(".outline-row.is-selected") || rows[0];
     setOutlineRoving(active);
@@ -94,7 +94,7 @@ function wireOutlineTargetDrop(row, target) {
         evt.preventDefault();
         const id = outlineDragState.id;
         outlineDragState = null;
-        moveElementToContainer(id, resolveTargetArray(state.project.template.elements, target), 0);
+        moveElementToContainer(id, resolveTargetArray(currentElements(), target), 0);
     });
 }
 
@@ -125,7 +125,7 @@ function wireOutlineRowDrag(row, el) {
         evt.preventDefault();
         const rect = row.getBoundingClientRect();
         const before = evt.clientY < rect.top + rect.height / 2;
-        const found = findContainerOf(state.project.template.elements, el.id);
+        const found = findContainerOf(currentElements(), el.id);
         const id = outlineDragState.id;
         outlineDragState = null;
         if (!found) return;
@@ -221,5 +221,5 @@ function buildElementRow(el, depth, parentKey) {
 }
 
 export function containerToTarget(array) {
-    return containerToTargetIn(state.project.template.elements, array);
+    return containerToTargetIn(currentElements(), array);
 }
