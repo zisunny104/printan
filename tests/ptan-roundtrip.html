@@ -19,7 +19,8 @@ pre { margin: 0 0 0 24px; white-space: pre-wrap; }
 import {
     applyTextStylePreset, createGroupElement, createTextElement, TEXT_STYLE_PRESETS, walkElements,
 } from "../js/core/document-model.js";
-import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
+import { createEmptyProject, groupPagesByCut, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
+import { renderPages, renderTemplate } from "../js/core/renderer.js";
 import { downloadPtan, readPtanFile } from "../js/core/ptan-file.js";
 import { ptToDots } from "../js/core/units.js";
 
@@ -274,6 +275,82 @@ test("壞檔：stylePreset 是不認得的值時，載入後整個欄位被拿�
     const t1 = pageEls(out.project)[0];
     assert(!("stylePreset" in t1), "不認得的值應該被拿掉");
     eq(t1.fontSize, 40, "其餘欄位不受影響");
+});
+
+// ---- 多頁（pages）：新檔、舊檔、cutAfter 組合（核心欄位行為另見 tests/index.html「多頁」段） ----
+// 手寫的 v3 檔，理由同 V1_FILE：不用現行建構函式產生，建構函式日後改動不會讓對照失去意義。
+const V3_FILE = {
+    format: "ptan",
+    version: 3,
+    meta: { name: "兩段收據" },
+    printerProfile: { id: "epson-tm-t82ii" },
+    paper: { widthId: "80mm" },
+    variables: ["name"],
+    template: { pages: [
+        { id: "pg_a", name: "抬頭", cutAfter: false, elements: [{ id: "t1", type: "text", text: "哈囉 {{name}}" }] },
+        { id: "pg_b", name: "明細", cutAfter: true, elements: [{ id: "d1", type: "divider" }, { id: "t2", type: "text", text: "小計" }] },
+        { id: "pg_c", name: "存根", cutAfter: true, elements: [{ id: "t3", type: "text", text: "存根 {{name}}" }] },
+    ] },
+    assets: [],
+};
+
+test("有 pages 的新檔：頁面 id／名稱／cutAfter／元素原樣載入，舊版 text 欄位照樣遷移", () => {
+    const out = loadProject(clone(V3_FILE));
+    assert(out.ok, out.error);
+    const pages = out.project.template.pages;
+    eq(pages.map((p) => [p.id, p.name, p.cutAfter]), [["pg_a", "抬頭", false], ["pg_b", "明細", true], ["pg_c", "存根", true]]);
+    eq(pages[1].elements.map((e) => e.type), ["divider", "text"]);
+    eq(pages[0].elements[0].runs[0].text, "哈囉 {{name}}");
+});
+
+test("有 pages 的新檔：serializeProject → File → readPtanFile 來回一致，仍是 v3", async () => {
+    const first = loadProject(clone(V3_FILE)).project;
+    const text = serializeProject(first);
+    eq(JSON.parse(text).version, PTAN_VERSION);
+    const back = await readPtanFile(new File([text], "x.ptan"));
+    assert(back.ok, back.error);
+    eq(serializeProject(back.project), text);
+});
+
+test("沒有 pages 的舊檔：包成一頁 cutAfter:true，renderPages 只有一筆且與 renderTemplate 輸出同尺寸", async () => {
+    const project = loadProject(clone(V1_FILE)).project;
+    eq(project.template.pages.length, 1);
+    eq(project.template.pages[0].cutAfter, true);
+    eq(project.template.elements, project.template.pages[0].elements, "template.elements 相容欄位指向第一頁");
+    const [single] = await renderPages(project, { name: "王" });
+    const legacy = await renderTemplate(project, { name: "王" });
+    eq([single.widthDots, single.canvas.height], [legacy.widthDots, legacy.canvas.height]);
+    eq(single.page.cutAfter, true);
+});
+
+test("renderPages：依頁序各回一筆，帶著該頁 cutAfter，變數每頁都有套用", async () => {
+    const project = loadProject(clone(V3_FILE)).project;
+    const results = await renderPages(project, { name: "王" });
+    eq(results.map((r) => [r.page.id, r.page.cutAfter]), [["pg_a", false], ["pg_b", true], ["pg_c", true]]);
+    assert(results.every((r) => r.canvas instanceof HTMLCanvasElement && r.widthDots > 0), "每頁各自有一份渲染結果");
+});
+
+test("cutAfter 組合：groupPagesByCut 依切紙邊界分段（2D 畫布水平＝段、垂直＝段內接續）", () => {
+    const pagesOf = (combo) => combo.map((cutAfter) => ({ cutAfter }));
+    eq(groupPagesByCut(pagesOf([true])), [[0]]);
+    eq(groupPagesByCut(pagesOf([true, true, true])), [[0], [1], [2]], "每頁都切＝各自一段");
+    eq(groupPagesByCut(pagesOf([false, false, true])), [[0, 1, 2]], "前面都接續＝同一張紙");
+    eq(groupPagesByCut(pagesOf([false, true, false, true])), [[0, 1], [2, 3]]);
+    eq(groupPagesByCut(pagesOf([true, false])), [[0], [1]], "最後一頁不切也自成一段的結尾");
+    eq(groupPagesByCut(pagesOf([false])), [[0]]);
+    eq(groupPagesByCut([]), []);
+});
+
+test("cutAfter 組合：每一種 3 頁組合存檔再讀回，cutAfter 與分段都不變", () => {
+    for (let mask = 0; mask < 8; mask++) {
+        const combo = [0, 1, 2].map((i) => Boolean(mask & (1 << i)));
+        const raw = clone(V3_FILE);
+        raw.template.pages.forEach((p, i) => { p.cutAfter = combo[i]; });
+        const out = loadProject(JSON.parse(serializeProject(loadProject(raw).project)));
+        assert(out.ok, out.error);
+        eq(out.project.template.pages.map((p) => p.cutAfter), combo, JSON.stringify(combo));
+        eq(groupPagesByCut(out.project.template.pages), groupPagesByCut(raw.template.pages), JSON.stringify(combo));
+    }
 });
 
 let failed = 0;

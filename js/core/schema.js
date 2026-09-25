@@ -54,6 +54,25 @@ export function createPage({ name = "頁 1", elements = [], cutAfter = true } = 
     return { id: nextPageId(), name, elements, cutAfter };
 }
 
+/**
+ * 依切紙邊界把頁面分段：回傳頁面索引的二維陣列，每一段是「印出來同一張連續紙」的頁面。
+ * cutAfter:true 的頁面是該段的最後一頁；最後一頁即使 cutAfter:false 也自成一段的結尾（後面沒有頁可接）。
+ * 編輯器 2D 畫布用它決定水平（不同段）／垂直（同段接續）排列，放在 core 是為了讓測試頁不經 DOM 就能驗證。
+ */
+export function groupPagesByCut(pages) {
+    const groups = [];
+    let current = [];
+    (Array.isArray(pages) ? pages : []).forEach((page, index) => {
+        current.push(index);
+        if (page?.cutAfter !== false) {
+            groups.push(current);
+            current = [];
+        }
+    });
+    if (current.length) groups.push(current);
+    return groups;
+}
+
 // renderer.js renderTemplate() 是公開的單頁 render-core API（見該檔案開頭說明），外部整合方
 // 常見用法是直接 renderTemplate(loadProject(file).project)，一路讀 project.template.elements——
 // v3 改成 template.pages 之後這個欄位不會自動存在，會讓外部呼叫端整個壞掉。這裡用 getter／setter
