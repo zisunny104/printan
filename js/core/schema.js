@@ -5,19 +5,27 @@ import { normalizeTextElement, walkElements } from "./document-model.js";
 import { normalizeRowGap } from "./units.js";
 
 export const PTAN_FORMAT = "ptan";
-export const PTAN_VERSION = 2;
+export const PTAN_VERSION = 3;
 
 /**
- * .ptan 檔案結構（version 1）：
+ * .ptan 檔案結構（version 3；有真的用到多頁才會寫這個版本，見 serializeProject）：
  * {
  *   format: "ptan",
- *   version: 1,
+ *   version: 3,
  *   meta: { name, createdAt, updatedAt },
  *   printerProfile: { id },
- *   paper: { widthId },
- *   variables: string[],           // 使用者定義的 placeholder 變數名稱
- *   template: { elements: Element[] },
- *   assets: [{ id, type, dataUrl }] // 圖片等二進位資源，內嵌為 data URL
+ *   paper: { widthId },              // 專案層級共用，不分頁（不同頁不可能換紙寬，同一次列印工作）
+ *   variables: string[],             // 使用者定義的 placeholder 變數名稱，跨所有頁彙整
+ *   template: { pages: Page[] },
+ *   assets: [{ id, type, dataUrl }]  // 圖片等二進位資源，內嵌為 data URL，跨頁共用
+ * }
+ *
+ * Page（多頁／frame，比照 Figma；見需求單「多頁支援」）:
+ * {
+ *   id, name: string,
+ *   elements: Element[],
+ *   cutAfter: boolean   // 列印完這一頁要不要送切紙指令。true＝切下來；false＝跟下一頁走同一段連續紙
+ *                        // （沒有實體切割，兩頁在同一次列印工作裡首尾相接）。
  * }
  *
  * Element（document-model.js 產生）:
@@ -29,7 +37,22 @@ export const PTAN_VERSION = 2;
  *   children?: Element[]    // 僅 group 使用（version 2）
  * 專案層級選用欄位 embeddedFonts?: [{ family, weight, unicodeRange, data }]（version 2；匯出時勾選才有）
  * }
+ *
+ * 版本沿革：v1 單頁 elements 陣列；v2 新增 group／圖文段落／直書；v3 template.elements → template.pages
+ * （多頁），單頁專案沒真的用到多頁功能時仍序列化成 v1/v2 的 template.elements 形狀，
+ * 讓舊版 Printan 與只認得單頁 elements 的外部整合方（renderer.js 是公開的 render-core API，
+ * 見該檔案開頭說明）都還能開。
  */
+
+let pageIdCounter = 0;
+function nextPageId() {
+    pageIdCounter += 1;
+    return `page_${Date.now().toString(36)}${pageIdCounter.toString(36)}`;
+}
+
+export function createPage({ name = "頁 1", elements = [], cutAfter = true } = {}) {
+    return { id: nextPageId(), name, elements, cutAfter };
+}
 
 export function createEmptyProject({ name = "未命名版型", printerProfileId, paperWidthId } = {}) {
     const now = new Date().toISOString();
@@ -40,7 +63,7 @@ export function createEmptyProject({ name = "未命名版型", printerProfileId,
         printerProfile: { id: printerProfileId },
         paper: { widthId: paperWidthId },
         variables: [],
-        template: { elements: [] },
+        template: { pages: [createPage({ name: "頁 1" })] },
         assets: [],
     };
 }
@@ -84,18 +107,44 @@ function migrate(project) {
     if (p.version > PTAN_VERSION) {
         return { ok: false, error: `此檔案版本 (${p.version}) 比目前工具支援的版本 (${PTAN_VERSION}) 新，請更新 Printan` };
     }
-    // v1 → v2 只新增 group 元素，資料結構無需轉換
     p = {
         ...p,
         variables: Array.isArray(p.variables) ? p.variables : [],
-        template: p.template && Array.isArray(p.template.elements) ? p.template : { elements: [] },
         assets: Array.isArray(p.assets) ? p.assets : [],
         meta: p.meta || {},
         printerProfile: p.printerProfile || {},
         paper: p.paper || {},
     };
-    p = { ...p, template: { elements: migrateElements(p.template.elements) }, assets: sanitizeAssets(p.assets) };
+    p = { ...p, template: migrateTemplate(p.template), assets: sanitizeAssets(p.assets) };
     return { ok: true, project: p };
+}
+
+// v1/v2 沒有 pages 欄位：整份 template.elements 當成單一隱含頁，cutAfter 預設 true——
+// 對使用者來說行為完全不變（原本就是列印完直接切紙），開啟舊檔不需要任何手動操作。
+// pageId／pageName：serializeProject 寫單頁 legacy 格式時額外夾帶的頁面 id／名稱（舊版 Printan
+// 只認得 elements，會忽略這兩個不認識的欄位，向下相容不受影響），讀回來能接上原本的頁面，
+// 而不是每次都生一個新 id——這樣「.ptan 存檔再打開」在單頁專案上也是逐位元組一致的來回。
+function migrateTemplate(template) {
+    const t = template && typeof template === "object" && !Array.isArray(template) ? template : {};
+    if (Array.isArray(t.pages)) return { pages: migratePages(t.pages) };
+    const elements = migrateElements(Array.isArray(t.elements) ? t.elements : []);
+    const name = typeof t.pageName === "string" && t.pageName ? t.pageName : "頁 1";
+    const page = createPage({ name, elements });
+    if (typeof t.pageId === "string" && t.pageId) page.id = t.pageId;
+    return { pages: [page] };
+}
+
+// 壞檔防護：不是物件的頁面丟掉，缺 id／name／elements／cutAfter 一律補預設值；
+// 全部頁面都壞掉的極端情況，退回一頁空白頁，讓後面的畫布／渲染不會因為 pages 是空陣列而整個空白當機。
+function migratePages(pages) {
+    const valid = pages.filter((p) => p && typeof p === "object" && !Array.isArray(p));
+    const list = valid.map((p, i) => ({
+        id: typeof p.id === "string" && p.id ? p.id : nextPageId(),
+        name: typeof p.name === "string" && p.name ? p.name : `頁 ${i + 1}`,
+        elements: migrateElements(Array.isArray(p.elements) ? p.elements : []),
+        cutAfter: p.cutAfter !== false,
+    }));
+    return list.length ? list : [createPage({ name: "頁 1" })];
 }
 
 // 匯入檔的圖片資源上限與格式：只收點陣圖 data URL（不收 svg 等可夾帶腳本的格式），筆數與大小設上限避免撐爆記憶體
@@ -152,11 +201,27 @@ function normalizeRow(el) {
 }
 
 export function serializeProject(project) {
-    // 沒用到群組、圖文段落、直書就仍寫 v1，舊版 Printan 也能開；有群組才寫 v2
-    // （內嵌字體 embeddedFonts 同理：有才寫 v2）
+    const pages = (project.template && Array.isArray(project.template.pages)) ? project.template.pages : [];
+    // 沒用到群組、圖文段落、直書就仍寫 v1，舊版 Printan 也能開；有群組才寫 v2（內嵌字體同理）
     let usesGroup = Array.isArray(project.embeddedFonts) && project.embeddedFonts.length > 0;
-    walkElements(project.template?.elements || [], (el) => { if (el.type === "group" || el.type === "float-block" || el.writingMode === "vertical") usesGroup = true; });
+    for (const page of pages) {
+        walkElements(page.elements || [], (el) => { if (el.type === "group" || el.type === "float-block" || el.writingMode === "vertical") usesGroup = true; });
+    }
     // 多欄 gap 為 0（或沒設）就不寫進檔案
     const dropZeroGap = function (key, value) { return key === "gap" && value === 0 && this.type === "row" ? undefined : value; };
-    return JSON.stringify({ ...project, version: usesGroup ? PTAN_VERSION : 1, format: PTAN_FORMAT }, dropZeroGap, 2);
+    // 只有一頁、且那一頁維持預設 cutAfter（沒有真的用到多頁功能）就照舊寫回 template.elements（v1/v2 形狀）：
+    // 舊版 Printan、以及只認單頁 elements 的外部整合方（renderer.js 公開 API）都還能直接開；
+    // 真的新增了第二頁或改過 cutAfter，才升版寫 template.pages（v3），這時候舊版工具開不了是預期行為
+    // （檔案結構本質上不一樣了，寫成假的單頁形狀反而會讓外部整合方以為只有一頁、漏印）。
+    const isSingleImplicitPage = pages.length <= 1 && (pages.length === 0 || pages[0].cutAfter !== false);
+    if (isSingleImplicitPage) {
+        const template = { elements: pages[0]?.elements || [] };
+        if (pages[0]) {
+            template.pageId = pages[0].id; // 舊版 Printan 不認得這兩個欄位、會直接忽略，見 migrateTemplate
+            template.pageName = pages[0].name;
+        }
+        const legacy = { ...project, template, version: usesGroup ? 2 : 1, format: PTAN_FORMAT };
+        return JSON.stringify(legacy, dropZeroGap, 2);
+    }
+    return JSON.stringify({ ...project, version: PTAN_VERSION, format: PTAN_FORMAT }, dropZeroGap, 2);
 }
