@@ -3,6 +3,7 @@
 import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
 import {
     DEFAULT_ROW_GAP, MIXED, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow,
+    resolveDividerDrawMode, resolveFill,
     applyStyleToRange, applyTextStylePreset, getRangeStyle, getTextContent, replaceFullText, TEXT_STYLE_PRESETS,
 } from "../core/document-model.js";
 import { MAX_ROW_GAP, normalizeRowGap, dotsToPt as dotsToPtRaw, ptToDots as ptToDotsRaw } from "../core/units.js";
@@ -74,6 +75,7 @@ const MULTI_FIELDS = [
     { key: "align", label: "對齊", kind: "align", types: ["text", "image", "barcode"] },
     { key: "heightDots", label: "高度", kind: "number", types: ["spacer", "barcode"] },
     { key: "widthPercent", label: "寬度 %", kind: "number", types: ["image"] },
+    { key: "drawMode", label: "畫法", kind: "select", options: [["line", "線條"], ["fill", "色塊"]], types: ["divider"] },
     { key: "style", label: "樣式", kind: "select", options: [["solid", "實線"], ["dashed", "虛線"], ["dotted", "點線"]], types: ["divider"] },
     { key: "thicknessDots", label: "粗細", kind: "number", types: ["divider"] },
     { key: "marginTopDots", label: "上邊距", kind: "number", types: ["divider"] },
@@ -424,7 +426,24 @@ function buildTextInspector(panel, el) {
     ]));
     panel.appendChild(field("對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
     panel.appendChild(field(null, checkboxInput(el.bold, (v) => applyParagraphField(el, presetGroup, () => { el.bold = v; }), "預設粗體")));
-    panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange({ skipInspector: true }); }, "整行反相")));
+    panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange(); }, "整行反相")));
+
+    panel.appendChild(foldSection(`${el.type}.inkFill`, "文字顏色", (body) => {
+        const inkFill = resolveFill(el.inkFill);
+        body.appendChild(fillFields(inkFill, (patch, redraw) => {
+            el.inkFill = { ...inkFill, ...patch };
+            onModelChange(redraw ? {} : { skipInspector: true });
+        }));
+    }));
+    if (el.inverse) {
+        panel.appendChild(foldSection(`${el.type}.bgFill`, "反白背景顏色", (body) => {
+            const bgFill = resolveFill(el.bgFill);
+            body.appendChild(fillFields(bgFill, (patch, redraw) => {
+                el.bgFill = { ...bgFill, ...patch };
+                onModelChange(redraw ? {} : { skipInspector: true });
+            }));
+        }));
+    }
 
     panel.appendChild(foldSection(`${el.type}.layout`, "排版", (body) => {
         body.appendChild(fieldRow([
@@ -718,12 +737,51 @@ function buildSpacerInspector(panel, el) {
     panel.appendChild(field("高度 (dot)", textInput(el.heightDots, (v) => { el.heightDots = v; onModelChange({ skipInspector: true }); }, "number")));
 }
 
+// 共用的填色控制項：純黑／網點／漸層，分隔線色塊、文字墨色、文字反白背景都用這一組（見
+// document-model.js createFill／resolveFill）。onChange(patch, needsRedraw)：patch 是要併入
+// 目前 fill 物件的欄位，needsRedraw 是「模式」這類會讓子欄位跟著變、面板要整個重繪的變動；
+// 其餘（濃度／方向／反轉）用 skipInspector，行為比照其它欄位（例如 divider 原本的粗細）。
+function fillFields(fill, onChange) {
+    const frag = document.createDocumentFragment();
+    frag.appendChild(field("填色方式", selectInput(
+        [["solid", "純黑"], ["halftone", "網點"], ["gradient", "漸層"]],
+        fill.mode,
+        (v) => onChange({ mode: v }, true),
+    )));
+    if (fill.mode === "halftone") {
+        frag.appendChild(sliderField("網點濃度", fill.level, 0, 255, (v) => onChange({ level: v }, false)));
+    } else if (fill.mode === "gradient") {
+        frag.appendChild(field("方向", selectInput(
+            [["horizontal", "水平"], ["vertical", "垂直"]],
+            fill.direction,
+            (v) => onChange({ direction: v }, false),
+        )));
+        frag.appendChild(field(null, checkboxInput(fill.reverse, (v) => onChange({ reverse: v }, false), "反轉方向（深到淺）")));
+    }
+    return frag;
+}
+
 function buildDividerInspector(panel, el) {
     panel.appendChild(sectionHeader("minus", "分隔線"));
-    panel.appendChild(fieldRow([
-        ["樣式", selectInput([["solid", "實線"], ["dashed", "虛線"], ["dotted", "點線"]], el.style, (v) => { el.style = v; onModelChange({ skipInspector: true }); })],
-        ["粗細 (dot)", textInput(el.thicknessDots, (v) => { el.thicknessDots = v; onModelChange({ skipInspector: true }); }, "number")],
-    ]));
+    const drawMode = resolveDividerDrawMode(el);
+    panel.appendChild(field("畫法", selectInput(
+        [["line", "線條"], ["fill", "色塊"]],
+        drawMode,
+        (v) => { el.drawMode = v; onModelChange(); },
+    )));
+    if (drawMode === "line") {
+        panel.appendChild(fieldRow([
+            ["樣式", selectInput([["solid", "實線"], ["dashed", "虛線"], ["dotted", "點線"]], el.style, (v) => { el.style = v; onModelChange({ skipInspector: true }); })],
+            ["粗細 (dot)", textInput(el.thicknessDots, (v) => { el.thicknessDots = v; onModelChange({ skipInspector: true }); }, "number")],
+        ]));
+    } else {
+        panel.appendChild(field("高度 (dot)", textInput(el.thicknessDots, (v) => { el.thicknessDots = v; onModelChange({ skipInspector: true }); }, "number")));
+        const fill = resolveFill(el.fill);
+        panel.appendChild(fillFields(fill, (patch, redraw) => {
+            el.fill = { ...fill, ...patch };
+            onModelChange(redraw ? {} : { skipInspector: true });
+        }));
+    }
     panel.appendChild(foldSection("divider.margin", "邊距", (body) => {
         body.appendChild(fieldRow([
             ["上 (dot)", textInput(el.marginTopDots, (v) => { el.marginTopDots = v; onModelChange({ skipInspector: true }); }, "number")],
