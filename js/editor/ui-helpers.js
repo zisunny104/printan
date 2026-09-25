@@ -49,6 +49,10 @@ export function createInfoIcon(text) {
     icon.className = "info-icon";
     icon.tabIndex = 0;
     icon.dataset.tooltip = text;
+    // Tocas 的 tooltip 預設只認 hover，且在觸控裝置（pointer: coarse）直接跳過 hover 觸發；
+    // 點觸控圖示雖然會讓它拿到 focus，但沒加 "focus" 這個 trigger，tooltip 一樣不會顯示——
+    // 觸控裝置上這顆圖示點了完全沒反應，加上 focus trigger 讓點擊聚焦也能顯示。
+    icon.dataset.trigger = "hover focus";
     icon.setAttribute("role", "img");
     icon.setAttribute("aria-label", text);
     const glyph = document.createElement("span");

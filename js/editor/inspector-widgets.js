@@ -301,7 +301,10 @@ export const IMAGE_SIDE_OPTIONS = [
 /** 對齊按鈕組（靠左／置中／靠右）：單選 radiogroup，左右方向鍵切換；current 為 null 表示混合（都不選）。 */
 export function alignGroup(current, onChange, label = "對齊", options = ALIGN_OPTIONS) {
     const group = document.createElement("div");
-    group.className = "ts-wrap is-compact has-top-spaced-small";
+    // 用 Tocas 的 .ts-buttons（合併邊框成一個膠囊、中間夾分隔線）取代原本各自獨立外框的 .ts-wrap，
+    // 讓這組選項看起來是「一組」而不是幾顆分開的按鈕（比照 Figma 的 segmented control），
+    // 選中狀態則交給 editor.css 的 .ts-buttons .ts-button.is-icon.is-active 填色。
+    group.className = "ts-buttons has-top-spaced-small";
     group.setAttribute("role", "radiogroup");
     group.setAttribute("aria-label", label);
     const buttons = options.map(([value, text, icon]) => {

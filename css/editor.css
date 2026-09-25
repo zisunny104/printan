@@ -377,6 +377,20 @@ body {
     color: #fff;
 }
 
+/* alignGroup（inspector-widgets.js）這類單選圖示鈕組：同一套填色選中風格，
+   但按鈕本身是 is-outlined，選中時連邊框也要蓋掉，不然會露出一圈灰邊框跟填色不搭 */
+.ts-buttons .ts-button.is-icon.is-active {
+    background: var(--ts-primary-700, #0050b3);
+    border-color: var(--ts-primary-700, #0050b3);
+    color: #fff;
+}
+
+.ts-buttons .ts-button.is-icon.is-active:hover {
+    background: var(--ts-primary-800, #003a8c);
+    border-color: var(--ts-primary-800, #003a8c);
+    color: #fff;
+}
+
 /* 「開啟」下拉選單裡的「最近編輯」清單：每一列要塞名稱＋時間＋刪除鈕，
    Tocas 預設 .item 是純文字排版，這裡另外排成一行 flex，刪除鈕固定在最右邊。 */
 #open-project-dropdown {
