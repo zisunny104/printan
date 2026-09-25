@@ -63,6 +63,9 @@ async function init() {
     wireHelpDialog();
     initMobileDrawers();
     onModelChange({ skipInspector: false });
+    // 到這裡大綱／畫布／檢視器都已經是真的內容，骨架畫面可以淡出了；下面印表機重連、
+    // kiosk 版型套用都跟畫面初次可見無關，不用等它們（也可能因裝置環境卡住，會拖著骨架不放）。
+    hideEditorSkeleton();
     onWebFontStatusChange(() => { // 字體載入失敗／恢復時，選單上的標示要跟著更新；非作用中頁面的縮圖可能是用替代字體畫的
         renderInspector();
         invalidatePageThumbs();
@@ -72,6 +75,15 @@ async function init() {
     await attemptSilentPrinterReconnect();
     // kiosk.js：網址帶 tpl= 才會動作，一般開啟編輯器（沒有這個參數）完全不受影響
     await bootKioskFromQuery(loadProjectIntoEditor, schedulePreview);
+}
+
+// 載入骨架畫面（partials/editor-skeleton.php）蓋在三欄上面，init() 到這裡才算「畫面已經是真的」
+// （草稿已還原、印表機重連跑完、kiosk 版型也套用完畢），先淡出再整個移除，避免擋住底下互動。
+function hideEditorSkeleton() {
+    const skeleton = document.getElementById("editorSkeleton");
+    if (!skeleton) return;
+    skeleton.classList.add("is-hiding");
+    skeleton.addEventListener("transitionend", () => skeleton.remove(), { once: true });
 }
 
 function cacheDom() {
