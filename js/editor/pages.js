@@ -48,7 +48,7 @@ export function addPage() {
 }
 
 function focusPageNameInput(pageId) {
-    const input = els["page-list"]?.querySelector(`.page-row[data-page-id="${pageId}"] .page-row-name`);
+    const input = els["page-list"]?.querySelector(`.page-row[data-page-id="${pageId}"] .page-row-name input`);
     if (!input) return;
     input.focus();
     input.select();
@@ -187,9 +187,10 @@ function buildPageRow(page, index, total) {
     badge.className = "ts-badge is-small is-outlined page-row-index";
     badge.textContent = String(index + 1);
 
+    const nameInputWrap = document.createElement("div");
+    nameInputWrap.className = "ts-input is-small page-row-name";
     const nameInput = document.createElement("input");
     nameInput.type = "text";
-    nameInput.className = "page-row-name";
     nameInput.value = page.name;
     nameInput.setAttribute("aria-label", `頁面 ${index + 1} 名稱`);
     nameInput.addEventListener("click", () => setCurrentPage(index));
@@ -197,19 +198,20 @@ function buildPageRow(page, index, total) {
     nameInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") nameInput.blur();
     });
+    nameInputWrap.appendChild(nameInput);
 
-    main.append(badge, nameInput);
+    main.append(badge, nameInputWrap);
 
     const cutLabel = document.createElement("label");
-    cutLabel.className = "page-row-cut";
+    cutLabel.className = "ts-checkbox is-small page-row-cut";
     cutLabel.dataset.tooltip = "列印完這一頁要不要切紙；關閉＝跟下一頁接續印在同一段連續紙上";
     const cutInput = document.createElement("input");
     cutInput.type = "checkbox";
     cutInput.checked = page.cutAfter;
     cutInput.setAttribute("aria-label", `頁面 ${index + 1} 列印後切紙`);
     cutInput.addEventListener("change", () => setPageCutAfter(page.id, cutInput.checked));
-    const cutText = document.createElement("span");
-    cutText.className = "ts-text is-description is-small";
+    const cutText = document.createElement("div");
+    cutText.className = "text";
     cutText.textContent = "切紙";
     cutLabel.append(cutInput, cutText);
 

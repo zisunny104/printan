@@ -306,28 +306,15 @@ body {
     gap: .5rem;
 }
 
-.pane-zoom-value {
-    box-sizing: border-box;
+/* 縮放輸入框：走標準 ts-input 外觀，只縮小寬高跟旁邊的圖示按鈕對齊 */
+.pane-zoom-input {
     width: 3.5rem;
     height: 1.5rem;
-    padding: 0 .25rem;
-    border: 1px solid transparent;
-    border-radius: .7rem; /* 同旁邊的圖示按鈕（Tocas is-rounded 控制項） */
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    font-weight: 400;
+}
+
+.pane-zoom-input input {
     font-variant-numeric: tabular-nums;
     text-align: right;
-}
-
-.pane-zoom-value:hover {
-    border-color: var(--ts-gray-300);
-}
-
-.pane-zoom-value:focus-visible {
-    outline: 2px solid light-dark(#1d4ed8, #93c5fd);
-    outline-offset: -1px;
 }
 
 .pane-zoom-controls .ts-button.is-small {
@@ -599,25 +586,10 @@ body {
 .page-row-name {
     flex: 1 1 auto;
     min-width: 0;
-    border: 1px solid transparent;
-    background: transparent;
-    font: inherit;
-    color: inherit;
-    padding: .1rem .2rem;
-    border-radius: .3rem;
-}
-
-.page-row-name:hover,
-.page-row-name:focus {
-    border-color: var(--ts-gray-300, #d1d5db);
-    background: light-dark(#fff, #1f2023);
 }
 
 /* 「切紙」開關：小到不影響整列高度，但必須跟頁面名稱明顯分開，避免被誤讀成頁面本身的屬性文字 */
 .page-row-cut {
-    display: flex;
-    align-items: center;
-    gap: .25rem;
     flex: none;
     white-space: nowrap;
 }
