@@ -31,8 +31,9 @@
                         <span class="ts-icon is-pen-icon" aria-hidden="true"></span>
                         <span class="project-name-text" id="project-name-text">未命名專案</span>
                     </button>
-                    <input type="text" class="ts-input is-small project-name-input" id="project-name-input"
-                        aria-label="專案名稱" maxlength="60" hidden>
+                    <div class="ts-input is-small project-name-input" id="project-name-input-wrap" hidden>
+                        <input type="text" id="project-name-input" aria-label="專案名稱" maxlength="60">
+                    </div>
                 </div>
                 <span class="toolbar-spacer"></span>
                 <!-- 印表機連線、走紙／切紙、可列印點數、測試列印都歸在同一顆「列印設定」按鈕底下同一個 modal 裡。

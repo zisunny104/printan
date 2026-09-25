@@ -304,26 +304,27 @@ body {
     gap: .5rem;
 }
 
-.pane-zoom-value {
-    box-sizing: border-box;
+/* 縮放百分比：Tocas ts-input is-basic（無框），寬度與高度對齊旁邊的圖示按鈕，hover 才露出邊框提示可輸入 */
+.ts-input.pane-zoom-value {
+    flex: none;
     width: 3.5rem;
-    height: 1.5rem;
+}
+
+.ts-input.pane-zoom-value input {
+    --height: 1.5rem;
     padding: 0 .25rem;
     border: 1px solid transparent;
     border-radius: .7rem; /* 同旁邊的圖示按鈕（Tocas is-rounded 控制項） */
-    background: transparent;
     color: inherit;
-    font: inherit;
-    font-weight: 400;
     font-variant-numeric: tabular-nums;
     text-align: right;
 }
 
-.pane-zoom-value:hover {
+.ts-input.pane-zoom-value input:hover {
     border-color: var(--ts-gray-300);
 }
 
-.pane-zoom-value:focus-visible {
+.ts-input.pane-zoom-value input:focus-visible {
     outline: 2px solid light-dark(#1d4ed8, #93c5fd);
     outline-offset: -1px;
 }
@@ -589,12 +590,12 @@ body {
 .outline-page-name-input {
     flex: 1 1 auto;
     min-width: 0;
-    font: inherit;
-    padding: .05rem .25rem;
-    border: 1px solid var(--ts-primary-400, #7ba8f5);
-    border-radius: .3rem;
-    background: light-dark(#fff, #1f2023);
-    color: inherit;
+    width: auto;
+}
+
+/* 改名中不要讓 hover 操作列蓋住輸入框 */
+.outline-page-row:has(.outline-page-name-input) .outline-actions {
+    display: none;
 }
 
 /* 切紙開關常駐：亮＝印完切紙（同畫布上的剪刀色），暗＝跟下一頁接續同一張紙 */

@@ -95,7 +95,7 @@ function cacheDom() {
         "btn-printer-forget", "printer-dots-list", "btn-printer-dots-reset", "printer-margin-list", "btn-printer-margin-reset", "btn-printer-margin-sheet",
         "printer-info-device", "printer-info-firmware", "printer-info-spec", "printer-info-dpi",
         "printer-info-paper", "printer-info-printable", "printer-info-blade", "export-embed-fonts", "export-embed-fonts-row",
-        "btn-project-name", "project-name-input", "project-name-text",
+        "btn-project-name", "project-name-input", "project-name-input-wrap", "project-name-text",
         "btn-page-add", "btn-page-split",
         "page-board", "page-pager", "page-pager-label", "page-pager-cut", "btn-page-prev", "btn-page-next",
     ].forEach((id) => (els[id] = document.getElementById(id)));
@@ -468,17 +468,18 @@ function renderProjectName() {
 function bindProjectName() {
     const btn = els["btn-project-name"];
     const input = els["project-name-input"];
+    const inputWrap = els["project-name-input-wrap"]; // Tocas ts-input 外層，顯示／隱藏切換的是它
     let cancelling = false;
 
     function enterEdit() {
         input.value = state.project.meta.name || "";
         btn.hidden = true;
-        input.hidden = false;
+        inputWrap.hidden = false;
         input.focus();
         input.select();
     }
     function exitEdit() {
-        input.hidden = true;
+        inputWrap.hidden = true;
         btn.hidden = false;
     }
     // Enter／blur（含點別處、Tab 走焦點）都算確認；Esc 用 cancelling 旗標跳過這裡的寫入，只還原顯示

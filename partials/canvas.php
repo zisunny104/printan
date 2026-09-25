@@ -11,8 +11,10 @@
                                     data-tooltip="縮小" aria-label="縮小">
                                     <span class="ts-icon is-minus-icon" aria-hidden="true"></span>
                                 </button>
-                                <input type="text" class="pane-zoom-value" id="zoom-value" inputmode="numeric" autocomplete="off"
-                                    spellcheck="false" aria-label="縮放比例" value="100%">
+                                <div class="ts-input is-small is-basic pane-zoom-value">
+                                    <input type="text" id="zoom-value" inputmode="numeric" autocomplete="off"
+                                        spellcheck="false" aria-label="縮放比例" value="100%">
+                                </div>
                                 <button class="ts-button is-icon is-ghost" id="btn-zoom-in"
                                     data-tooltip="放大" aria-label="放大">
                                     <span class="ts-icon is-plus-icon" aria-hidden="true"></span>

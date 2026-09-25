@@ -190,10 +190,12 @@ export function startPageRename(pageId) {
     const label = els["outline-list"].querySelector(`.outline-page-row[data-page-id="${CSS.escape(pageId)}"] .outline-page-name`);
     const page = state.project.template.pages.find((p) => p.id === pageId);
     if (!label || !page) return;
+    const wrap = document.createElement("div");
+    wrap.className = "ts-input is-small outline-page-name-input";
     const input = document.createElement("input");
     input.type = "text";
-    input.className = "outline-page-name-input";
     input.value = page.name;
+    wrap.appendChild(input);
     input.setAttribute("aria-label", "頁面名稱");
     let cancelled = false;
     input.addEventListener("click", (e) => e.stopPropagation());
@@ -207,7 +209,7 @@ export function startPageRename(pageId) {
         if (!cancelled && input.value.trim() && input.value.trim() !== page.name) renamePage(pageId, input.value);
         else renderOutline();
     });
-    label.replaceWith(input);
+    label.replaceWith(wrap);
     input.focus();
     input.select();
 }
