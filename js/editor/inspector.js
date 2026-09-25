@@ -2,7 +2,7 @@
 
 import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
 import {
-    DEFAULT_ROW_GAP, MIXED, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow,
+    DEFAULT_ROW_GAP, MIXED, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow, resolveTextVAlign,
     resolveDividerDrawMode, resolveFill,
     applyStyleToRange, applyTextStylePreset, getRangeStyle, getTextContent, replaceFullText, TEXT_STYLE_PRESETS,
 } from "../core/document-model.js";
@@ -15,7 +15,7 @@ import {
     primaryFamilyName,
 } from "../core/fonts.js";
 import {
-    alignGroup, IMAGE_FIT_OPTIONS, IMAGE_SIDE_OPTIONS, checkboxInput, dropdownField, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, sectionDivider,
+    alignGroup, IMAGE_FIT_OPTIONS, IMAGE_SIDE_OPTIONS, checkboxInput, dropdownField, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, numberStepperInput, sectionDivider,
     sectionHeader, selectInput, sliderField, textInput,
 } from "./inspector-widgets.js";
 import { getEffectiveProfile, inlineEditor, onModelChange, textSel } from "./editor.js";
@@ -98,7 +98,7 @@ export function renderInspector() {
 const MULTI_FIELDS = [
     { key: "fontSize", label: "字級 (pt)", kind: "number", types: ["text"], runField: true },
     { key: "bold", label: "粗體", kind: "bool", types: ["text"], runField: true },
-    { key: "inverse", label: "整行反相", kind: "bool", types: ["text"] },
+    { key: "inverse", label: "容器底色反轉（黑底白字）", kind: "bool", types: ["text"] },
     { key: "lineHeight", label: "行高", kind: "number", types: ["text"] },
     { key: "letterSpacing", label: "字距", kind: "number", types: ["text"] },
     { key: "align", label: "對齊", kind: "align", types: ["text", "image", "barcode"] },
@@ -282,6 +282,12 @@ const TEXT_OVERFLOW_OPTIONS = [
     ["grow", "自動變高", textSvgIcon('<rect x="2" y="1.5" width="12" height="7" rx="1" stroke-dasharray="2 1.5"/><path d="M8 5v7M5.5 9.5 8 12l2.5-2.5"/>')],
     ["clip", "裁切", textSvgIcon('<rect x="2" y="1.5" width="12" height="6" rx="1" fill="currentColor" fill-opacity=".15"/><path d="M2 7.5h12" stroke-dasharray="1.5 1.5"/>')],
 ];
+// 框內容垂直位置：外框虛線示意固定高度的框，實心色塊代表內容貼齊的位置（頂／中／底）
+const TEXT_VALIGN_OPTIONS = [
+    ["top", "靠上", textSvgIcon('<rect x="2" y="1.5" width="12" height="13" rx="1" stroke-dasharray="2 1.5"/><rect x="4" y="3.5" width="8" height="3" fill="currentColor"/>')],
+    ["middle", "置中", textSvgIcon('<rect x="2" y="1.5" width="12" height="13" rx="1" stroke-dasharray="2 1.5"/><rect x="4" y="6.5" width="8" height="3" fill="currentColor"/>')],
+    ["bottom", "靠下", textSvgIcon('<rect x="2" y="1.5" width="12" height="13" rx="1" stroke-dasharray="2 1.5"/><rect x="4" y="9.5" width="8" height="3" fill="currentColor"/>')],
+];
 
 // 樣式預設選單：每個選項直接秀縮小後的實際樣子（字級比例／粗細），不用純文字標籤，
 // 這樣不用先套用才知道「H2」長怎樣。標籤直接用 H1-H5／P（見 document-model.js TEXT_STYLE_PRESETS
@@ -293,47 +299,91 @@ const TEXT_STYLE_PRESET_INFO = "標籤對應 Markdown 的標題階層（H1-H5）
 // 這份清單，任一欄位被手動改動都代表元素不再是單純套用預設的樣子，要清掉 stylePreset 標記。
 const PRESET_BACKED_FIELDS = ["fontSize", "bold", "lineHeight", "letterSpacing"];
 
-function textStylePresetPicker(current, onChange) {
-    const group = document.createElement("div");
-    group.className = "ts-wrap is-compact has-top-spaced-small style-preset-group";
-    group.setAttribute("role", "radiogroup");
-    group.setAttribute("aria-label", "文字樣式");
-    for (const key of Object.keys(TEXT_STYLE_PRESETS)) {
-        const preset = TEXT_STYLE_PRESETS[key];
-        const active = current === key;
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "ts-button is-outlined style-preset-btn";
-        btn.classList.toggle("is-active", active);
-        btn.setAttribute("role", "radio");
-        btn.setAttribute("aria-checked", String(active));
-        btn.dataset.tooltip = key;
+// 「容器底色」選單：多一個「無」對應 el.inverse=false（見 buildTextInspector），其餘沿用 fillFields
+// 的模式名稱，但「純黑」在這裡改叫「反轉」，比較貼近使用者實際感受到的效果（黑底白字）。
+// 填色方式按鈕直接用色票（實際填色效果的縮圖）取代抽象圖示，跟工具列的粗體/斜體一樣是單選圖示按鈕組。
+const fillSwatch = (bg) => `<span class="fill-swatch" style="background:${bg}" aria-hidden="true"></span>`;
+const SWATCH_SOLID = fillSwatch("#000");
+const SWATCH_HALFTONE = fillSwatch("radial-gradient(circle, #000 34%, transparent 36%) 0 0/40% 40%, #fff");
+const SWATCH_GRADIENT = fillSwatch("linear-gradient(135deg, #000, #fff)");
+const INK_FILL_MODE_OPTIONS = [["solid", "純黑", SWATCH_SOLID], ["halftone", "網點", SWATCH_HALFTONE], ["gradient", "漸層", SWATCH_GRADIENT]];
+// 「無」「反轉」是狀態／動作不是顏色，用圖示比色票更好懂；網點／漸層是實際填色效果，用色票。
+const BG_FILL_MODE_OPTIONS = [["none", "無", "ban"], ["solid", "反轉", "circle-half-stroke"], ["halftone", "網點", SWATCH_HALFTONE], ["gradient", "漸層", SWATCH_GRADIENT]];
+const FILL_DIRECTION_OPTIONS = [["horizontal", "水平", fillSwatch("linear-gradient(90deg, #000, #fff)")], ["vertical", "垂直", fillSwatch("linear-gradient(180deg, #000, #fff)")]];
 
-        const sample = document.createElement("span");
-        sample.className = "style-preset-sample";
-        sample.style.fontSize = `${Math.round(preset.fontSizePt * 1.3)}px`; // pt 數字偏小，*1.3 讓縮圖在按鈕裡看得出對比
-        sample.style.fontWeight = preset.bold ? "700" : "400";
-        sample.textContent = "Aa";
-
-        const label = document.createElement("span");
-        label.className = "ts-text is-description style-preset-label";
-        label.textContent = key;
-
-        btn.append(sample, label);
-        btn.addEventListener("click", () => onChange(active ? null : key)); // 再點一次目前已選的＝改回自訂
-        group.appendChild(btn);
-    }
-    return group;
+// 每個選項左邊放縮小後的實際樣子（字級比例／粗細）、右邊放階層標籤（H1-H5／P），
+// 觸發鈕與選單裡的每一列共用同一份內容，比照 Word／Docs 那種段落樣式下拉選單。
+function styleOptionRow(key) {
+    const row = document.createDocumentFragment();
+    const preset = TEXT_STYLE_PRESETS[key];
+    const sample = document.createElement("span");
+    sample.className = "style-preset-sample";
+    sample.style.fontSize = `${Math.round(preset.fontSizePt * 1.3)}px`; // pt 數字偏小，*1.3 讓縮圖看得出對比
+    sample.style.fontWeight = preset.bold ? "700" : "400";
+    sample.textContent = "Aa";
+    const label = document.createElement("span");
+    label.className = "ts-text is-description style-preset-label";
+    label.textContent = key;
+    row.append(sample, label);
+    return row;
 }
 
-// 樣式選單按鈕的 active 狀態被清掉標記時要同步，但不能靠整個重繪 inspector 來做——
+let stylePresetDropdownSeq = 0;
+
+function textStylePresetPicker(current, onChange) {
+    const wrap = document.createElement("div");
+    wrap.className = "dropdown-select style-preset-dropdown has-top-spaced-small";
+    const menuId = `style-preset-dropdown-${++stylePresetDropdownSeq}`;
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "ts-button is-small is-outlined is-fluid dropdown-select-trigger";
+    trigger.dataset.dropdown = menuId;
+    trigger.setAttribute("aria-haspopup", "listbox");
+    const triggerContent = document.createElement("span");
+    triggerContent.className = "style-preset-trigger-content";
+    const caret = document.createElement("span");
+    caret.className = "ts-icon is-chevron-down-icon dropdown-select-caret";
+    caret.setAttribute("aria-hidden", "true");
+    trigger.append(triggerContent, caret);
+
+    const menu = document.createElement("div");
+    menu.id = menuId;
+    menu.className = "ts-dropdown dropdown-select-menu style-preset-dropdown-menu";
+    menu.setAttribute("role", "listbox");
+    menu.setAttribute("aria-label", "文字樣式");
+
+    const items = [];
+    for (const key of Object.keys(TEXT_STYLE_PRESETS)) {
+        const item = document.createElement("a");
+        item.className = "item style-preset-item";
+        item.dataset.value = key;
+        item.setAttribute("role", "option");
+        item.appendChild(styleOptionRow(key));
+        item.addEventListener("click", () => setValue(item.classList.contains("is-active") ? null : key, true)); // 再點一次目前已選的＝改回自訂
+        menu.appendChild(item);
+        items.push(item);
+    }
+
+    function setValue(value, fire) {
+        triggerContent.innerHTML = "";
+        const match = items.find((it) => it.dataset.value === value);
+        triggerContent.appendChild(match ? styleOptionRow(value) : document.createTextNode("自訂"));
+        items.forEach((it) => it.classList.toggle("is-active", it === match));
+        if (fire) onChange(value);
+    }
+    setValue(current, false);
+
+    wrap.append(trigger, menu);
+    wrap.setValue = setValue; // 供 clearPresetPickerActiveState 在欄位手動編輯後同步回「自訂」
+    return wrap;
+}
+
+// 手動編輯展開後的欄位時要把樣式選單同步回「自訂」，但不能靠整個重繪 inspector 來做——
 // 那會摧毀使用者正在輸入、持有焦點的欄位（例如打第二個數字時整個 input 被換成新節點，
-// 焦點跟著消失，後續按鍵變成打到別的地方）。直接操作既有 DOM 節點，欄位輸入不受影響。
+// 焦點跟著消失，後續按鍵變成打到別的地方）。直接呼叫既有節點的 setValue，欄位輸入不受影響。
 function clearPresetPickerActiveState(group) {
-    group.querySelectorAll(".style-preset-btn").forEach((btn) => {
-        btn.classList.remove("is-active");
-        btn.setAttribute("aria-checked", "false");
-    });
+    group.setValue?.(null, false);
 }
 
 // fontSize／bold／lineHeight／letterSpacing 是樣式預設展開後的具體欄位（見 document-model.js
@@ -438,9 +488,19 @@ function buildTextInspector(panel, el) {
         ["預設字體", fontFamilySelect(el.fontFamily, (v) => { el.fontFamily = v; onModelChange({ skipInspector: true }); }, "跟隨全域預設")],
         ["預設字級 (pt)", textInput(dotsToPt(el.fontSize), (v) => applyParagraphField(el, presetGroup, () => { el.fontSize = ptToDots(v); }), "number")],
     ]));
-    panel.appendChild(field("對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
+    // 水平對齊跟垂直對齊是同一組「對齊」概念，擺在一起比照 Figma 的做法；
+    // 垂直對齊只有固定高度的容器才有意義（沒有多的高度可以分配），所以高度為自動時不顯示，
+    // 但位置緊接在水平對齊旁邊，不會像之前那樣被拆到後面「寬高」區塊裡讓人找不到。
+    const heightFixedForAlign = el.type === "text" && resolveTextHeightMode(el) === "fixed";
+    if (heightFixedForAlign) {
+        panel.appendChild(fieldRow([
+            ["水平對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })],
+            ["垂直對齊", alignGroup(resolveTextVAlign(el), (v) => { el.vAlign = v; onModelChange({ skipInspector: true }); }, "垂直對齊", TEXT_VALIGN_OPTIONS)],
+        ]));
+    } else {
+        panel.appendChild(field("對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
+    }
     panel.appendChild(field(null, checkboxInput(el.bold, (v) => applyParagraphField(el, presetGroup, () => { el.bold = v; }), "預設粗體")));
-    panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange(); }, "整行反相")));
 
     panel.appendChild(foldSection(`${el.type}.inkFill`, "文字顏色", (body) => {
         const inkFill = resolveFill(el.inkFill);
@@ -449,20 +509,40 @@ function buildTextInspector(panel, el) {
             onModelChange(redraw ? {} : { skipInspector: true });
         }));
     }));
-    if (el.inverse) {
-        panel.appendChild(foldSection(`${el.type}.bgFill`, "反白背景顏色", (body) => {
-            const bgFill = resolveFill(el.bgFill);
-            body.appendChild(fillFields(bgFill, (patch, redraw) => {
-                el.bgFill = { ...bgFill, ...patch };
-                onModelChange(redraw ? {} : { skipInspector: true });
+    // 「容器底色」統一 el.inverse（開關）＋ el.bgFill（樣式）：選「無」等於 inverse=false（bgFill 設定保留，
+    // 下次選別的樣式不用重設）；選反轉／網點／漸層等於 inverse=true 並把 bgFill.mode 設成對應值。
+    // 局部反白（富文字工具列的反白鈕）跟這個相抵的效果在 renderer.js 已經處理，這裡不用管。
+    panel.appendChild(foldSection(`${el.type}.bgFill`, "容器底色", (body) => {
+        const bgFill = resolveFill(el.bgFill);
+        const mode = el.inverse ? bgFill.mode : "none";
+        body.appendChild(field("填色方式", alignGroup(mode, (v) => {
+            if (v === "none") { el.inverse = false; onModelChange(); return; }
+            el.inverse = true;
+            el.bgFill = { ...bgFill, mode: v };
+            onModelChange();
+        }, "填色方式", BG_FILL_MODE_OPTIONS)));
+        if (mode === "halftone") {
+            body.appendChild(sliderField("網點濃度", bgFill.level, 0, 255, (v) => {
+                el.bgFill = { ...bgFill, level: v };
+                onModelChange({ skipInspector: true });
             }));
-        }));
-    }
+        } else if (mode === "gradient") {
+            body.appendChild(field("方向", alignGroup(
+                bgFill.direction,
+                (v) => { el.bgFill = { ...bgFill, direction: v }; onModelChange({ skipInspector: true }); },
+                "方向", FILL_DIRECTION_OPTIONS,
+            )));
+            body.appendChild(field(null, checkboxInput(bgFill.reverse, (v) => {
+                el.bgFill = { ...bgFill, reverse: v };
+                onModelChange({ skipInspector: true });
+            }, "反轉方向（深到淺）")));
+        }
+    }));
 
     panel.appendChild(foldSection(`${el.type}.layout`, "排版", (body) => {
         body.appendChild(fieldRow([
-            ["行高倍數", textInput(el.lineHeight, (v) => applyParagraphField(el, presetGroup, () => { el.lineHeight = v; }), "number")],
-            ["字距 (dot)", textInput(el.letterSpacing, (v) => applyParagraphField(el, presetGroup, () => { el.letterSpacing = v; }), "number")],
+            ["行高倍數", numberStepperInput(el.lineHeight, (v) => applyParagraphField(el, presetGroup, () => { el.lineHeight = v; }), { icon: "text-height", step: 0.1, min: 0.5, precision: 2 })],
+            ["字距 (dot)", numberStepperInput(el.letterSpacing, (v) => applyParagraphField(el, presetGroup, () => { el.letterSpacing = v; }), { icon: "arrows-left-right", step: 1, bigStep: 5 })],
         ]));
         body.appendChild(field("最多行數", textInput(el.maxLines || "", (v) => { el.maxLines = v; onModelChange({ skipInspector: true }); }, "number", "不限")));
         body.appendChild(field(null, checkboxInput(el.wrap, (v) => { el.wrap = v; onModelChange({ skipInspector: true }); }, "自動換行")));
@@ -757,19 +837,11 @@ function buildSpacerInspector(panel, el) {
 // 其餘（濃度／方向／反轉）用 skipInspector，行為比照其它欄位（例如 divider 原本的粗細）。
 function fillFields(fill, onChange) {
     const frag = document.createDocumentFragment();
-    frag.appendChild(field("填色方式", selectInput(
-        [["solid", "純黑"], ["halftone", "網點"], ["gradient", "漸層"]],
-        fill.mode,
-        (v) => onChange({ mode: v }, true),
-    )));
+    frag.appendChild(field("填色方式", alignGroup(fill.mode, (v) => onChange({ mode: v }, true), "填色方式", INK_FILL_MODE_OPTIONS)));
     if (fill.mode === "halftone") {
         frag.appendChild(sliderField("網點濃度", fill.level, 0, 255, (v) => onChange({ level: v }, false)));
     } else if (fill.mode === "gradient") {
-        frag.appendChild(field("方向", selectInput(
-            [["horizontal", "水平"], ["vertical", "垂直"]],
-            fill.direction,
-            (v) => onChange({ direction: v }, false),
-        )));
+        frag.appendChild(field("方向", alignGroup(fill.direction, (v) => onChange({ direction: v }, false), "方向", FILL_DIRECTION_OPTIONS)));
         frag.appendChild(field(null, checkboxInput(fill.reverse, (v) => onChange({ reverse: v }, false), "反轉方向（深到淺）")));
     }
     return frag;

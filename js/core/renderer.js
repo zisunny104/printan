@@ -13,7 +13,7 @@
 
 import { getPrinterProfile, getPaperWidth } from "./printer-profiles.js";
 import { applyDataToElements } from "./merge.js";
-import { FLOAT_GAP_DOTS, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow, resolveDividerDrawMode, resolveFill } from "./document-model.js";
+import { FLOAT_GAP_DOTS, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow, resolveTextVAlign, resolveDividerDrawMode, resolveFill } from "./document-model.js";
 import { dotsToMm, splitRowColumns } from "./units.js";
 import { applyThermalSimulation, toGrayscale, applyDither } from "./dithering.js";
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
@@ -187,7 +187,10 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, show
             const height = heightMode === "fixed" ? (clip ? el.heightDots : Math.max(el.heightDots, totalHeight)) : totalHeight;
             const clipHeight = clip ? el.heightDots : null;
             const clipped = (clip && totalHeight > el.heightDots) || !!vertical?.widthClipped; // 供編輯疊層畫裁切提示用（直書則是欄數過多、總寬度超框寬）
-            items.push({ el, y, height, widthDots, boxWidth, contentHeight: totalHeight, clipHeight, clipped, lines, vertical });
+            // 框比內容高時多出來的空間怎麼分配：只有 heightMode="fixed"（grow 也算，height 會撐到至少 heightDots）
+            // 才可能出現這種空間；heightMode="auto" 時 height 恆等於 totalHeight，offset 自然是 0，跟舊行為一致
+            const vAlignOffset = Math.max(0, height - totalHeight) * (resolveTextVAlign(el) === "middle" ? 0.5 : resolveTextVAlign(el) === "bottom" ? 1 : 0);
+            items.push({ el, y, height, widthDots, boxWidth, contentHeight: totalHeight, clipHeight, clipped, vAlignOffset, lines, vertical });
             y += height;
         } else if (el.type === "float-block") {
             const item = await layoutFloatBlock(el, widthDots, ctx, fontFamily, assetCtx);
@@ -518,7 +521,7 @@ function paintVerticalText(ctx, item, x, y, widthOverride) {
     let colRight = right;
     for (const col of vertical.columns) {
         const cx = colRight - col.width / 2;
-        let cellY = y;
+        let cellY = y + (item.vAlignOffset || 0);
         for (const cell of col.cells) {
             const { style } = cell;
             const inverse = !!el.inverse !== style.inverse;
@@ -645,7 +648,7 @@ function paintText(ctx, item, x, y) {
         ctx.rect(x + boxX, y, effWidth, clipHeight);
         ctx.clip();
     }
-    let lineY = y;
+    let lineY = y + (item.vAlignOffset || 0);
     for (const line of lines) {
         // 圖文段落的行帶有 offsetX／availWidth／skipBefore，純文字沒有這些欄位、行為不變
         lineY += line.skipBefore || 0;

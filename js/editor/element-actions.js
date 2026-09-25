@@ -42,7 +42,15 @@ export function addElement(kind, { ratio, target } = {}) {
 
 export function insertElement(element) {
     const target = resolveTargetArray(currentElements(), state.insertionTarget);
-    target.push(element);
+    // 目前有單選一個元素、且它就在這個容器裡：新元素插在它後面（鄰近位置），比較符合「在這裡加一個」
+    // 的直覺；沒有選取、多選、或選的元素不在這個容器（例如用某個欄位標題的「＋」另外指定了插入目標）
+    // 時維持舊行為，加到容器最後。
+    const anchor = state.selectedId && !state.multi.length ? findContainerOf(currentElements(), state.selectedId) : null;
+    if (anchor && anchor.array === target) {
+        target.splice(anchor.index + 1, 0, element);
+    } else {
+        target.push(element);
+    }
     state.selectedId = element.id;
     state.multi = [];
     rt.pendingReveal = { id: element.id, edit: element.type === "text" || element.type === "float-block" };

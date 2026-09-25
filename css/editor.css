@@ -342,30 +342,26 @@ body {
     outline-offset: -1px;
 }
 
-/* 文字樣式預設選單（js/editor/inspector.js textStylePresetPicker）：每個選項要放縮小後的
-   實際樣子＋標籤兩行文字，選項寬度也不固定（各預設字級不同），用 flex 直向置中排版，
-   跟一般 ts-button 的單行文字排版分開寫一份 class 避免互相干擾。 */
-.style-preset-group {
-    align-items: stretch;
-}
-
-.style-preset-btn {
+/* 文字樣式預設下拉選單（js/editor/inspector.js textStylePresetPicker）：觸發鈕與選單裡的每一列
+   都是左邊縮小後的實際樣子、右邊階層標籤（H1-H5／P），比照 Word／Docs 的段落樣式選單，
+   一眼就看得出各階層的相對大小，不用先套用才知道「H2」長怎樣。 */
+.style-preset-trigger-content,
+.style-preset-item {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: .2rem;
-    min-width: 4.5rem;
-    padding-block: .5rem;
-    line-height: 1.15;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .75rem;
+    width: 100%;
 }
 
 .style-preset-sample {
     font-family: inherit;
+    line-height: 1;
 }
 
 .style-preset-label {
     font-size: .75rem;
+    flex: none;
 }
 
 /* ⓘ 說明圖示（js/editor/ui-helpers.js createInfoIcon）：灰色小圖示，hover／聚焦時顯示 tooltip */
@@ -424,6 +420,34 @@ body {
     display: flex;
     align-items: center;
     gap: .5rem;
+}
+
+/* Figma 式數字調整框（inspector-widgets.js numberStepperInput，目前用在行高倍數／字距）：
+   左邊圖示可左右拖曳刷數值，比瀏覽器內建 <input type=number> 那兩顆小到很難點的 spinner 好用，
+   所以把原生 spinner 藏掉，改用這顆圖示當拖曳把手；圖示本身也提示這格是做什麼用的。 */
+.number-stepper-handle {
+    display: inline-flex;
+    align-items: center;
+    padding-inline-start: .6rem;
+    color: var(--ts-gray-500, #888);
+    cursor: ew-resize;
+    touch-action: none;
+    flex: none;
+}
+
+.number-stepper-handle:hover,
+.number-stepper-handle.is-dragging {
+    color: var(--ts-primary-600, #2563eb);
+}
+
+.number-stepper input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+.number-stepper input[type="number"]::-webkit-outer-spin-button,
+.number-stepper input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 /* 縮放百分比：Tocas ts-input is-basic（無框），寬度與高度對齊旁邊的圖示按鈕，hover 才露出邊框提示可輸入 */
@@ -497,6 +521,34 @@ body {
 .pane-zoom-controls .ts-button[aria-pressed="true"]:hover {
     background: var(--ts-primary-800, #003a8c);
     color: #fff;
+}
+
+/* alignGroup（inspector-widgets.js）這類單選圖示鈕組：同一套填色選中風格，
+   但按鈕本身是 is-outlined，選中時連邊框也要蓋掉，不然會露出一圈灰邊框跟填色不搭 */
+.ts-buttons .ts-button.is-icon.is-active {
+    background: var(--ts-primary-700, #0050b3);
+    border-color: var(--ts-primary-700, #0050b3);
+    color: #fff;
+}
+
+.ts-buttons .ts-button.is-icon.is-active:hover {
+    background: var(--ts-primary-800, #003a8c);
+    border-color: var(--ts-primary-800, #003a8c);
+    color: #fff;
+}
+
+/* 填色方式按鈕：直接用實際填色效果當色票縮圖（純黑／網點／漸層），比抽象圖示更直覺。
+   選中時按鈕底變成藍色，色票外框改白色才看得出邊界（尤其「無」跟漸層淺色那端）。 */
+.fill-swatch {
+    display: block;
+    width: 1.05em;
+    height: 1.05em;
+    border-radius: 3px;
+    border: 1px solid var(--ts-gray-400, #bbb);
+}
+
+.ts-button.is-active .fill-swatch {
+    border-color: rgba(255, 255, 255, .8);
 }
 
 /* 「開啟」下拉選單裡的「最近編輯」清單：每一列要塞名稱＋時間＋刪除鈕，

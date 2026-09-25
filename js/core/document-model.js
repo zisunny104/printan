@@ -72,6 +72,7 @@ export function createTextElement(overrides = {}) {
         heightMode: "auto", // auto＝高度完全由內容決定（舊檔行為）｜fixed＝改用 heightDots，見 resolveTextHeightMode
         heightDots: 0, // heightMode==="fixed" 時的框高（dots）
         overflow: "grow", // heightMode==="fixed" 時：grow＝heightDots 當最小高度、內容較高則自動變高｜clip＝固定高度、超出內容真的不印出，見 resolveTextOverflow
+        vAlign: "top", // 內容在框內的垂直位置：top｜middle｜bottom。框高剛好等於內容時看不出差異，只有 heightMode="fixed" 且框比內容高（或 auto 但沒填滿）時才有作用；換模板套不同長度內容時，靠這個維持版面觀感一致，見 resolveTextVAlign
         ...overrides,
     };
 }
@@ -308,6 +309,13 @@ export const TEXT_OVERFLOWS = ["grow", "clip"];
 export function resolveTextOverflow(el) {
     const overflow = el.overflow || "grow";
     return TEXT_OVERFLOWS.includes(overflow) ? overflow : "grow";
+}
+
+/** 內容在框內的垂直位置（舊檔沒有 vAlign 一律視為 top，貼近舊行為）。見 createTextElement 的 vAlign 說明。 */
+export const TEXT_VALIGNS = ["top", "middle", "bottom"];
+export function resolveTextVAlign(el) {
+    const vAlign = el.vAlign || "top";
+    return TEXT_VALIGNS.includes(vAlign) ? vAlign : "top";
 }
 
 export function createImageElement(overrides = {}) {
