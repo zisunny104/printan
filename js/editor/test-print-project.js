@@ -250,14 +250,20 @@ const EASTER_EGG = {
 const money = (n) => `${n < 0 ? "-" : ""}$${Math.abs(n).toLocaleString("en-US")}`;
 
 // [名稱, 數量, 單價, 備註]；數量可放字串（如 "999+"），計價時當 0。金額照實填，合計由程式加總。
-// 名稱盡量一看就懂（功能名或明顯的玩笑）；42＝宇宙的答案、65＝ASCII 的 A。
-const menuItems = () => [
-    ["所見即所得預覽", 1, 42, "42：生命、宇宙與一切的答案"],
-    ["續命美式咖啡", 3, 65, "喝茶請洽 HTTP 418"],
-    ["Token 一籮筐", EASTER_EGG.tokens, 0, "用量沒算過，反正很多"],
-    ["月費方案", 1, EASTER_EGG.monthlyFeeUsd, "Claude Pro，自掏腰包"],
-    ["Hello World", 1, 1, "第一行輸出，成功了"],
-];
+// 名稱盡量一看就懂（功能名或明顯的玩笑）；42＝宇宙的答案、95＝一杯美式咖啡平均咖啡因量(mg)。
+// 兩份數量（份數）跟著當下時間變：預覽＝今天幾號、咖啡＝現在幾點（0 點算 24 杯），讓每次列印金額不同。
+const menuItems = () => {
+    const now = new Date();
+    const previewCount = now.getDate();
+    const coffeeCount = now.getHours() || 24;
+    return [
+        ["所見即所得預覽", previewCount, 42, "42：生命、宇宙與一切的答案"],
+        ["續命美式咖啡", coffeeCount, 95, "喝茶請洽 HTTP 418"],
+        ["Token 一籮筐", EASTER_EGG.tokens, 0, "用量沒算過，反正很多"],
+        ["月費方案", 1, EASTER_EGG.monthlyFeeUsd, "Claude Pro，自掏腰包"],
+        ["Hello World", 1, 1, "第一行輸出，成功了"],
+    ];
+};
 
 const DISCOUNT = ["優惠　一點點……耐心", -15];
 
