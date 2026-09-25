@@ -127,7 +127,11 @@ body {
         flex: none;
     }
 
-    .editor-list .ts-box,
+    /* 頁面清單卡（.page-list-box）排除在外：它是「幾頁就幾列」的內容高度清單，不是這條規則
+       原本要撐滿全高的對象（那是給版面結構卡用的）——多頁功能加了這張卡之後，
+       .editor-list .ts-box 這個 descendant selector 沒特別排除就會連它一起吃到 flex:1 0 auto，
+       跟版面結構卡對半搶剩餘高度，頁數少時卡片下半部會多出一大塊空白（見使用者回報）。 */
+    .editor-list .ts-box:not(.page-list-box),
     .editor-dock > .ts-box:has(> #inspector) {
         flex: 1 0 auto;
     }
