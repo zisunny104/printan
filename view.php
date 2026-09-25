@@ -28,6 +28,8 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
             <div class="ts-divider has-vertically-spaced-small"></div>
 
             <div class="editor-shell" id="editorShell">
+                <?php require __DIR__ . '/partials/editor-skeleton.php'; ?>
+
                 <?php require __DIR__ . '/partials/outline.php'; ?>
 
                 <div class="col-resizer" id="colResizerLeft" role="separator" aria-orientation="vertical"
