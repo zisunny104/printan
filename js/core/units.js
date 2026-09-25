@@ -11,6 +11,16 @@ export function dotsToMm(dots, dpi) {
     return dots / dotsPerMm(dpi);
 }
 
+/** pt↔dots 換算：兩個方向都四捨五入到整數，讓使用者打一個 pt 整數、存回 dots、
+ * 再讀出顯示，看到的還是同一個數字，不會有「明明打 12 怎麼變 11.9」的觀感問題。
+ * 印表機／字級輸入介面共用同一份公式，避免各處各算一套互相對不齊。 */
+export function dotsToPt(dots, dpi) {
+    return Math.round((dots * 72) / dpi);
+}
+export function ptToDots(pt, dpi) {
+    return Math.round((pt * dpi) / 72);
+}
+
 /**
  * 依比例陣列（例如 [1,1] 或 [2,1]）把總點數切成整數欄寬，
  * 確保各欄寬度總和精確等於 totalDots（最後一欄吸收捨入誤差）。

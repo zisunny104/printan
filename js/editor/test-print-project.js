@@ -6,7 +6,7 @@ import { createEmptyProject } from "../core/schema.js";
 import { renderTemplate, DEFAULT_FONT_FAMILY } from "../core/renderer.js";
 import {
     createTextElement, createTextRun, createDividerElement, createSpacerElement,
-    createImageElement, createRowElement, createBarcodeElement,
+    createImageElement, createRowElement, createBarcodeElement, applyTextStylePreset,
 } from "../core/document-model.js";
 import { dotsPerMm } from "../core/units.js";
 import { renderBarcodeResult } from "../core/barcode.js";
@@ -261,12 +261,12 @@ const menuItems = () => [
 
 const DISCOUNT = ["優惠　一點點……耐心", -15];
 
-function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDetailUrl, ditherUrl, widthDots) {
-    // 字級依紙寬取值：80mm 特大，58mm（約 420 點）退一級才放得下
+function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDetailUrl, ditherUrl, widthDots, dpi) {
+    // 字級依紙寬取值：80mm 特大，58mm（約 420 點）退一級才放得下。
+    // 副標、合計改套用 H3／H2 樣式預設（見 document-model.js TEXT_STYLE_PRESETS）：固定 pt、
+    // 不隨紙寬縮放，用來示範預設系統本身，跟其餘仍依紙寬取值的字級是兩種不同的設計考量。
     const wide = widthDots >= 500;
     const brandSize = wide ? 56 : 40;
-    const titleSize = wide ? 36 : 28;
-    const totalSize = wide ? 40 : 32;
     const noteSize = wide ? 22 : 20;
     const smallSize = wide ? 22 : 20;
     // 縮小 20%（PROJECT_URL 29 模組／TEAPOT_URL 25 模組，見下方統一縮放註解）：
@@ -321,10 +321,20 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
         return row;
     });
 
+    const subtitleEl = center("小小一張紙，所見即所印", { italic: true });
+    applyTextStylePreset(subtitleEl, "H3", dpi);
+    const totalRow = createRowElement([1, 1]);
+    const totalLeftEl = text("合計", { inverse: true });
+    const totalRightEl = text(money(total), { inverse: true, align: "right" });
+    applyTextStylePreset(totalLeftEl, "H2", dpi);
+    applyTextStylePreset(totalRightEl, "H2", dpi);
+    totalRow.columns[0].push(totalLeftEl);
+    totalRow.columns[1].push(totalRightEl);
+
     return [
         // 標題：icon 與名稱並排
         brandRow,
-        center("小小一張紙，所見即所印", { fontSize: titleSize, italic: true }),
+        subtitleEl,
         center("toka.dev/koilisu/printan", { fontSize: smallSize }),
         gap(),
         // 品項：上方一條反白窄帶當區段標頭
@@ -336,7 +346,7 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
         line("小計", money(subtotal)),
         discountRow,
         gap(),
-        line({ text: "合計", bold: true, fontSize: totalSize }, { text: money(total), bold: true, fontSize: totalSize }, { inverse: true }),
+        totalRow,
         gap(),
         // 條碼與 QR
         // 明碼另用一般文字元素，字級與內文同大（條碼內建明碼太小，熱感應二值化後糊成一團）
@@ -395,6 +405,7 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
         buildFineDetailStrip(paper.printableWidthDots),
         buildDitherSwatch(paper.printableWidthDots),
         paper.printableWidthDots,
+        dpi,
     );
     const body = await renderTemplate(project, {}, { mode: "thermal", profile });
 
