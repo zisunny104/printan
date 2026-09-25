@@ -378,8 +378,8 @@ export function alignGroup(current, onChange, label = "對齊", options = ALIGN_
         b.setAttribute("aria-label", text);
         b.dataset.tooltip = text;
         b.dataset.value = value;
-        // icon 是 "<svg" 開頭就直接用（自製的版面示意圖），否則當 Tocas 圖示名稱
-        b.innerHTML = icon.startsWith("<svg") ? icon : `<span class="ts-icon is-${icon}-icon" aria-hidden="true"></span>`;
+        // icon 是 "<" 開頭就直接當 HTML 用（自製的版面示意圖／色票 swatch），否則當 Tocas 圖示名稱
+        b.innerHTML = icon.startsWith("<") ? icon : `<span class="ts-icon is-${icon}-icon" aria-hidden="true"></span>`;
         return b;
     });
     const select = (value, focus) => {

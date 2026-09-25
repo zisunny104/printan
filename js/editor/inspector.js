@@ -301,7 +301,15 @@ const PRESET_BACKED_FIELDS = ["fontSize", "bold", "lineHeight", "letterSpacing"]
 
 // 「容器底色」選單：多一個「無」對應 el.inverse=false（見 buildTextInspector），其餘沿用 fillFields
 // 的模式名稱，但「純黑」在這裡改叫「反轉」，比較貼近使用者實際感受到的效果（黑底白字）。
-const BG_FILL_MODE_OPTIONS = [["none", "無"], ["solid", "反轉"], ["halftone", "網點"], ["gradient", "漸層"]];
+// 填色方式按鈕直接用色票（實際填色效果的縮圖）取代抽象圖示，跟工具列的粗體/斜體一樣是單選圖示按鈕組。
+const fillSwatch = (bg) => `<span class="fill-swatch" style="background:${bg}" aria-hidden="true"></span>`;
+const SWATCH_SOLID = fillSwatch("#000");
+const SWATCH_HALFTONE = fillSwatch("radial-gradient(circle, #000 34%, transparent 36%) 0 0/40% 40%, #fff");
+const SWATCH_GRADIENT = fillSwatch("linear-gradient(135deg, #000, #fff)");
+const INK_FILL_MODE_OPTIONS = [["solid", "純黑", SWATCH_SOLID], ["halftone", "網點", SWATCH_HALFTONE], ["gradient", "漸層", SWATCH_GRADIENT]];
+// 「無」「反轉」是狀態／動作不是顏色，用圖示比色票更好懂；網點／漸層是實際填色效果，用色票。
+const BG_FILL_MODE_OPTIONS = [["none", "無", "ban"], ["solid", "反轉", "circle-half-stroke"], ["halftone", "網點", SWATCH_HALFTONE], ["gradient", "漸層", SWATCH_GRADIENT]];
+const FILL_DIRECTION_OPTIONS = [["horizontal", "水平", fillSwatch("linear-gradient(90deg, #000, #fff)")], ["vertical", "垂直", fillSwatch("linear-gradient(180deg, #000, #fff)")]];
 
 // 每個選項左邊放縮小後的實際樣子（字級比例／粗細）、右邊放階層標籤（H1-H5／P），
 // 觸發鈕與選單裡的每一列共用同一份內容，比照 Word／Docs 那種段落樣式下拉選單。
@@ -480,7 +488,18 @@ function buildTextInspector(panel, el) {
         ["預設字體", fontFamilySelect(el.fontFamily, (v) => { el.fontFamily = v; onModelChange({ skipInspector: true }); }, "跟隨全域預設")],
         ["預設字級 (pt)", textInput(dotsToPt(el.fontSize), (v) => applyParagraphField(el, presetGroup, () => { el.fontSize = ptToDots(v); }), "number")],
     ]));
-    panel.appendChild(field("對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
+    // 水平對齊跟垂直對齊是同一組「對齊」概念，擺在一起比照 Figma 的做法；
+    // 垂直對齊只有固定高度的容器才有意義（沒有多的高度可以分配），所以高度為自動時不顯示，
+    // 但位置緊接在水平對齊旁邊，不會像之前那樣被拆到後面「寬高」區塊裡讓人找不到。
+    const heightFixedForAlign = el.type === "text" && resolveTextHeightMode(el) === "fixed";
+    if (heightFixedForAlign) {
+        panel.appendChild(fieldRow([
+            ["水平對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })],
+            ["垂直對齊", alignGroup(resolveTextVAlign(el), (v) => { el.vAlign = v; onModelChange({ skipInspector: true }); }, "垂直對齊", TEXT_VALIGN_OPTIONS)],
+        ]));
+    } else {
+        panel.appendChild(field("對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
+    }
     panel.appendChild(field(null, checkboxInput(el.bold, (v) => applyParagraphField(el, presetGroup, () => { el.bold = v; }), "預設粗體")));
 
     panel.appendChild(foldSection(`${el.type}.inkFill`, "文字顏色", (body) => {
@@ -496,22 +515,22 @@ function buildTextInspector(panel, el) {
     panel.appendChild(foldSection(`${el.type}.bgFill`, "容器底色", (body) => {
         const bgFill = resolveFill(el.bgFill);
         const mode = el.inverse ? bgFill.mode : "none";
-        body.appendChild(field("填色方式", selectInput(BG_FILL_MODE_OPTIONS, mode, (v) => {
+        body.appendChild(field("填色方式", alignGroup(mode, (v) => {
             if (v === "none") { el.inverse = false; onModelChange(); return; }
             el.inverse = true;
             el.bgFill = { ...bgFill, mode: v };
             onModelChange();
-        })));
+        }, "填色方式", BG_FILL_MODE_OPTIONS)));
         if (mode === "halftone") {
             body.appendChild(sliderField("網點濃度", bgFill.level, 0, 255, (v) => {
                 el.bgFill = { ...bgFill, level: v };
                 onModelChange({ skipInspector: true });
             }));
         } else if (mode === "gradient") {
-            body.appendChild(field("方向", selectInput(
-                [["horizontal", "水平"], ["vertical", "垂直"]],
+            body.appendChild(field("方向", alignGroup(
                 bgFill.direction,
                 (v) => { el.bgFill = { ...bgFill, direction: v }; onModelChange({ skipInspector: true }); },
+                "方向", FILL_DIRECTION_OPTIONS,
             )));
             body.appendChild(field(null, checkboxInput(bgFill.reverse, (v) => {
                 el.bgFill = { ...bgFill, reverse: v };
@@ -572,10 +591,6 @@ function buildTextInspector(panel, el) {
                     el.overflow = v;
                     onModelChange();
                 }, "超出處理", TEXT_OVERFLOW_OPTIONS)));
-                body.appendChild(field("垂直位置", alignGroup(resolveTextVAlign(el), (v) => {
-                    el.vAlign = v;
-                    onModelChange();
-                }, "垂直位置", TEXT_VALIGN_OPTIONS)));
             }
         }));
     }
@@ -822,19 +837,11 @@ function buildSpacerInspector(panel, el) {
 // 其餘（濃度／方向／反轉）用 skipInspector，行為比照其它欄位（例如 divider 原本的粗細）。
 function fillFields(fill, onChange) {
     const frag = document.createDocumentFragment();
-    frag.appendChild(field("填色方式", selectInput(
-        [["solid", "純黑"], ["halftone", "網點"], ["gradient", "漸層"]],
-        fill.mode,
-        (v) => onChange({ mode: v }, true),
-    )));
+    frag.appendChild(field("填色方式", alignGroup(fill.mode, (v) => onChange({ mode: v }, true), "填色方式", INK_FILL_MODE_OPTIONS)));
     if (fill.mode === "halftone") {
         frag.appendChild(sliderField("網點濃度", fill.level, 0, 255, (v) => onChange({ level: v }, false)));
     } else if (fill.mode === "gradient") {
-        frag.appendChild(field("方向", selectInput(
-            [["horizontal", "水平"], ["vertical", "垂直"]],
-            fill.direction,
-            (v) => onChange({ direction: v }, false),
-        )));
+        frag.appendChild(field("方向", alignGroup(fill.direction, (v) => onChange({ direction: v }, false), "方向", FILL_DIRECTION_OPTIONS)));
         frag.appendChild(field(null, checkboxInput(fill.reverse, (v) => onChange({ reverse: v }, false), "反轉方向（深到淺）")));
     }
     return frag;
