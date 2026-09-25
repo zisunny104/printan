@@ -7,12 +7,17 @@ import { createPage } from "../core/schema.js";
 import { els, state } from "./context.js";
 import { iconButton } from "./inspector-widgets.js";
 import { findContainerOf } from "../core/element-tree.js";
-import { onModelChange } from "./editor.js";
+import { onModelChange, schedulePreview } from "./editor.js";
 import { getSelectedIds } from "./element-actions.js";
 import { renderOutline } from "./outline.js";
 import { renderInspector } from "./inspector.js";
 
-/** 切換目前檢視／編輯的頁面：純畫面切換，不是內容變動，不進復原歷史（見 history.js snapshotPages）。 */
+/**
+ * 切換目前檢視／編輯的頁面：純畫面切換，不是內容變動——不記錄復原歷史（history.js 的
+ * currentPageIndex 本來就故意不放進快照），也不能走 onModelChange()，那條路徑是給實際
+ * 內容變動用的，會連帶重設 autosave 的 500ms debounce（scheduleSave），切頁點快一點
+ * 就會讓草稿一直存不進去。只重繪頁面清單／大綱／檢視器／預覽這幾個跟目前頁面相關的畫面。
+ */
 export function setCurrentPage(index) {
     const pages = state.project.template.pages;
     const clamped = Math.max(0, Math.min(index, pages.length - 1));
@@ -24,15 +29,7 @@ export function setCurrentPage(index) {
     renderPageList();
     renderOutline();
     renderInspector();
-    onModelChangeForPageSwitch();
-}
-
-// 只重繪畫面（大綱／檢視器已經在呼叫端處理），不記錄歷史——直接呼叫 editor.js 的 schedulePreview
-// 會造成循環 import（editor.js 也要 import 這個檔案來掛頁面清單的按鈕），所以透過 onModelChange
-// 但把它視為一般變動一樣記錄快照：切頁本身不改 pages 陣列內容，recordHistory() 比較快照字串
-// 沒有變化就不會真的推入新的一筆，等同 no-op，不用另外開一條路徑。
-function onModelChangeForPageSwitch() {
-    onModelChange();
+    schedulePreview();
 }
 
 export function addPage() {
@@ -98,6 +95,11 @@ export function movePage(id, direction) {
  * 版面是由上而下的流動排版（見 renderer.js layoutColumn），元素陣列本身沒有存 y 座標，
  * 「接在目前頁尾端」這件事單純把陣列接起來就自動達成「往下偏移目前頁高度」的視覺效果，
  * 不需要另外算高度、搬動座標。
+ * cutAfter 沿用來源頁（source）的，不是目前頁（target）原本的：合併後內容變成
+ * 「target 的內容接著 source 的內容」，決定要不要切紙的是合併後這一頁「印到最後」的狀態，
+ * 也就是原本 source 尾端的切紙設定；target 原本自己的 cutAfter 對應的邊界（target 結束的地方）
+ * 合併後已經不存在了，跟 splitAtSelection() 分割時前半段固定改成 cutAfter:false 是同一個道理
+ * （分割與合併互為逆操作，邊界消失的那一段固定不留原本的切紙語意）。
  */
 export function mergePageInto(sourceId) {
     const pages = state.project.template.pages;
@@ -106,6 +108,7 @@ export function mergePageInto(sourceId) {
     if (sourceIndex === -1 || pages[sourceIndex] === target) return;
     const [source] = pages.splice(sourceIndex, 1);
     target.elements.push(...source.elements);
+    target.cutAfter = source.cutAfter;
     if (sourceIndex < state.currentPageIndex) state.currentPageIndex -= 1;
     state.selectedId = null;
     state.multi = [];
