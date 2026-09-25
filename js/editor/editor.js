@@ -20,7 +20,7 @@ import { saveDraft, loadDraft, deleteDraft, listRecent, safeGetItem, safeSetItem
 import { wireResizableColumns } from "./resizable-columns.js";
 import { createInlineTextEditor } from "./inline-text-editor.js";
 import { createWorkspaceView } from "./workspace-view.js";
-import { createInfoIcon, wireHelpDialog } from "./ui-helpers.js";
+import { createInfoIcon, hideStageNotice, showStageNotice, wireHelpDialog } from "./ui-helpers.js";
 import { LAST_DRAFT_KEY, currentElements, currentPage, els, rt, state } from "./context.js";
 import {
     attemptSilentPrinterReconnect, bindPrinterSettings, loadPrintPrefs, printCurrent, renderMarginRows,
@@ -37,6 +37,7 @@ import { bindEditorShortcuts, recordHistory, resetHistory } from "./history.js";
 import { addElement, insertElement, wireAddMenu } from "./element-actions.js";
 import { bootKioskFromQuery } from "./kiosk.js";
 import { bindPageList, renderPageList } from "./pages.js";
+import { bindPagePager, invalidatePageThumbs, renderPageThumbs, revealActivePage, syncPageBoard } from "./page-board.js";
 
 async function init() {
     cacheDom();
@@ -53,14 +54,20 @@ async function init() {
     bindProjectName();
     renderProjectName();
     bindPageList();
+    bindPagePager();
     renderPageList();
     wireResizableColumns();
     wireToolbarOverflow();
     workspace.mount();
+    wireZoomRevealsActivePage();
     wireHelpDialog();
     initMobileDrawers();
     onModelChange({ skipInspector: false });
-    onWebFontStatusChange(() => renderInspector()); // 字體載入失敗／恢復時，選單上的標示要跟著更新
+    onWebFontStatusChange(() => { // 字體載入失敗／恢復時，選單上的標示要跟著更新；非作用中頁面的縮圖可能是用替代字體畫的
+        renderInspector();
+        invalidatePageThumbs();
+        schedulePreview();
+    });
     restoreLocalFontsIfGranted().then((restored) => { if (restored) renderInspector(); });
     await attemptSilentPrinterReconnect();
     // kiosk.js：網址帶 tpl= 才會動作，一般開啟編輯器（沒有這個參數）完全不受影響
@@ -89,7 +96,8 @@ function cacheDom() {
         "printer-info-device", "printer-info-firmware", "printer-info-spec", "printer-info-dpi",
         "printer-info-paper", "printer-info-printable", "printer-info-blade", "export-embed-fonts", "export-embed-fonts-row",
         "btn-project-name", "project-name-input", "project-name-text",
-        "page-list", "btn-page-add", "btn-page-split",
+        "btn-page-add", "btn-page-split",
+        "page-board", "page-pager", "page-pager-label", "page-pager-cut", "btn-page-prev", "btn-page-next",
     ].forEach((id) => (els[id] = document.getElementById(id)));
 }
 
@@ -622,6 +630,14 @@ const workspace = createWorkspaceView({
     },
 });
 
+// 「符合寬度」／1:1 的語意是對作用中頁面那一欄：縮放本身只算一張紙的寬度（getPaperWidthMm），
+// 縮完再把作用中頁面置中，不然 2D 佈局裡它可能被推到畫面外。排在 workspace 自己的監聽器之後執行。
+function wireZoomRevealsActivePage() {
+    for (const id of ["btn-zoom-fit", "btn-zoom-actual"]) {
+        document.getElementById(id).addEventListener("click", () => requestAnimationFrame(() => revealActivePage({ center: true })));
+    }
+}
+
 // 紙寬與可列印寬度之差的一半＝左右各印不到的寬度（左右對稱，用標準值；可列印點數含使用者覆寫，不含邊距校正）
 function unprintableMm() {
     const paper = getPaperWidth(getBaseProfile(), state.project.paper.widthId);
@@ -629,6 +645,7 @@ function unprintableMm() {
 }
 
 // 白底左右兩側的「不可印區」：純畫面提示（DOM，不在 canvas 內），匯出與列印不含
+// 作用中頁面的 #paper-shadow 會在 2D 佈局裡搬來搬去，不可印區只在它身上補一次；縮圖頁面自己帶（見 page-board.js）
 function ensureUnprintableZones() {
     const shadow = els["paper-shadow"];
     if (shadow.querySelector(".unprintable-zone")) return;
@@ -650,23 +667,29 @@ function updatePaperFrame() {
     // 太靠下緣的內容，切紙時有被裁到的風險。
     const bladeOffsetMm = profile.autocutter?.bladeOffsetMm ?? 0;
     const pxPerMm = workspace.pxPerMm();
-    // 畫面上的紙＝可列印區：白底寬度＝printableWidthMm × pxPerMm（對應實際列印的 576 點）
-    els["canvas-host"].style.width = `${paper.printableWidthMm * pxPerMm}px`;
-    els["paper-shadow"].style.setProperty("--paper-unprintable", `${unprintableMm() * pxPerMm}px`);
-    els["paper-shadow"].style.setProperty("--paper-safe-bottom", `${bladeOffsetMm * pxPerMm}px`);
+    // 畫面上的紙＝可列印區：白底寬度＝printableWidthMm × pxPerMm（對應實際列印的 576 點）。
+    // 寫在 2D 佈局的外層：作用中頁面與其餘縮圖頁面都繼承同一組尺寸（紙寬是專案層級共用，不分頁）
+    const board = els["page-board"];
+    board.style.setProperty("--paper-width", `${paper.printableWidthMm * pxPerMm}px`);
+    board.style.setProperty("--paper-unprintable", `${unprintableMm() * pxPerMm}px`);
+    board.style.setProperty("--paper-safe-bottom", `${bladeOffsetMm * pxPerMm}px`);
     // 空白版型的白底＝最短可切下的一張紙（列印頭到切刀的距離），隨縮放與 profile 變動
-    els["paper-shadow"].style.setProperty("--paper-min-height", `${bladeOffsetMm * pxPerMm}px`);
-    // 版面完全沒有元素時，切刀安全線只是誤導（看起來像渲染壞掉），故不顯示
+    board.style.setProperty("--paper-min-height", `${bladeOffsetMm * pxPerMm}px`);
+    // 版面完全沒有元素時，切刀安全線只是誤導（看起來像渲染壞掉），故不顯示；
+    // 這一頁印完不切紙（接續下一頁）時切刀安全線同樣沒有意義，一併隱藏
     const isEmpty = currentElements().length === 0;
     els["paper-viewport"].classList.toggle("is-empty", isEmpty);
+    els["paper-viewport"].classList.toggle("is-no-cut", !currentPage().cutAfter);
 }
 
-async function updatePreview() {
+async function updatePreview({ live = false } = {}) {
+    const rebuilt = syncPageBoard();
     updatePaperFrame();
     const generation = ++state.previewGeneration;
     let result;
+    let data;
     try {
-        const data = state.batchPreview.active
+        data = state.batchPreview.active
             ? (state.batchPreview.records[state.batchPreview.index] ?? {})
             : state.previewData;
         // 畫布一次只編輯／預覽目前這一頁：renderTemplate() 是不能更動的公開單頁 API（見 renderer.js
@@ -690,45 +713,21 @@ async function updatePreview() {
     }
     els["canvas-host"].appendChild(els["edit-overlay"]);
     renderEditOverlay();
+    if (rebuilt) revealActivePage();
+    // 拖曳／打字這類 live 更新只改作用中頁面，其他頁的縮圖不用跟著每個畫格重算
+    if (!live) renderPageThumbs({ data, mode: state.mode, profile: getEffectiveProfile() });
 }
 
 /** 批次資料的圖片網址被拒絕或載入失敗時，在預覽區上方提示已略過。 */
 function updateImageFailureNotice(failures) {
-    let notice = els["image-failure-notice"];
-    if (!failures?.length) {
-        if (notice) notice.hidden = true;
-        return;
-    }
-    if (!notice) {
-        notice = document.createElement("div");
-        notice.className = "ts-notice is-negative";
-        notice.appendChild(Object.assign(document.createElement("div"), { className: "content" }));
-        const stage = els["paper-shadow"].parentElement.parentElement;
-        stage.parentElement.insertBefore(notice, stage);
-        els["image-failure-notice"] = notice;
-    }
-    notice.hidden = false;
-    notice.firstChild.textContent = `有 ${failures.length} 張圖片無法載入，已略過`;
-    notice.title = failures.join("\n");
+    if (!failures?.length) return hideStageNotice("image-failure-notice");
+    showStageNotice("image-failure-notice", `有 ${failures.length} 張圖片無法載入，已略過`, { title: failures.join("\n") });
 }
 
 /** 網頁字體（等寬）載入失敗時，在預覽區上方明確提示目前顯示與列印的是系統字體，不默默換字。 */
 function updateFontFallbackNotice(failedLabels) {
-    let notice = els["font-fallback-notice"];
-    if (!failedLabels?.length) {
-        if (notice) notice.hidden = true;
-        return;
-    }
-    if (!notice) {
-        notice = document.createElement("div");
-        notice.className = "ts-notice is-negative";
-        notice.appendChild(Object.assign(document.createElement("div"), { className: "content" }));
-        const stage = els["paper-shadow"].parentElement.parentElement;
-        stage.parentElement.insertBefore(notice, stage);
-        els["font-fallback-notice"] = notice;
-    }
-    notice.hidden = false;
-    notice.firstChild.textContent = `字體「${failedLabels.join("、")}」沒有載入成功（可能沒有網路），預覽與列印暫時改用系統字體。`;
+    if (!failedLabels?.length) return hideStageNotice("font-fallback-notice");
+    showStageNotice("font-fallback-notice", `字體「${failedLabels.join("、")}」沒有載入成功（可能沒有網路），預覽與列印暫時改用系統字體。`);
 }
 
 // 預覽區行內文字編輯（見 inline-text-editor.js）。textSel 是面板工具列操作的選取範圍，
@@ -784,7 +783,7 @@ export function schedulePreviewLive() {
         while (liveDirty) {
             liveDirty = false;
             clearTimeout(previewTimer);
-            await updatePreview();
+            await updatePreview({ live: true });
         }
         liveBusy = false;
     });

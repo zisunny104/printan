@@ -48,6 +48,8 @@ body {
 :root {
     --paper-color: #fff; /* 紙張底色（熱感紙永遠是白的，深色模式也不變）；畫布與兩側不可印區共用 */
     --printan-guide-color: rgba(120, 120, 120, .55); /* 畫布上不會列印的輔助虛線統一色（切刀安全線／不可印區邊界）；線永遠畫在白紙上，不用深色模式變體 */
+    /* 2D 多頁畫布的「會切紙」標記色（段落分界的虛線＋剪刀）；畫在灰底工作區上，要跟輔助線明顯不同 */
+    --printan-cut-color: light-dark(#d9480f, #ff8f5a);
     --printan-list-width: 290px;
     --printan-dock-width: 340px;
 }
@@ -127,11 +129,7 @@ body {
         flex: none;
     }
 
-    /* 頁面清單卡（.page-list-box）排除在外：它是「幾頁就幾列」的內容高度清單，不是這條規則
-       原本要撐滿全高的對象（那是給版面結構卡用的）——多頁功能加了這張卡之後，
-       .editor-list .ts-box 這個 descendant selector 沒特別排除就會連它一起吃到 flex:1 0 auto，
-       跟版面結構卡對半搶剩餘高度，頁數少時卡片下半部會多出一大塊空白（見使用者回報）。 */
-    .editor-list .ts-box:not(.page-list-box),
+    .editor-list .ts-box,
     .editor-dock > .ts-box:has(> #inspector) {
         flex: 1 0 auto;
     }
@@ -558,92 +556,90 @@ body {
     box-shadow: inset 0 -2px 0 var(--ts-positive-500, #2e7d32);
 }
 
-/* 頁面清單（js/editor/pages.js）：外觀比照大綱列，維持同一套視覺語言，但多了
-   名稱輸入框與「切紙」小開關，寬度比大綱列吃緊，用 flex-wrap 讓窄側欄也不會被擠爆。 */
-.page-list {
-    display: flex;
-    flex-direction: column;
-    gap: .3rem;
+/* 版面結構樹的頁面列（最上層，比照 Figma 圖層面板的 frame；js/editor/outline.js buildPageRow）：
+   不套元素的型別底色，用粗一點的字與頁碼區分層級；作用中頁面整列加底色，跟畫布上的主色外框對應。 */
+.outline-page-row {
+    font-weight: 600;
 }
 
-.page-row {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: .4rem;
-    padding: .35rem .5rem;
-    border-radius: .4rem;
-    border: 1px solid transparent;
-    background: light-dark(rgba(0, 0, 0, .03), rgba(255, 255, 255, .05));
+.outline-page-row.is-current {
+    background: light-dark(rgba(59, 130, 246, .08), rgba(96, 165, 250, .18));
 }
 
-.page-row.is-selected {
-    border-color: light-dark(#1d4ed8, #93c5fd);
-    outline: 2px solid light-dark(#1d4ed8, #93c5fd);
-    outline-offset: -3px;
+.outline-page-row ~ .outline-page-row {
+    margin-top: .35rem;
 }
 
-.page-row-main {
-    display: flex;
-    align-items: center;
-    gap: .4rem;
+.outline-page-number {
+    flex: none;
+    min-width: 1.35rem;
+    padding: 0 .3rem;
+    border-radius: 999px;
+    background: var(--ts-gray-200, #e5e5e5);
+    color: var(--ts-gray-700, #444);
+    font-size: .75rem;
+    text-align: center;
+}
+
+.outline-page-row.is-current .outline-page-number {
+    background: var(--ts-primary-500, #3b82f6);
+    color: #fff;
+}
+
+.outline-page-name-input {
     flex: 1 1 auto;
     min-width: 0;
+    font: inherit;
+    padding: .05rem .25rem;
+    border: 1px solid var(--ts-primary-400, #7ba8f5);
+    border-radius: .3rem;
+    background: light-dark(#fff, #1f2023);
+    color: inherit;
+}
+
+/* 切紙開關常駐：亮＝印完切紙（同畫布上的剪刀色），暗＝跟下一頁接續同一張紙 */
+.outline-page-row .outline-page-cut {
+    color: var(--printan-cut-color);
+}
+
+/* hover 才出現的操作列避開最右邊的切紙開關，不要蓋住它 */
+.outline-page-row .outline-actions {
+    right: calc(.25rem + 24px + .25rem);
+}
+
+.outline-page-row .outline-page-cut.is-off {
+    color: var(--ts-gray-400, #aaa);
+    opacity: .6;
+}
+
+/* 收合箭頭：沒有子層的列放同寬空位，同一層的圖示與名稱才會對齊 */
+.outline-toggle {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ts-gray-500, #888);
+    font-size: .65rem;
     cursor: pointer;
 }
 
-.page-row-index {
-    flex: none;
+.outline-toggle.is-spacer {
+    cursor: inherit;
 }
 
-.page-row-name {
-    flex: 1 1 auto;
-    min-width: 0;
-    border: 1px solid transparent;
-    background: transparent;
-    font: inherit;
-    color: inherit;
-    padding: .1rem .2rem;
-    border-radius: .3rem;
-}
-
-.page-row-name:hover,
-.page-row-name:focus {
-    border-color: var(--ts-gray-300, #d1d5db);
-    background: light-dark(#fff, #1f2023);
-}
-
-/* 「切紙」開關：小到不影響整列高度，但必須跟頁面名稱明顯分開，避免被誤讀成頁面本身的屬性文字 */
-.page-row-cut {
-    display: flex;
-    align-items: center;
-    gap: .25rem;
-    flex: none;
-    white-space: nowrap;
-}
-
-.page-row-actions {
-    display: flex;
-    gap: .125rem;
-    flex: none;
-    margin-left: auto;
-}
-
-.page-row-actions .ts-button.is-icon {
-    width: 24px;
-    height: 24px;
-    min-height: 0;
-    padding: 0;
-    flex: none;
-}
-
-.page-list-box {
-    margin-bottom: .75rem;
+.outline-empty-page {
+    padding: .25rem .5rem .25rem 2.5rem;
 }
 
 .outline-indent-1 { margin-left: 1rem; }
 .outline-indent-2 { margin-left: 2rem; }
 .outline-indent-3 { margin-left: 3rem; }
+.outline-indent-4 { margin-left: 4rem; }
 
 /* ==== 畫布與尺規 ==== */
 
@@ -821,12 +817,14 @@ body {
 
 .canvas-host {
     position: relative;
+    width: var(--paper-width, auto);
     background: var(--paper-color);
 }
 
 /* 版面還沒有任何元素時，畫布內容高度只有幾個 px，白底看起來像一條裂縫；
-   只有空版面才撐一個最短高度（列印頭到切刀的距離），有內容時白底高度就是內容高度。 */
-.paper-viewport.is-empty .canvas-host {
+   只有空版面才撐一個最短高度（列印頭到切刀的距離），有內容時白底高度就是內容高度。
+   掛在各頁的 .page-frame 上：2D 畫布裡非作用中頁面也可能是空白頁。 */
+.page-frame.is-empty .canvas-host {
     min-height: var(--paper-min-height, 160px);
 }
 
@@ -838,8 +836,257 @@ body {
 }
 
 .paper-viewport.is-preview-mode .safe-area-guide,
-.paper-viewport.is-empty .safe-area-guide {
+.paper-viewport.is-empty .safe-area-guide,
+.paper-viewport.is-no-cut .safe-area-guide {
     display: none;
+}
+
+/* ---- 2D 多頁畫布（js/editor/page-board.js）：直接對應列印出來的實體結果 ----
+   水平並排＝不同段（段與段之間切紙，中間是橘色虛線＋剪刀）；同一段裡 cutAfter:false 串起來的頁面
+   垂直貼齊堆疊，上下頁之間沒有外框線、只留一條很淡的點線，看起來就是同一張連續紙。
+   兩種邊界刻意用不同線型＋顏色，不只靠位置差異。 */
+.page-board {
+    flex: none;
+    display: flex;
+    align-items: stretch;
+    margin: 0 auto;
+}
+
+.page-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-inline: calc(var(--paper-unprintable, 0px) + 1.25rem);
+}
+
+/* 有接續頁的段，左側要留位置放接續頁的頁碼（見 .page-frame-label.is-side） */
+.page-group:has(.page-frame-label.is-side) {
+    padding-left: calc(var(--paper-unprintable, 0px) + 5.5rem);
+}
+
+.page-board:not(.is-multi-page) .page-group {
+    padding-inline: 0;
+}
+
+.page-frame {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.page-frame-label {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    max-width: var(--paper-width, 12rem);
+    margin-bottom: .4rem;
+    font-size: .8rem;
+    line-height: 1.3;
+    color: var(--ts-gray-600, #666);
+    white-space: nowrap;
+}
+
+/* 接續頁的頁碼掛在紙張左外側、對齊接縫，不在兩頁之間插一行把連續紙撐開 */
+.page-frame-label.is-side {
+    position: absolute;
+    top: .25rem;
+    right: calc(100% + var(--paper-unprintable, 0px) + .5rem);
+    flex-direction: row-reverse;
+    max-width: 5rem;
+    margin: 0;
+}
+
+.page-frame-number {
+    flex: none;
+    min-width: 1.35rem;
+    padding: 0 .3rem;
+    border-radius: 999px;
+    background: var(--ts-gray-200, #e5e5e5);
+    color: var(--ts-gray-700, #444);
+    font-weight: 600;
+    text-align: center;
+}
+
+.page-frame-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 作用中頁面：頁碼實心＋紙張外框換成主色，一眼看出工具列新增的元素會進哪一頁 */
+.page-frame.is-active .page-frame-number {
+    background: var(--ts-primary-500, #3b82f6);
+    color: #fff;
+}
+
+.page-frame.is-active .page-frame-name {
+    color: var(--ts-gray-900, #111);
+    font-weight: 600;
+}
+
+.page-board.is-multi-page .page-frame.is-active > .paper-shadow::before {
+    border: 2px solid var(--ts-primary-500, #3b82f6);
+}
+
+.page-board:not(.is-multi-page) .page-frame-label,
+.page-board:not(.is-multi-page) .page-cut-edge {
+    display: none;
+}
+
+/* 非作用中頁面是唯讀縮圖，點一下切換過去 */
+.page-frame:not(.is-active) {
+    cursor: pointer;
+}
+
+.page-frame:not(.is-active) > .paper-shadow {
+    opacity: .72;
+    transition: opacity .15s;
+}
+
+.page-frame:not(.is-active):hover > .paper-shadow,
+.page-frame:not(.is-active):focus-visible > .paper-shadow {
+    opacity: 1;
+}
+
+.page-frame:focus-visible {
+    outline: none;
+}
+
+.page-frame:not(.is-active):focus-visible > .paper-shadow::before {
+    border: 2px solid var(--ts-primary-400, #7ba8f5);
+}
+
+.page-frame:not(.is-active) canvas {
+    pointer-events: none;
+}
+
+/* 同段接續：上下相鄰那一側不畫外框線、不留陰影縫，只留淡點線當接縫 */
+.page-frame.is-joined-above > .paper-shadow::before {
+    border-top-color: transparent;
+}
+
+.page-frame.is-joined-below > .paper-shadow::before {
+    border-bottom-color: transparent;
+    box-shadow: none;
+}
+
+.page-frame.is-joined-above > .paper-shadow::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: calc(-1 * var(--paper-unprintable, 0px));
+    right: calc(-1 * var(--paper-unprintable, 0px));
+    z-index: 2;
+    border-top: 1px dotted var(--printan-guide-color);
+    pointer-events: none;
+}
+
+/* 段尾切紙：紙張下緣外側的虛線＋剪刀 */
+.page-cut-edge {
+    position: relative;
+    width: calc(var(--paper-width, 0px) + 2 * var(--paper-unprintable, 0px) + 1rem);
+    height: 1.5rem;
+    margin-top: .35rem;
+    border-top: 2px dashed var(--printan-cut-color);
+}
+
+.page-cut-edge .ts-icon,
+.page-cut-divider .ts-icon {
+    color: var(--printan-cut-color);
+    font-size: .95rem;
+}
+
+.page-cut-edge .ts-icon {
+    position: absolute;
+    left: -1.1rem;
+    top: -.72rem;
+}
+
+/* 段與段之間：整條垂直虛線＋剪刀（剪刀黏在可見範圍頂端，長紙往下捲也看得到） */
+.page-cut-divider {
+    flex: none;
+    width: 0;
+    border-left: 2px dashed var(--printan-cut-color);
+}
+
+.page-cut-divider .ts-icon {
+    position: sticky;
+    top: .25rem;
+    display: block;
+    width: 1.2rem;
+    margin-left: calc(-.6rem - 1px);
+    text-align: center;
+    transform: rotate(90deg);
+}
+
+/* 窄螢幕的前後頁切換列（見 page-board.js updatePager）；桌面版有 2D 佈局，不需要 */
+.page-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    padding: .25rem .5rem;
+    border-bottom: 1px solid var(--ts-gray-300, #ddd);
+}
+
+.page-pager-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.page-pager-cut {
+    color: var(--printan-cut-color);
+}
+
+@media (width >= 768px) {
+    .page-pager {
+        display: none;
+    }
+}
+
+/* 窄螢幕（手機／直立平板）：2D 空間佈局在小螢幕上沒什麼意義，只顯示作用中那一頁，用上面的切換列換頁 */
+@media (width < 768px) {
+    .page-frame:not(.is-active),
+    .page-cut-divider,
+    .page-frame-label,
+    .page-cut-edge {
+        display: none;
+    }
+
+    .page-group,
+    .page-group:has(.page-frame-label.is-side) {
+        padding-inline: 0;
+    }
+
+    .page-board.is-multi-page .page-frame.is-active > .paper-shadow::before {
+        border: 1px solid light-dark(rgba(0, 0, 0, .35), rgba(255, 255, 255, .4));
+    }
+
+    .page-frame.is-joined-above > .paper-shadow::before,
+    .page-frame.is-joined-below > .paper-shadow::before {
+        border-color: light-dark(rgba(0, 0, 0, .35), rgba(255, 255, 255, .4));
+    }
+
+    .page-frame.is-joined-above > .paper-shadow::after {
+        display: none;
+    }
+}
+
+/* 工作區上方的提示列（ui-helpers.js showStageNotice）；可關閉的那種右上角放關閉鈕 */
+.stage-notice {
+    position: relative;
+}
+
+.stage-notice:has(.stage-notice-close) .content {
+    padding-right: 2rem;
+}
+
+.stage-notice-close {
+    position: absolute;
+    top: .35rem;
+    right: .35rem;
 }
 
 /* ---- 工作區下緣置中的浮動工具列（快速新增元素），比照 koilisu/apps/pitrace 的
@@ -1582,11 +1829,6 @@ body {
     }
 }
 
-/* 大綱沒有元素時才顯示空狀態（沿用 .pane-empty-state-static：圖示在上、一行說明在下、置中） */
-.outline-list:has(.outline-row) ~ .outline-empty {
-    display: none;
-}
-
 /* 空狀態統一：圖示 1.75rem 灰、說明一行灰字；「最近編輯」的空狀態由 JS 產生文字，用 ::before 補同款圖示 */
 .pane-empty-state-static .ts-icon.is-heading {
     color: var(--ts-gray-500, #888);
@@ -1774,7 +2016,9 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
 .is-kiosk #app-footer,
 .is-kiosk .editor-canvas-pane .canvas-floating-toolbar,
 .is-kiosk #paper-viewport .pane-card-header,
-.is-kiosk #safe-area-guide {
+.is-kiosk #safe-area-guide,
+.is-kiosk .page-pager,
+.is-kiosk .page-frame-label {
     display: none;
 }
 
