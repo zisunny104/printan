@@ -54,6 +54,22 @@ export function createPage({ name = "頁 1", elements = [], cutAfter = true } = 
     return { id: nextPageId(), name, elements, cutAfter };
 }
 
+// renderer.js renderTemplate() 是公開的單頁 render-core API（見該檔案開頭說明），外部整合方
+// 常見用法是直接 renderTemplate(loadProject(file).project)，一路讀 project.template.elements——
+// v3 改成 template.pages 之後這個欄位不會自動存在，會讓外部呼叫端整個壞掉。這裡用 getter／setter
+// 轉接到 pages[0]（第一頁），讓 template.elements 繼續能讀寫、且永遠跟 pages[0].elements 同步
+// （不是複製一份快照，複製會在 pages 之後被改動時跟著失真）。多頁專案的第二頁以後本來就不在
+// 這個相容欄位的涵蓋範圍內，外部整合方要處理多頁得改用 renderer.js 的 renderPages()。
+function attachElementsCompat(template) {
+    Object.defineProperty(template, "elements", {
+        get() { return template.pages[0]?.elements ?? []; },
+        set(elements) { if (template.pages[0]) template.pages[0].elements = elements; },
+        enumerable: false,
+        configurable: true,
+    });
+    return template;
+}
+
 export function createEmptyProject({ name = "未命名版型", printerProfileId, paperWidthId } = {}) {
     const now = new Date().toISOString();
     return {
@@ -63,7 +79,7 @@ export function createEmptyProject({ name = "未命名版型", printerProfileId,
         printerProfile: { id: printerProfileId },
         paper: { widthId: paperWidthId },
         variables: [],
-        template: { pages: [createPage({ name: "頁 1" })] },
+        template: attachElementsCompat({ pages: [createPage({ name: "頁 1" })] }),
         assets: [],
     };
 }
@@ -126,12 +142,12 @@ function migrate(project) {
 // 而不是每次都生一個新 id——這樣「.ptan 存檔再打開」在單頁專案上也是逐位元組一致的來回。
 function migrateTemplate(template) {
     const t = template && typeof template === "object" && !Array.isArray(template) ? template : {};
-    if (Array.isArray(t.pages)) return { pages: migratePages(t.pages) };
+    if (Array.isArray(t.pages)) return attachElementsCompat({ pages: migratePages(t.pages) });
     const elements = migrateElements(Array.isArray(t.elements) ? t.elements : []);
     const name = typeof t.pageName === "string" && t.pageName ? t.pageName : "頁 1";
     const page = createPage({ name, elements });
     if (typeof t.pageId === "string" && t.pageId) page.id = t.pageId;
-    return { pages: [page] };
+    return attachElementsCompat({ pages: [page] });
 }
 
 // 壞檔防護：不是物件的頁面丟掉，缺 id／name／elements／cutAfter 一律補預設值；
