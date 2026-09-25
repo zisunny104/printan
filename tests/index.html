@@ -490,6 +490,29 @@ test("邊界：直書＋長文與圖文塊（圖比字高很多）", async () =>
     sane(r);
     assert(r.canvas.height >= 3000 * (384 * 0.4) / 50 * 0.9, `圖文塊應被高圖撐開 h=${r.canvas.height}`);
 });
+test("直書：多段落（多欄）總寬度超過框寬時標記 clipped，並被 ctx.clip() 真的裁掉", async () => {
+    // 每個換行字元分隔的段落各佔一欄，欄寬約等於字級 * lineHeight；用很多短段落把總寬度撐爆
+    const manyParagraphs = Array.from({ length: 20 }, (_, i) => `第${i}段`).join("\n");
+    const r = await bRender([bt(manyParagraphs, { writingMode: "vertical", fontSize: 24 })], 100);
+    sane(r);
+    const item = r.items.find((it) => it.el.type === "text");
+    assert(item.vertical.widthClipped, "20 欄擠在 100 點寬應標記 widthClipped");
+    assert(item.clipped, "widthClipped 應反映到通用的 clipped 旗標（編輯疊層裁切提示）");
+});
+test("直書：欄寬夠時不標記 clipped", async () => {
+    const r = await bRender([bt("單一段落", { writingMode: "vertical", fontSize: 24 })], 384);
+    const item = r.items.find((it) => it.el.type === "text");
+    assert(!item.vertical.widthClipped, "單欄且框寬夠大不應標記 widthClipped");
+    assert(!item.clipped);
+});
+test("直書：不同紙寬（58mm=420 點／80mm=576 點）都能正常渲染，欄數少時不誤判 clipped", async () => {
+    for (const w of [420, 576]) {
+        const r = await bRender([bt("直書測試文字", { writingMode: "vertical", fontSize: 24 })], w);
+        sane(r);
+        const item = r.items.find((it) => it.el.type === "text");
+        assert(!item.vertical.widthClipped, `寬度 ${w} 單欄不應 clipped`);
+    }
+});
 test("邊界：內容超過 65535 點高 → 截斷並標記，canvas 不會變空白", async () => {
     const r = await bRender([bt("直書很長的文字".repeat(300), { writingMode: "vertical" })]);
     eq(r.canvas.height, MAX_CANVAS_HEIGHT);
