@@ -42,6 +42,16 @@ export function addPage() {
     state.insertionTarget = null;
     renderPageList();
     onModelChange();
+    // 比照 Figma 新增頁面：名稱直接進入可打字狀態，不用使用者自己再點一次輸入框去改名
+    // （預設名稱「頁 N」多半就是要馬上蓋掉的暫定值）。
+    focusPageNameInput(page.id);
+}
+
+function focusPageNameInput(pageId) {
+    const input = els["page-list"]?.querySelector(`.page-row[data-page-id="${pageId}"] .page-row-name`);
+    if (!input) return;
+    input.focus();
+    input.select();
 }
 
 /** 刪掉指定頁面；至少留一頁，刪最後一頁時直接擋下（畫面上按鈕本來就會停用，這裡是保險）。 */
@@ -162,6 +172,7 @@ export function renderPageList() {
 function buildPageRow(page, index, total) {
     const row = document.createElement("div");
     row.className = "page-row" + (index === state.currentPageIndex ? " is-selected" : "");
+    row.dataset.pageId = page.id;
     row.setAttribute("role", "option");
     row.setAttribute("aria-selected", String(index === state.currentPageIndex));
 
