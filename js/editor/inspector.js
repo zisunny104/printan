@@ -299,47 +299,79 @@ const TEXT_STYLE_PRESET_INFO = "標籤對應 Markdown 的標題階層（H1-H5）
 // 這份清單，任一欄位被手動改動都代表元素不再是單純套用預設的樣子，要清掉 stylePreset 標記。
 const PRESET_BACKED_FIELDS = ["fontSize", "bold", "lineHeight", "letterSpacing"];
 
-function textStylePresetPicker(current, onChange) {
-    const group = document.createElement("div");
-    group.className = "ts-wrap is-compact has-top-spaced-small style-preset-group";
-    group.setAttribute("role", "radiogroup");
-    group.setAttribute("aria-label", "文字樣式");
-    for (const key of Object.keys(TEXT_STYLE_PRESETS)) {
-        const preset = TEXT_STYLE_PRESETS[key];
-        const active = current === key;
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "ts-button is-outlined style-preset-btn";
-        btn.classList.toggle("is-active", active);
-        btn.setAttribute("role", "radio");
-        btn.setAttribute("aria-checked", String(active));
-        btn.dataset.tooltip = key;
-
-        const sample = document.createElement("span");
-        sample.className = "style-preset-sample";
-        sample.style.fontSize = `${Math.round(preset.fontSizePt * 1.3)}px`; // pt 數字偏小，*1.3 讓縮圖在按鈕裡看得出對比
-        sample.style.fontWeight = preset.bold ? "700" : "400";
-        sample.textContent = "Aa";
-
-        const label = document.createElement("span");
-        label.className = "ts-text is-description style-preset-label";
-        label.textContent = key;
-
-        btn.append(sample, label);
-        btn.addEventListener("click", () => onChange(active ? null : key)); // 再點一次目前已選的＝改回自訂
-        group.appendChild(btn);
-    }
-    return group;
+// 每個選項左邊放縮小後的實際樣子（字級比例／粗細）、右邊放階層標籤（H1-H5／P），
+// 觸發鈕與選單裡的每一列共用同一份內容，比照 Word／Docs 那種段落樣式下拉選單。
+function styleOptionRow(key) {
+    const row = document.createDocumentFragment();
+    const preset = TEXT_STYLE_PRESETS[key];
+    const sample = document.createElement("span");
+    sample.className = "style-preset-sample";
+    sample.style.fontSize = `${Math.round(preset.fontSizePt * 1.3)}px`; // pt 數字偏小，*1.3 讓縮圖看得出對比
+    sample.style.fontWeight = preset.bold ? "700" : "400";
+    sample.textContent = "Aa";
+    const label = document.createElement("span");
+    label.className = "ts-text is-description style-preset-label";
+    label.textContent = key;
+    row.append(sample, label);
+    return row;
 }
 
-// 樣式選單按鈕的 active 狀態被清掉標記時要同步，但不能靠整個重繪 inspector 來做——
+let stylePresetDropdownSeq = 0;
+
+function textStylePresetPicker(current, onChange) {
+    const wrap = document.createElement("div");
+    wrap.className = "dropdown-select style-preset-dropdown has-top-spaced-small";
+    const menuId = `style-preset-dropdown-${++stylePresetDropdownSeq}`;
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "ts-button is-small is-outlined is-fluid dropdown-select-trigger";
+    trigger.dataset.dropdown = menuId;
+    trigger.setAttribute("aria-haspopup", "listbox");
+    const triggerContent = document.createElement("span");
+    triggerContent.className = "style-preset-trigger-content";
+    const caret = document.createElement("span");
+    caret.className = "ts-icon is-chevron-down-icon dropdown-select-caret";
+    caret.setAttribute("aria-hidden", "true");
+    trigger.append(triggerContent, caret);
+
+    const menu = document.createElement("div");
+    menu.id = menuId;
+    menu.className = "ts-dropdown dropdown-select-menu style-preset-dropdown-menu";
+    menu.setAttribute("role", "listbox");
+    menu.setAttribute("aria-label", "文字樣式");
+
+    const items = [];
+    for (const key of Object.keys(TEXT_STYLE_PRESETS)) {
+        const item = document.createElement("a");
+        item.className = "item style-preset-item";
+        item.dataset.value = key;
+        item.setAttribute("role", "option");
+        item.appendChild(styleOptionRow(key));
+        item.addEventListener("click", () => setValue(item.classList.contains("is-active") ? null : key, true)); // 再點一次目前已選的＝改回自訂
+        menu.appendChild(item);
+        items.push(item);
+    }
+
+    function setValue(value, fire) {
+        triggerContent.innerHTML = "";
+        const match = items.find((it) => it.dataset.value === value);
+        triggerContent.appendChild(match ? styleOptionRow(value) : document.createTextNode("自訂"));
+        items.forEach((it) => it.classList.toggle("is-active", it === match));
+        if (fire) onChange(value);
+    }
+    setValue(current, false);
+
+    wrap.append(trigger, menu);
+    wrap.setValue = setValue; // 供 clearPresetPickerActiveState 在欄位手動編輯後同步回「自訂」
+    return wrap;
+}
+
+// 手動編輯展開後的欄位時要把樣式選單同步回「自訂」，但不能靠整個重繪 inspector 來做——
 // 那會摧毀使用者正在輸入、持有焦點的欄位（例如打第二個數字時整個 input 被換成新節點，
-// 焦點跟著消失，後續按鍵變成打到別的地方）。直接操作既有 DOM 節點，欄位輸入不受影響。
+// 焦點跟著消失，後續按鍵變成打到別的地方）。直接呼叫既有節點的 setValue，欄位輸入不受影響。
 function clearPresetPickerActiveState(group) {
-    group.querySelectorAll(".style-preset-btn").forEach((btn) => {
-        btn.classList.remove("is-active");
-        btn.setAttribute("aria-checked", "false");
-    });
+    group.setValue?.(null, false);
 }
 
 // fontSize／bold／lineHeight／letterSpacing 是樣式預設展開後的具體欄位（見 document-model.js
