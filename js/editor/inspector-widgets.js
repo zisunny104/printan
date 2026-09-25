@@ -76,8 +76,9 @@ export function iconToggleButton(icon, label, active, onClick) {
 }
 
 // 欄位標籤是視覺上的 <label>、沒有 for/id 連到輸入元件，螢幕閱讀器讀不到名稱；直接把標籤文字掛成 aria-label。
+const CONTROL_SELECTOR = "input, select, textarea, .dropdown-select-trigger";
 function nameControl(container, text) {
-    const control = container.matches?.("input, select, textarea") ? container : container.querySelector?.("input, select, textarea");
+    const control = container.matches?.(CONTROL_SELECTOR) ? container : container.querySelector?.(CONTROL_SELECTOR);
     if (control && !control.hasAttribute("aria-label")) control.setAttribute("aria-label", text);
 }
 
@@ -134,20 +135,71 @@ export function textInput(value, onInput, type = "text", placeholder = "") {
     return wrap;
 }
 
-export function selectInput(options, value, onChange) {
+// 下拉選單：跳出 Tocas 自訂樣式清單（同 open-project-dropdown／export-dropdown／row-ratio-dropdown
+// 那組 data-dropdown 觸發機制），不用原生 <select>（開啟時是瀏覽器原生清單方框，樣式蓋不掉）。
+// groups：[[群組標題或 null, [[value, label], ...]], ...]，標題為 null 時不畫 .header 分隔。
+let dropdownSeq = 0;
+export function dropdownField(groups, value, onChange, { disabled = false, mixedLabel } = {}) {
     const wrap = document.createElement("div");
-    wrap.className = "ts-select is-small is-fluid";
-    const select = document.createElement("select");
-    for (const [v, label] of options) {
-        const opt = document.createElement("option");
-        opt.value = v;
-        opt.textContent = label;
-        if (v === value) opt.selected = true;
-        select.appendChild(opt);
+    wrap.className = "dropdown-select";
+    const menuId = `dropdown-select-${++dropdownSeq}`;
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "ts-button is-small is-outlined is-fluid dropdown-select-trigger";
+    trigger.dataset.dropdown = menuId;
+    trigger.disabled = disabled;
+    trigger.setAttribute("aria-haspopup", "listbox");
+
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "dropdown-select-label";
+    trigger.append(labelSpan, iconSpan("chevron-down", "dropdown-select-caret"));
+
+    const menu = document.createElement("div");
+    menu.id = menuId;
+    menu.className = "ts-dropdown dropdown-select-menu";
+    menu.setAttribute("role", "listbox");
+
+    const items = [];
+    const addItem = (parent, v, text) => {
+        const item = document.createElement("a");
+        item.className = "item";
+        item.textContent = text;
+        item.dataset.value = v;
+        item.setAttribute("role", "option");
+        item.addEventListener("click", () => setValue(v, true));
+        parent.appendChild(item);
+        items.push(item);
+    };
+    const buildGroups = (groupList) => {
+        menu.innerHTML = "";
+        items.length = 0;
+        for (const [groupLabel, options] of groupList) {
+            if (groupLabel) {
+                const header = document.createElement("div");
+                header.className = "header";
+                header.textContent = groupLabel;
+                menu.appendChild(header);
+            }
+            for (const [v, text] of options) addItem(menu, v, text);
+        }
+    };
+    buildGroups(groups);
+
+    function setValue(v, fire) {
+        const match = items.find((it) => it.dataset.value === v);
+        labelSpan.textContent = match ? match.textContent : (mixedLabel ?? "");
+        items.forEach((it) => it.classList.toggle("is-active", it === match));
+        if (fire) onChange(v);
     }
-    select.addEventListener("change", () => onChange(select.value));
-    wrap.appendChild(select);
-    return wrap;
+    setValue(value, false);
+
+    wrap.append(trigger, menu);
+    return { el: wrap, setValue, setGroups: (g) => buildGroups(g), setDisabled: (d) => { trigger.disabled = d; } };
+}
+
+export function selectInput(options, value, onChange) {
+    return dropdownField([[null, options]], value, onChange).el;
 }
 
 export function sliderField(labelText, value, min, max, onInput) {

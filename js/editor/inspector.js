@@ -14,7 +14,7 @@ import {
     primaryFamilyName,
 } from "../core/fonts.js";
 import {
-    alignGroup, IMAGE_FIT_OPTIONS, IMAGE_SIDE_OPTIONS, checkboxInput, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, sectionDivider,
+    alignGroup, IMAGE_FIT_OPTIONS, IMAGE_SIDE_OPTIONS, checkboxInput, dropdownField, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, sectionDivider,
     sectionHeader, selectInput, sliderField, textInput,
 } from "./inspector-widgets.js";
 import { getEffectiveProfile, inlineEditor, onModelChange, textSel } from "./editor.js";
@@ -142,37 +142,22 @@ const FONT_CHOICES = [
  * 授權過本機字體就再接一組「本機字體」；目前值不在清單裡（例如 .ptan 來自別台電腦的本機字體）就補一項並標明這台電腦有沒有。
  */
 function buildFontSelect({ value, leading, disabled = false, onChange }) {
-    const wrap = document.createElement("div");
-    wrap.className = "ts-select is-small is-fluid";
-    const select = document.createElement("select");
-    select.disabled = disabled;
-    const addOption = (parent, v, label) => {
-        const opt = document.createElement("option");
-        opt.value = v;
-        opt.textContent = label;
-        parent.appendChild(opt);
-    };
-    for (const [v, label] of leading) addOption(select, v, label);
-    for (const [v, label] of FONT_CHOICES) {
-        addOption(select, v, findWebFont(v) && isWebFontFailed(findWebFont(v).id) ? `${label}（載入失敗，暫用系統字體）` : label);
-    }
+    const fontChoices = FONT_CHOICES.map(([v, label]) => [
+        v, findWebFont(v) && isWebFontFailed(findWebFont(v).id) ? `${label}（載入失敗，暫用系統字體）` : label,
+    ]);
+    const groups = [[null, [...leading, ...fontChoices]]];
 
     const localFonts = getLocalFontFamilies();
-    if (localFonts.length) {
-        const group = document.createElement("optgroup");
-        group.label = "本機字體";
-        for (const family of localFonts) addOption(group, localFontStack(family), family);
-        select.appendChild(group);
+    if (localFonts.length) groups.push(["本機字體", localFonts.map((family) => [localFontStack(family), family])]);
+
+    const known = new Set(groups.flatMap(([, options]) => options.map(([v]) => v)));
+    if (value && value !== MIXED && !known.has(value)) {
+        const name = primaryFamilyName(value);
+        groups.push([null, [[value, isFontInstalled(name) ? `${name}（本機字體）` : `${name}（此電腦沒有）`]]]);
     }
 
-    if (value && value !== MIXED && ![...select.options].some((o) => o.value === value)) {
-        const name = primaryFamilyName(value);
-        addOption(select, value, isFontInstalled(name) ? `${name}（本機字體）` : `${name}（此電腦沒有）`);
-    }
-    select.value = value === MIXED ? "__mixed__" : (value || "");
-    select.addEventListener("change", () => onChange(select.value || null));
-    wrap.appendChild(select);
-    return wrap;
+    const { el } = dropdownField(groups, value === MIXED ? "__mixed__" : (value || ""), (v) => onChange(v || null), { disabled });
+    return el;
 }
 
 function fontFamilySelect(value, onChange, inheritLabel) {

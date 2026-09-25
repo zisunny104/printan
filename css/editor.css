@@ -874,6 +874,30 @@ body {
     cursor: pointer;
 }
 
+/* ---- 檢視器欄位裡的下拉選單（取代原生 <select>，見 inspector-widgets.js dropdownField）：
+   觸發鈕與開啟的清單走 Tocas 標準 ts-button／ts-dropdown 外觀，這裡只處理版面：鈕內文字／箭頭
+   左右分散、清單寬度貼齊觸發鈕、字體清單可能很長要能捲動。 ---- */
+.dropdown-select-trigger {
+    justify-content: space-between;
+}
+
+.dropdown-select-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.dropdown-select-caret {
+    flex: none;
+}
+
+.dropdown-select-menu {
+    min-width: 100%;
+    max-height: 16rem;
+    overflow-y: auto;
+}
+
 /* ---- 編輯模式畫布疊層：每個元素的虛線外框、拖曳排序、拖曳縮放把手 ---- */
 
 .edit-overlay {
