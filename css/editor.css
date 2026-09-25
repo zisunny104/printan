@@ -2136,14 +2136,11 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
     align-items: center;
     justify-content: space-between;
     gap: .5rem;
+    padding: .65rem 1rem;
 }
 
 #export-embed-fonts-row .info-icon {
     flex: none;
-}
-
-#export-embed-fonts-row {
-    padding: .65rem 1rem;
 }
 
 /* 未勾選的勾選框：Tocas 預設 #eee 底＋同色框，白底上幾乎看不見（對比 <1.2:1）；改深灰外框，達 3:1 以上 */
