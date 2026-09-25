@@ -98,7 +98,7 @@ export function renderInspector() {
 const MULTI_FIELDS = [
     { key: "fontSize", label: "字級 (pt)", kind: "number", types: ["text"], runField: true },
     { key: "bold", label: "粗體", kind: "bool", types: ["text"], runField: true },
-    { key: "inverse", label: "整行反相", kind: "bool", types: ["text"] },
+    { key: "inverse", label: "整行反白（黑底白字）", kind: "bool", types: ["text"] },
     { key: "lineHeight", label: "行高", kind: "number", types: ["text"] },
     { key: "letterSpacing", label: "字距", kind: "number", types: ["text"] },
     { key: "align", label: "對齊", kind: "align", types: ["text", "image", "barcode"] },
@@ -478,7 +478,7 @@ function buildTextInspector(panel, el) {
     ]));
     panel.appendChild(field("對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
     panel.appendChild(field(null, checkboxInput(el.bold, (v) => applyParagraphField(el, presetGroup, () => { el.bold = v; }), "預設粗體")));
-    panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange(); }, "整行反相")));
+    panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange(); }, "整行反白（黑底白字）")));
 
     panel.appendChild(foldSection(`${el.type}.inkFill`, "文字顏色", (body) => {
         const inkFill = resolveFill(el.inkFill);
