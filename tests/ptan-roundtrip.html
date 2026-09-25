@@ -16,9 +16,14 @@ pre { margin: 0 0 0 24px; white-space: pre-wrap; }
 <ul id="list"></ul>
 <script type="module">
 // 只測純函式與檔案讀寫，跟 tests/index.html 同一套跑法（開啟頁面即執行，標題顯示 PASS／FAIL）。
-import { createGroupElement, createTextElement, walkElements } from "../js/core/document-model.js";
+import {
+    applyTextStylePreset, createGroupElement, createTextElement, TEXT_STYLE_PRESETS, walkElements,
+} from "../js/core/document-model.js";
 import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
 import { downloadPtan, readPtanFile } from "../js/core/ptan-file.js";
+import { ptToDots } from "../js/core/units.js";
+
+const TEST_DPI = 203; // epson-tm-t82ii 預設 profile 的 dpi.x，樣式預設測試用來把 pt 換算成 dots
 
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
@@ -204,6 +209,73 @@ test("多欄 gap：非 0 才寫進檔案、來回一致；0 或缺欄位不寫�
     eq(pageEls(back.project).map((r) => r.gap), [8, undefined, undefined, 48]);
     eq(serializeProject(back.project), text);
 });
+// ---- 文字樣式預設（stylePreset） ----
+test("applyTextStylePreset：套用會展開成具體欄位並記錄 stylePreset", () => {
+    const el = createTextElement({ fontSize: 999, bold: false, lineHeight: 9, letterSpacing: 9 });
+    applyTextStylePreset(el, "H1", TEST_DPI);
+    eq(el.stylePreset, "H1");
+    eq(el.fontSize, ptToDots(TEXT_STYLE_PRESETS.H1.fontSizePt, TEST_DPI), "fontSize");
+    eq(el.bold, TEXT_STYLE_PRESETS.H1.bold, "bold");
+    eq(el.lineHeight, TEXT_STYLE_PRESETS.H1.lineHeight, "lineHeight");
+    eq(el.letterSpacing, TEXT_STYLE_PRESETS.H1.letterSpacing, "letterSpacing");
+});
+test("applyTextStylePreset：傳 null 只清掉標記，不動其餘欄位（使用者可能想保留目前數值繼續手動調）", () => {
+    const el = createTextElement();
+    applyTextStylePreset(el, "H5", TEST_DPI);
+    el.fontSize = 77; // 模擬套用後手動改過
+    applyTextStylePreset(el, null, TEST_DPI);
+    assert(!("stylePreset" in el), "stylePreset 應該被清掉");
+    eq(el.fontSize, 77, "手動改過的值不該被清掉標記這個動作動到");
+});
+test("applyTextStylePreset：不認得的 preset 名稱視同 null（改回自訂）", () => {
+    const el = createTextElement();
+    applyTextStylePreset(el, "H1", TEST_DPI);
+    applyTextStylePreset(el, "bogus", TEST_DPI);
+    assert(!("stylePreset" in el));
+});
+test("applyTextStylePreset：preset 拒絕繼承屬性名稱（constructor／toString 這類），視同自訂", () => {
+    const el = createTextElement({ fontSize: 55 });
+    applyTextStylePreset(el, "constructor", TEST_DPI);
+    assert(!("stylePreset" in el), "constructor 不是合法 preset key，不該被當成套用成功");
+    eq(el.fontSize, 55, "沒有套用任何預設，原本的值不該被動到");
+});
+
+test("stylePreset：套用預設的文字元素存檔再讀回，preset 與展開後的欄位都不變", () => {
+    const p = createEmptyProject({ name: "樣式", printerProfileId: "epson-tm-t82ii", paperWidthId: "80mm" });
+    const el = createTextElement({ id: "t1", runs: [{ text: "標題文字" }] });
+    applyTextStylePreset(el, "H1", TEST_DPI);
+    p.template.pages[0].elements = [el];
+    const back = loadProject(serializeProject(p));
+    assert(back.ok, back.error);
+    const got = pageEls(back.project)[0];
+    eq(got.stylePreset, "H1");
+    eq(got.fontSize, ptToDots(TEXT_STYLE_PRESETS.H1.fontSizePt, TEST_DPI));
+    eq(got.bold, TEXT_STYLE_PRESETS.H1.bold);
+});
+test("stylePreset：沒套用預設（自訂）的文字元素存檔不會寫出 stylePreset 欄位", () => {
+    const p = createEmptyProject({ name: "自訂", printerProfileId: "epson-tm-t82ii", paperWidthId: "80mm" });
+    p.template.pages[0].elements = [createTextElement({ id: "t1", runs: [{ text: "自訂文字" }] })];
+    const text = serializeProject(p);
+    assert(!("stylePreset" in JSON.parse(text).template.elements[0]), "自訂狀態不該寫出 stylePreset 欄位");
+});
+test("舊檔（沒有 stylePreset 欄位）載入後文字元素視為自訂，不需要 migration、不會出錯", () => {
+    const oldFile = clone(V1_FILE); // V1_FILE 的 text 元素本來就沒有 stylePreset 欄位
+    const out = loadProject(oldFile);
+    assert(out.ok, out.error);
+    const t1 = pageEls(out.project)[0];
+    assert(!("stylePreset" in t1), "舊檔沒有這個欄位，載入後也不該自己冒出來");
+});
+test("壞檔：stylePreset 是不認得的值時，載入後整個欄位被拿掉，退回自訂，不影響其餘欄位", () => {
+    const raw = { format: "ptan", version: 2, template: { elements: [
+        { id: "t1", type: "text", runs: [{ text: "壞掉的樣式" }], stylePreset: "not-a-real-preset", fontSize: 40 },
+    ] } };
+    const out = loadProject(raw);
+    assert(out.ok, out.error);
+    const t1 = pageEls(out.project)[0];
+    assert(!("stylePreset" in t1), "不認得的值應該被拿掉");
+    eq(t1.fontSize, 40, "其餘欄位不受影響");
+});
+
 let failed = 0;
 for (const c of cases) {
     const li = document.createElement("li");

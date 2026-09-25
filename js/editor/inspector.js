@@ -3,9 +3,9 @@
 import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
 import {
     DEFAULT_ROW_GAP, MIXED, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow,
-    applyStyleToRange, getRangeStyle, getTextContent, replaceFullText,
+    applyStyleToRange, applyTextStylePreset, getRangeStyle, getTextContent, replaceFullText, TEXT_STYLE_PRESETS,
 } from "../core/document-model.js";
-import { MAX_ROW_GAP, normalizeRowGap } from "../core/units.js";
+import { MAX_ROW_GAP, normalizeRowGap, dotsToPt as dotsToPtRaw, ptToDots as ptToDotsRaw } from "../core/units.js";
 import { WEB_FONTS, findWebFont, isWebFontFailed } from "../core/web-fonts.js";
 import { applyFieldToElements, findElementById, setRowRatio, splitRowColumn, MAX_ROW_COLUMNS } from "../core/element-tree.js";
 import { createInfoIcon } from "./ui-helpers.js";
@@ -22,14 +22,13 @@ import { deleteElement, deleteElements, duplicateElement, duplicateElements, ung
 import { currentElements, els, rt, state } from "./context.js";
 
 // 字級輸入介面單位：內部資料模型（fontSize/textSize）維持 dots 不動——渲染公式（renderer.js 一堆
-// style.fontSize 相關換算）與 .ptan 舊檔都假設 dots，目前也只有單一印表機 profile／固定 DPI，沒有多
-// DPI 情境要處理。只在「輸入框顯示」這個邊界做 pt↔dots 換算，兩個方向都四捨五入到整數，這樣使用者
-// 打一個 pt 整數、存回 dots、再讀出顯示，看到的還是同一個數字，不會有「明明打 12 怎麼變 11.9」的觀感問題。
+// style.fontSize 相關換算）與 .ptan 舊檔都假設 dots。只在「輸入框顯示」這個邊界做 pt↔dots 換算，
+// 換算公式本身在 units.js（樣式預設展開時也是同一份公式，見 document-model.js applyTextStylePreset）。
 function dotsToPt(dots) {
-    return Math.round((dots * 72) / getEffectiveProfile().dpi.x);
+    return dotsToPtRaw(dots, getEffectiveProfile().dpi.x);
 }
 function ptToDots(pt) {
-    return Math.round((pt * getEffectiveProfile().dpi.x) / 72);
+    return ptToDotsRaw(pt, getEffectiveProfile().dpi.x);
 }
 
 // 選取對象改變時通知訂閱者（小螢幕抽屜據此打開元素設定面板）；同一個元素重繪不會重發
@@ -86,6 +85,9 @@ function buildMultiInspector(panel, ids) {
     panel.appendChild(sectionHeader("shapes", `已選 ${selected.length} 個元素`));
     const apply = (spec, value) => {
         applyFieldToElements(selected, spec.key, value, { runField: spec.runField }); // 片段自己的覆寫要一併清掉才看得到效果
+        if (PRESET_BACKED_FIELDS.includes(spec.key)) {
+            for (const el of selected) delete el.stylePreset; // 跟單一元素路徑一致：改了展開欄位就不再是套用預設的樣子
+        }
         onModelChange({ skipInspector: true });
     };
     let shown = 0;
@@ -265,7 +267,82 @@ const TEXT_OVERFLOW_OPTIONS = [
     ["clip", "裁切", textSvgIcon('<rect x="2" y="1.5" width="12" height="6" rx="1" fill="currentColor" fill-opacity=".15"/><path d="M2 7.5h12" stroke-dasharray="1.5 1.5"/>')],
 ];
 
+// 樣式預設選單：每個選項直接秀縮小後的實際樣子（字級比例／粗細），不用純文字標籤，
+// 這樣不用先套用才知道「H2」長怎樣。標籤直接用 H1-H5／P（見 document-model.js TEXT_STYLE_PRESETS
+// 開頭說明），不轉中文說法，方便之後對照 Markdown 的標題階層。
+const TEXT_STYLE_PRESET_INFO = "標籤對應 Markdown 的標題階層（H1-H5）與本文（P），套用後會展開成" +
+    "字級／粗體／行高等具體欄位，之後仍可個別手動調整；手動調整這些欄位後會自動改回「自訂」，" +
+    "不會被預設值蓋回去。";
+// 樣式預設展開後的具體欄位（見 document-model.js TEXT_STYLE_PRESETS）：單一元素與多選共用
+// 這份清單，任一欄位被手動改動都代表元素不再是單純套用預設的樣子，要清掉 stylePreset 標記。
+const PRESET_BACKED_FIELDS = ["fontSize", "bold", "lineHeight", "letterSpacing"];
+
+function textStylePresetPicker(current, onChange) {
+    const group = document.createElement("div");
+    group.className = "ts-wrap is-compact has-top-spaced-small style-preset-group";
+    group.setAttribute("role", "radiogroup");
+    group.setAttribute("aria-label", "文字樣式");
+    for (const key of Object.keys(TEXT_STYLE_PRESETS)) {
+        const preset = TEXT_STYLE_PRESETS[key];
+        const active = current === key;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ts-button is-outlined style-preset-btn";
+        btn.classList.toggle("is-active", active);
+        btn.setAttribute("role", "radio");
+        btn.setAttribute("aria-checked", String(active));
+        btn.dataset.tooltip = key;
+
+        const sample = document.createElement("span");
+        sample.className = "style-preset-sample";
+        sample.style.fontSize = `${Math.round(preset.fontSizePt * 1.3)}px`; // pt 數字偏小，*1.3 讓縮圖在按鈕裡看得出對比
+        sample.style.fontWeight = preset.bold ? "700" : "400";
+        sample.textContent = "Aa";
+
+        const label = document.createElement("span");
+        label.className = "ts-text is-description style-preset-label";
+        label.textContent = key;
+
+        btn.append(sample, label);
+        btn.addEventListener("click", () => onChange(active ? null : key)); // 再點一次目前已選的＝改回自訂
+        group.appendChild(btn);
+    }
+    return group;
+}
+
+// 樣式選單按鈕的 active 狀態被清掉標記時要同步，但不能靠整個重繪 inspector 來做——
+// 那會摧毀使用者正在輸入、持有焦點的欄位（例如打第二個數字時整個 input 被換成新節點，
+// 焦點跟著消失，後續按鍵變成打到別的地方）。直接操作既有 DOM 節點，欄位輸入不受影響。
+function clearPresetPickerActiveState(group) {
+    group.querySelectorAll(".style-preset-btn").forEach((btn) => {
+        btn.classList.remove("is-active");
+        btn.setAttribute("aria-checked", "false");
+    });
+}
+
+// fontSize／bold／lineHeight／letterSpacing 是樣式預設展開後的具體欄位（見 document-model.js
+// TEXT_STYLE_PRESETS）：使用者手動改了其中任一個，代表這個元素已經不是單純套用預設的樣子，
+// 把標記清掉退回「自訂」，不動其餘欄位、不跳提示，維持操作單純；一律沿用 skipInspector
+// 保留輸入欄位的焦點，樣式選單改用 clearPresetPickerActiveState 直接同步視覺狀態。
+function applyParagraphField(el, presetGroup, mutate) {
+    const hadPreset = !!el.stylePreset;
+    mutate();
+    if (hadPreset) {
+        delete el.stylePreset;
+        clearPresetPickerActiveState(presetGroup);
+    }
+    onModelChange({ skipInspector: true });
+}
+
 function buildTextInspector(panel, el) {
+    panel.appendChild(sectionHeader("font", "文字樣式", TEXT_STYLE_PRESET_INFO));
+    const presetGroup = textStylePresetPicker(el.stylePreset || null, (preset) => {
+        applyTextStylePreset(el, preset, getEffectiveProfile().dpi.x);
+        onModelChange(); // 展開後的字級／粗體／行高／字距欄位在下面「段落樣式」要一併重繪，不能只 skipInspector
+    });
+    panel.appendChild(presetGroup);
+    panel.appendChild(sectionDivider());
+
     panel.appendChild(sectionHeader("align-left", "內容", VARIABLE_INFO));
 
     const sel = textSel;
@@ -343,16 +420,16 @@ function buildTextInspector(panel, el) {
     panel.appendChild(sectionHeader("font", "段落樣式"));
     panel.appendChild(fieldRow([
         ["預設字體", fontFamilySelect(el.fontFamily, (v) => { el.fontFamily = v; onModelChange({ skipInspector: true }); }, "跟隨全域預設")],
-        ["預設字級 (pt)", textInput(dotsToPt(el.fontSize), (v) => { el.fontSize = ptToDots(v); onModelChange({ skipInspector: true }); }, "number")],
+        ["預設字級 (pt)", textInput(dotsToPt(el.fontSize), (v) => applyParagraphField(el, presetGroup, () => { el.fontSize = ptToDots(v); }), "number")],
     ]));
     panel.appendChild(field("對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
-    panel.appendChild(field(null, checkboxInput(el.bold, (v) => { el.bold = v; onModelChange({ skipInspector: true }); }, "預設粗體")));
+    panel.appendChild(field(null, checkboxInput(el.bold, (v) => applyParagraphField(el, presetGroup, () => { el.bold = v; }), "預設粗體")));
     panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange({ skipInspector: true }); }, "整行反相")));
 
     panel.appendChild(foldSection(`${el.type}.layout`, "排版", (body) => {
         body.appendChild(fieldRow([
-            ["行高倍數", textInput(el.lineHeight, (v) => { el.lineHeight = v; onModelChange({ skipInspector: true }); }, "number")],
-            ["字距 (dot)", textInput(el.letterSpacing, (v) => { el.letterSpacing = v; onModelChange({ skipInspector: true }); }, "number")],
+            ["行高倍數", textInput(el.lineHeight, (v) => applyParagraphField(el, presetGroup, () => { el.lineHeight = v; }), "number")],
+            ["字距 (dot)", textInput(el.letterSpacing, (v) => applyParagraphField(el, presetGroup, () => { el.letterSpacing = v; }), "number")],
         ]));
         body.appendChild(field("最多行數", textInput(el.maxLines || "", (v) => { el.maxLines = v; onModelChange({ skipInspector: true }); }, "number", "不限")));
         body.appendChild(field(null, checkboxInput(el.wrap, (v) => { el.wrap = v; onModelChange({ skipInspector: true }); }, "自動換行")));

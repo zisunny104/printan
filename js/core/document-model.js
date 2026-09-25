@@ -2,6 +2,8 @@
 // 尺寸單位一律是「點（dot）」，對應目前 Printer Profile 的 DPI（見 units.js）。
 // 欄寬（row 的 ratio）是相對比例，不是絕對點數，才能讓紙寬切換不用重建專案。
 
+import { ptToDots } from "./units.js";
+
 let idCounter = 0;
 function nextId(prefix) {
     idCounter += 1;
@@ -46,16 +48,62 @@ export function createTextElement(overrides = {}) {
     };
 }
 
+// 語意化文字樣式：套用時一次展開成底下的具體欄位（fontSize/bold/letterSpacing/lineHeight），
+// 欄位本身才是渲染依據，renderer.js 完全不需要認得 stylePreset，只吃展開後的具體欄位，
+// 公開 API 維持單純（見 schema.js 開頭關於 renderer.js 是 render-core 公開 API 的說明）。
+// stylePreset 欄位是選用的：沒有這個欄位就代表自訂（手動設定），不需要另外處理沒有這個欄位的
+// 情況，本來就是合法狀態。
+//
+// 標籤直接對應 Markdown 的 H1-H5／P（本文），方便之後 MD 轉換功能直接查表；H6 因為在 203dpi
+// 熱感紙上印中文字太小容易糊掉，先不開放。字級存 pt（跟 inspector.js 的字級輸入介面同一個單位），
+// 套用時才依當下 profile 的 dpi 換算成 dots，避免未來加入不同 DPI 的機型時整批數字要重算。
+// pt 數字是「標準字級階梯」（8/9/10/11/12/14/16/18/20…，Word／Docs 這類軟體字級選單的慣例值），
+// 不是直接套 HTML 標題比例（2/1.5/1.17/1/0.83/0.67 倍）算出來的小數，理由同上——比例只用來決定
+// 相對大小關係，實際數字要落在使用者眼熟的階梯上。
+export const TEXT_STYLE_PRESETS = {
+    H1: { fontSizePt: 20, bold: true, letterSpacing: 0, lineHeight: 1.2 },
+    H2: { fontSizePt: 16, bold: true, letterSpacing: 0, lineHeight: 1.2 },
+    H3: { fontSizePt: 12, bold: true, letterSpacing: 0, lineHeight: 1.2 },
+    H4: { fontSizePt: 10, bold: true, letterSpacing: 0, lineHeight: 1.2 },
+    P: { fontSizePt: 10, bold: false, letterSpacing: 0, lineHeight: 1.3 },
+    H5: { fontSizePt: 8, bold: true, letterSpacing: 0, lineHeight: 1.2 },
+};
+
+/** 套用樣式預設：展開成具體欄位並記錄 stylePreset 供 UI 顯示目前選的是哪個。
+ * dpiX 是套用當下 profile 的 DPI（見 printer-profiles.js），只在展開這一刻用來把 pt 換算成 dots，
+ * 換算後的 dots 才是實際存進元素、渲染時讀取的值——跟其餘所有字級欄位存法一致。
+ * preset 傳 null／不認得的值＝自訂，只清掉標記、不動現有欄位值，讓使用者能繼續拿目前這組
+ * 數值手動調整，不會被覆寫掉。 */
+export function applyTextStylePreset(el, preset, dpiX) {
+    const spec = preset && Object.hasOwn(TEXT_STYLE_PRESETS, preset) ? TEXT_STYLE_PRESETS[preset] : null;
+    if (spec) {
+        const { fontSizePt, ...rest } = spec;
+        Object.assign(el, rest, { fontSize: ptToDots(fontSizePt, dpiX) });
+        el.stylePreset = preset;
+    } else {
+        delete el.stylePreset;
+    }
+}
+
 /** 把文字元素的所有 run 接成單一字串（大綱標籤預覽、變數掃描等用途）。 */
 export function getTextContent(el) {
     if (!Array.isArray(el.runs)) return "";
     return el.runs.map((r) => r.text || "").join("");
 }
 
-/** 把舊版（v1 之前）扁平 text 欄位的文字元素轉成 runs 陣列，供 schema migrate() 呼叫。 */
+/** 把舊版（v1 之前）扁平 text 欄位的文字元素轉成 runs 陣列，供 schema migrate() 呼叫。
+ * 順便清掉不認得的 stylePreset 值（壞檔／未來版本新增的預設名稱）——留著會讓 UI 選字樣式時
+ * 查不到對應的具體欄位組合，這裡當它沒設，退回「自訂」，不影響其餘既有欄位。 */
 export function normalizeTextElement(el) {
-    if (Array.isArray(el.runs)) return el;
-    const { text, ...rest } = el;
+    const preset = el.stylePreset;
+    const badPreset = preset !== undefined && !Object.hasOwn(TEXT_STYLE_PRESETS, preset);
+    if (Array.isArray(el.runs)) {
+        if (!badPreset) return el;
+        const { stylePreset, ...rest } = el;
+        return rest;
+    }
+    const { text, stylePreset, ...rest } = el;
+    if (!badPreset && stylePreset !== undefined) rest.stylePreset = stylePreset;
     return { ...rest, runs: [createTextRun({ text: text || "" })] };
 }
 
