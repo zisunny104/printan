@@ -52,9 +52,13 @@ const V1_FILE = {
 
 const textsOf = (project) => {
     const out = [];
-    walkElements(project.template.elements, (e) => { if (e.type === "text") out.push(e); });
+    walkElements(pageEls(project), (e) => { if (e.type === "text") out.push(e); });
     return out;
 };
+// 匯入後一律是 template.pages（單頁也一樣，見 schema.js migrate），這個檔案大多只處理單頁專案。
+function pageEls(project) {
+    return project.template.pages[0].elements;
+}
 
 // ---- 圖片 fit 新值 ----
 test("圖片 fit：none／auto／stretch 與不認得的值載入後原樣保留（渲染端負責退回 auto）", () => {
@@ -63,7 +67,7 @@ test("圖片 fit：none／auto／stretch 與不認得的值載入後原樣保留
         file.template.elements[3].fit = fit;
         const out = loadProject(file);
         assert(out.ok, out.error);
-        eq(out.project.template.elements[3].fit, fit);
+        eq(pageEls(out.project)[3].fit, fit);
     }
 });
 
@@ -71,7 +75,7 @@ test("圖片 fit：none／auto／stretch 與不認得的值載入後原樣保留
 test("v1 檔遷移：扁平 text 變 runs，其餘欄位與非文字元素原樣保留", () => {
     const out = loadProject(clone(V1_FILE));
     assert(out.ok, out.error);
-    const [t1, s1, r1, i1] = out.project.template.elements;
+    const [t1, s1, r1, i1] = pageEls(out.project);
     eq(t1.runs, [{ text: "哈囉 {{name}}" }]);
     assert(!("text" in t1), "舊的 text 欄位應被移除");
     eq([t1.id, t1.fontSize, t1.bold, t1.align], ["t1", 40, true, "center"]);
@@ -104,22 +108,22 @@ test("沒有群組的 v1 檔重新匯出仍是 v1（舊版 Printan 也能開）"
     const out = loadProject(clone(V1_FILE));
     eq(JSON.parse(serializeProject(out.project)).version, 1);
 });
-test("v1 檔加上群組後匯出為 v2，重新匯入群組內容不變", () => {
+test("v1 檔加上群組後匯出為 v2（單頁專案，不因為目前版本是 v3 就跟著升版），重新匯入群組內容不變", () => {
     const out = loadProject(clone(V1_FILE));
     const project = out.project;
-    project.template.elements.push(createGroupElement([createTextElement({ id: "gt", runs: [{ text: "組內" }] })]));
+    pageEls(project).push(createGroupElement([createTextElement({ id: "gt", runs: [{ text: "組內" }] })]));
     const text = serializeProject(project);
-    eq(JSON.parse(text).version, PTAN_VERSION);
+    eq(JSON.parse(text).version, 2);
     const back = loadProject(text);
     assert(back.ok, back.error);
-    eq(back.project.template.elements, project.template.elements);
+    eq(pageEls(back.project), pageEls(project));
 });
 test("v2 檔內群組裡的舊版扁平 text 也會遷移", () => {
     const out = loadProject({ format: "ptan", version: 2, template: { elements: [
         { id: "g", type: "group", children: [{ id: "x", type: "text", text: "群組舊文字" }] },
     ] } });
     assert(out.ok, out.error);
-    eq(out.project.template.elements[0].children[0].runs, [{ text: "群組舊文字" }]);
+    eq(pageEls(out.project)[0].children[0].runs, [{ text: "群組舊文字" }]);
 });
 test("未知的額外欄位匯出再匯入後保留（向前相容）", () => {
     const raw = { ...clone(V1_FILE), futureThing: { a: 1 } };
@@ -132,12 +136,16 @@ test("readPtanFile：v1 檔與直接 loadProject 的結果一致", async () => {
     const viaFile = await readPtanFile(new File([JSON.stringify(V1_FILE)], "old.ptan"));
     const direct = loadProject(clone(V1_FILE));
     assert(viaFile.ok, viaFile.error);
-    eq(viaFile.project, direct.project);
+    // V1_FILE 沒有 pageId（舊檔本來就不會有），migrate() 幫隱含頁合成的 id 只在同一次
+    // migrate() 呼叫內是穩定的；這裡是兩次各自獨立的 loadProject，各自合成的頁面 id
+    // 本來就不會相同（id 不是檔案內容本身），比較內容用 pageEls，其餘欄位另外逐一比較。
+    eq(pageEls(viaFile.project), pageEls(direct.project));
+    for (const key of ["meta", "printerProfile", "paper", "variables", "assets"]) eq(viaFile.project[key], direct.project[key], key);
 });
 test("serializeProject → File → readPtanFile：完整專案來回一致", async () => {
     const p = createEmptyProject({ name: "來回", printerProfileId: "epson-tm-t82ii", paperWidthId: "58mm" });
-    p.template.elements = loadProject(clone(V1_FILE)).project.template.elements;
-    p.template.elements.push(createGroupElement([createTextElement({ runs: [{ text: "甲", italic: true }, { text: "乙" }] })]));
+    p.template.pages[0].elements = pageEls(loadProject(clone(V1_FILE)).project);
+    pageEls(p).push(createGroupElement([createTextElement({ runs: [{ text: "甲", italic: true }, { text: "乙" }] })]));
     p.variables = ["name"];
     p.assets = clone(V1_FILE.assets);
     const back = await readPtanFile(new File([serializeProject(p)], "x.ptan"));
@@ -173,7 +181,7 @@ test("內嵌字體：匯出 v2 → readPtanFile 讀回後字體不留在專案�
     const p = loadProject(clone(V1_FILE)).project;
     const fonts = [{ family: "不存在的字體", weight: 400, unicodeRange: "U+0-7F", data: "AAEC" }];
     const text = serializeProject({ ...p, embeddedFonts: fonts });
-    eq(JSON.parse(text).version, PTAN_VERSION);
+    eq(JSON.parse(text).version, 2); // 單頁專案，不因為目前版本是 v3 就跟著升版
     const back = await readPtanFile(new File([text], "f.ptan"));
     assert(back.ok, back.error);
     assert(!("embeddedFonts" in back.project), "embeddedFonts 應被移除");
@@ -185,15 +193,15 @@ const list = document.getElementById("list");
 test("多欄 gap：非 0 才寫進檔案、來回一致；0 或缺欄位不寫、讀入後仍沒有 gap", async () => {
     const p = createEmptyProject({ name: "gap", printerProfileId: "epson-tm-t82ii", paperWidthId: "58mm" });
     const mk = (id, gap) => ({ id, type: "row", ratio: [1, 1], columns: [[], []], ...(gap === undefined ? {} : { gap }) });
-    p.template.elements = [mk("g8", 8), mk("g0", 0), mk("gn"), mk("g48", 48)];
+    p.template.pages[0].elements = [mk("g8", 8), mk("g0", 0), mk("gn"), mk("g48", 48)];
     const text = serializeProject(p);
     const raw = JSON.parse(text).template.elements;
     eq(raw.map((r) => r.gap), [8, undefined, undefined, 48]);
     assert(!("gap" in raw[1]), "gap=0 不該寫入");
-    assert(p.template.elements[1].gap === 0, "序列化不可改動原專案");
+    assert(pageEls(p)[1].gap === 0, "序列化不可改動原專案");
     const back = await readPtanFile(new File([text], "x.ptan"));
     assert(back.ok, back.error);
-    eq(back.project.template.elements.map((r) => r.gap), [8, undefined, undefined, 48]);
+    eq(pageEls(back.project).map((r) => r.gap), [8, undefined, undefined, 48]);
     eq(serializeProject(back.project), text);
 });
 let failed = 0;
