@@ -10,7 +10,7 @@
 
 ## 進行中
 - [ ] 圖文段落（site-b3，最小版：單圖靠左／右＋橫書文字）：渲染、檢視器、畫布把手、測試、說明書已提交，實機列印與各紙寬繞排外觀待驗證
-- [ ] 文字直書（site-b3）：writingMode／renderer 直排／檢視器切換已提交（1～3/3），版面細節與實機列印待驗證
+- [ ] 文字直書（site-b3）：writingMode／renderer 直排／檢視器切換已提交（1～3/3）。多段落（多欄）總寬度超出框寬時會被靜默裁掉的問題已修（layoutVerticalText 補上 widthClipped 偵測，編輯疊層會提示），其餘版面細節與實機列印待驗證
 
 ## 已知但未處理
 - [ ] editor.js 仍有 674 行：已拆出 context／inspector-widgets／inspector／printer-settings／outline／batch-export／element-actions／canvas-overlay／workspace-view，是否再拆待評估

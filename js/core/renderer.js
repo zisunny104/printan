@@ -186,7 +186,7 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, show
             const clip = heightMode === "fixed" && resolveTextOverflow(el) === "clip";
             const height = heightMode === "fixed" ? (clip ? el.heightDots : Math.max(el.heightDots, totalHeight)) : totalHeight;
             const clipHeight = clip ? el.heightDots : null;
-            const clipped = clip && totalHeight > el.heightDots; // 供編輯疊層畫裁切提示用
+            const clipped = (clip && totalHeight > el.heightDots) || !!vertical?.widthClipped; // 供編輯疊層畫裁切提示用（直書則是欄數過多、總寬度超框寬）
             items.push({ el, y, height, widthDots, boxWidth, contentHeight: totalHeight, clipHeight, clipped, lines, vertical });
             y += height;
         } else if (el.type === "float-block") {
@@ -333,7 +333,7 @@ function truncateGlyphLine(glyphs, maxWidth, ctx, fallbackStyle) {
 }
 
 function layoutText(el, widthDots, ctx, fallbackFontFamily) {
-    if (el.writingMode === "vertical") return layoutVerticalText(el, ctx, fallbackFontFamily);
+    if (el.writingMode === "vertical") return layoutVerticalText(el, widthDots, ctx, fallbackFontFamily);
     if ("letterSpacing" in ctx) ctx.letterSpacing = `${el.letterSpacing || 0}px`;
 
     const paragraphs = buildParagraphs(el, fallbackFontFamily);
@@ -478,7 +478,7 @@ function buildVerticalCells(glyphs, ctx, letterSpacing) {
     return cells;
 }
 
-function layoutVerticalText(el, ctx, fallbackFontFamily) {
+function layoutVerticalText(el, widthDots, ctx, fallbackFontFamily) {
     if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
     const spacing = el.letterSpacing || 0;
     const columns = buildParagraphs(el, fallbackFontFamily).map((glyphs) => {
@@ -493,7 +493,11 @@ function layoutVerticalText(el, ctx, fallbackFontFamily) {
     });
     const minHeight = Math.round(el.fontSize * (el.lineHeight || 1.3));
     const totalHeight = Math.max(minHeight, ...columns.map((c) => c.height));
-    return { lines: [], totalHeight, vertical: { columns } };
+    // 直書欄數（段落數）一多，總寬度會超出框寬：paintVerticalText 用 ctx.clip() 把最左邊超出的欄位真的裁掉，
+    // 這裡先算出來供上層標記 widthClipped，讓編輯疊層能提示「內容被裁掉」（比照橫書 heightMode fixed 的 clipped 提示）
+    const totalWidth = columns.reduce((sum, c) => sum + c.width, 0);
+    const widthClipped = widthDots > 0 && totalWidth > widthDots;
+    return { lines: [], totalHeight, vertical: { columns, widthClipped } };
 }
 
 function paintVerticalText(ctx, item, x, y, widthOverride) {

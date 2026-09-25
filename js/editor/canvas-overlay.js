@@ -24,7 +24,7 @@ export function renderEditOverlay() {
 
     walkItems(items, 0, 0, (box, item) => {
         overlay.appendChild(buildEditBlock(box, scale));
-        if (item.clipped) overlay.appendChild(buildTextClipIndicator(box, scale));
+        if (item.clipped) overlay.appendChild(buildTextClipIndicator(box, scale, item.vertical?.widthClipped));
         if (box.el.type === "spacer" || box.el.type === "image" || box.el.type === "barcode" || box.el.type === "text") {
             handleBuilders.push(() => buildHeightResizeHandle(box, scale));
         }
@@ -393,14 +393,16 @@ function buildTextWidthResizeHandle(box, item, { side, x, y }, scale) {
 
 /** 文字「高度固定＋裁切」時，內容真的超出框高的視覺提示（半透明遮罩＋虛線，比照不可印區疊層）：
  * 只在編輯疊層顯示，不進 canvas 畫面、不影響列印／匯出。CSS 是暫定樣式（.text-clip-indicator，見 editor.css），之後由 89 調整。 */
-function buildTextClipIndicator(box, scale) {
+function buildTextClipIndicator(box, scale, isVerticalWidthClip) {
     const div = document.createElement("div");
     div.className = "text-clip-indicator";
     div.style.left = `${box.x * scale}px`;
     div.style.top = `${box.y * scale}px`;
     div.style.width = `${box.width * scale}px`;
     div.style.height = `${Math.max(box.height, 1) * scale}px`;
-    div.dataset.tooltip = "內容超出固定高度，多出的部分不會印出";
+    div.dataset.tooltip = isVerticalWidthClip
+        ? "直書欄數過多、總寬度超出框寬，最左側的欄位不會印出"
+        : "內容超出固定高度，多出的部分不會印出";
     return div;
 }
 
