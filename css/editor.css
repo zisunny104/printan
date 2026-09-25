@@ -222,6 +222,32 @@ body {
     outline-offset: -1px;
 }
 
+/* 文字樣式預設選單（js/editor/inspector.js textStylePresetPicker）：每個選項要放縮小後的
+   實際樣子＋標籤兩行文字，選項寬度也不固定（各預設字級不同），用 flex 直向置中排版，
+   跟一般 ts-button 的單行文字排版分開寫一份 class 避免互相干擾。 */
+.style-preset-group {
+    align-items: stretch;
+}
+
+.style-preset-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .2rem;
+    min-width: 4.5rem;
+    padding-block: .5rem;
+    line-height: 1.15;
+}
+
+.style-preset-sample {
+    font-family: inherit;
+}
+
+.style-preset-label {
+    font-size: .75rem;
+}
+
 /* ⓘ 說明圖示（js/editor/ui-helpers.js createInfoIcon）：灰色小圖示，hover／聚焦時顯示 tooltip */
 .info-icon {
     display: inline-flex;
