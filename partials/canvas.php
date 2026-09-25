@@ -11,7 +11,7 @@
                                     data-tooltip="縮小" aria-label="縮小">
                                     <span class="ts-icon is-minus-icon" aria-hidden="true"></span>
                                 </button>
-                                <div class="ts-input is-small pane-zoom-input">
+                                <div class="ts-input is-small is-basic pane-zoom-value">
                                     <input type="text" id="zoom-value" inputmode="numeric" autocomplete="off"
                                         spellcheck="false" aria-label="縮放比例" value="100%">
                                 </div>
@@ -41,16 +41,35 @@
                                 </button>
                             </div>
                         </div>
+                        <!-- 窄螢幕（<768px）不排 2D 佈局，一次顯示一頁，用這列前後切換；只有一頁時隱藏 -->
+                        <div class="page-pager" id="page-pager" hidden>
+                            <button type="button" class="ts-button is-icon is-ghost is-small" id="btn-page-prev" aria-label="上一頁">
+                                <span class="ts-icon is-chevron-left-icon" aria-hidden="true"></span>
+                            </button>
+                            <span class="ts-text is-small page-pager-label" id="page-pager-label" aria-live="polite"></span>
+                            <span class="ts-icon is-scissors-icon page-pager-cut" id="page-pager-cut" role="img" aria-label="印完切紙"></span>
+                            <button type="button" class="ts-button is-icon is-ghost is-small" id="btn-page-next" aria-label="下一頁">
+                                <span class="ts-icon is-chevron-right-icon" aria-hidden="true"></span>
+                            </button>
+                        </div>
                         <div class="paper-viewport-stage">
                             <div class="paper-ruler-corner" id="ruler-corner" aria-hidden="true"></div>
                             <div class="paper-ruler is-horizontal" id="ruler-h" aria-hidden="true"><canvas></canvas></div>
                             <div class="paper-ruler is-vertical" id="ruler-v" aria-hidden="true"><canvas></canvas></div>
                             <div class="paper-viewport-body" id="paper-scroll">
-                                <div class="paper-shadow" id="paper-shadow">
-                                    <div class="safe-area-guide" id="safe-area-guide">
-                                        <span class="ts-icon is-circle-info-icon" data-tooltip="切刀安全線：低於此線的內容，切紙時可能被切到" aria-hidden="true"></span>
+                                <!-- 2D 多頁佈局（js/editor/page-board.js）：水平＝不同段（之間會切紙），垂直＝同段接續的連續紙。
+                                     下面這組 #paper-shadow 永遠是「作用中頁面」，切頁時由 JS 搬進對應的欄位；其餘頁面是唯讀縮圖。 -->
+                                <div class="page-board" id="page-board">
+                                    <div class="page-group">
+                                        <div class="page-frame is-active">
+                                            <div class="paper-shadow" id="paper-shadow">
+                                                <div class="safe-area-guide" id="safe-area-guide">
+                                                    <span class="ts-icon is-circle-info-icon" data-tooltip="切刀安全線：低於此線的內容，切紙時可能被切到" aria-hidden="true"></span>
+                                                </div>
+                                                <div id="canvas-host" class="canvas-host"></div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div id="canvas-host" class="canvas-host"></div>
                                 </div>
                             </div>
                         </div>

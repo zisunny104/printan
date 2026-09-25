@@ -1,15 +1,15 @@
-// 多頁（frame）管理：頁面清單 UI ＋ 新增／刪除／改名／排序／合併／分割。
+// 多頁（frame）管理：新增／刪除／改名／排序／合併／分割。頁面本身顯示在「版面結構」樹的最上層
+// （比照 Figma 圖層面板的 frame），列的畫法在 outline.js，這裡只管資料操作。
 // 「目前編輯中的頁面」是唯一的間接層（見 context.js currentPage／currentElements）：
 // 這個檔案只負責改動 state.project.template.pages 這個陣列本身跟 state.currentPageIndex，
 // 版面元素的 CRUD 邏輯完全不需要知道專案有幾頁。
 
 import { createPage } from "../core/schema.js";
 import { els, state } from "./context.js";
-import { iconButton } from "./inspector-widgets.js";
 import { findContainerOf } from "../core/element-tree.js";
 import { onModelChange, schedulePreview } from "./editor.js";
 import { getSelectedIds } from "./element-actions.js";
-import { renderOutline } from "./outline.js";
+import { renderOutline, startPageRename } from "./outline.js";
 import { renderInspector } from "./inspector.js";
 
 /**
@@ -42,16 +42,9 @@ export function addPage() {
     state.insertionTarget = null;
     renderPageList();
     onModelChange();
-    // 比照 Figma 新增頁面：名稱直接進入可打字狀態，不用使用者自己再點一次輸入框去改名
+    // 比照 Figma 新增頁面：名稱直接進入可打字狀態，不用使用者自己再點一次去改名
     // （預設名稱「頁 N」多半就是要馬上蓋掉的暫定值）。
-    focusPageNameInput(page.id);
-}
-
-function focusPageNameInput(pageId) {
-    const input = els["page-list"]?.querySelector(`.page-row[data-page-id="${pageId}"] .page-row-name input`);
-    if (!input) return;
-    input.focus();
-    input.select();
+    startPageRename(page.id);
 }
 
 /** 刪掉指定頁面；至少留一頁，刪最後一頁時直接擋下（畫面上按鈕本來就會停用，這裡是保險）。 */
@@ -158,79 +151,10 @@ function canSplitAtCurrentSelection() {
     return !!found && found.array === page.elements && found.index > 0;
 }
 
+// 頁面列就在版面結構樹裡，重畫頁面＝重畫整棵樹；保留這個名稱讓頁面操作的呼叫端不用知道這件事
 export function renderPageList() {
-    const list = els["page-list"];
-    if (!list) return;
-    list.innerHTML = "";
-    const pages = state.project.template.pages;
-    pages.forEach((page, index) => {
-        list.appendChild(buildPageRow(page, index, pages.length));
-    });
+    renderOutline();
     if (els["btn-page-split"]) els["btn-page-split"].disabled = !canSplitAtCurrentSelection();
-}
-
-function buildPageRow(page, index, total) {
-    const row = document.createElement("div");
-    row.className = "page-row" + (index === state.currentPageIndex ? " is-selected" : "");
-    row.dataset.pageId = page.id;
-    row.setAttribute("role", "option");
-    row.setAttribute("aria-selected", String(index === state.currentPageIndex));
-
-    const main = document.createElement("div");
-    main.className = "page-row-main";
-    main.addEventListener("click", (e) => {
-        if (e.target.closest("input, button")) return;
-        setCurrentPage(index);
-    });
-
-    const badge = document.createElement("span");
-    badge.className = "ts-badge is-small is-outlined page-row-index";
-    badge.textContent = String(index + 1);
-
-    const nameInputWrap = document.createElement("div");
-    nameInputWrap.className = "ts-input is-small page-row-name";
-    const nameInput = document.createElement("input");
-    nameInput.type = "text";
-    nameInput.value = page.name;
-    nameInput.setAttribute("aria-label", `頁面 ${index + 1} 名稱`);
-    nameInput.addEventListener("click", () => setCurrentPage(index));
-    nameInput.addEventListener("change", () => renamePage(page.id, nameInput.value));
-    nameInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") nameInput.blur();
-    });
-    nameInputWrap.appendChild(nameInput);
-
-    main.append(badge, nameInputWrap);
-
-    const cutLabel = document.createElement("label");
-    cutLabel.className = "ts-checkbox is-small page-row-cut";
-    cutLabel.dataset.tooltip = "列印完這一頁要不要切紙；關閉＝跟下一頁接續印在同一段連續紙上";
-    const cutInput = document.createElement("input");
-    cutInput.type = "checkbox";
-    cutInput.checked = page.cutAfter;
-    cutInput.setAttribute("aria-label", `頁面 ${index + 1} 列印後切紙`);
-    cutInput.addEventListener("change", () => setPageCutAfter(page.id, cutInput.checked));
-    const cutText = document.createElement("div");
-    cutText.className = "text";
-    cutText.textContent = "切紙";
-    cutLabel.append(cutInput, cutText);
-
-    const actions = document.createElement("span");
-    actions.className = "page-row-actions";
-    actions.appendChild(iconButton("arrow-up", `上移頁面 ${page.name}`, () => movePage(page.id, -1)));
-    actions.appendChild(iconButton("arrow-down", `下移頁面 ${page.name}`, () => movePage(page.id, 1)));
-    if (index !== state.currentPageIndex) {
-        actions.appendChild(iconButton("object-ungroup", `把「${page.name}」合併到目前頁`, () => mergePageInto(page.id)));
-    }
-    const delBtn = iconButton("trash", `刪除頁面 ${page.name}`, () => {
-        if (total <= 1) return;
-        if (confirm(`確定要刪除「${page.name}」嗎？此動作可以用復原（Ctrl+Z）復原。`)) deletePage(page.id);
-    });
-    delBtn.disabled = total <= 1;
-    actions.appendChild(delBtn);
-
-    row.append(main, cutLabel, actions);
-    return row;
 }
 
 export function bindPageList() {

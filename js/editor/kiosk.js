@@ -24,24 +24,15 @@ import { registerEmbeddedFonts } from "../core/web-fonts.js";
 import { describePrinterError } from "../core/printer-adapter.js";
 import { els, state } from "./context.js";
 import { attemptSilentPrinterReconnect, connectPrinter, printSilently } from "./printer-settings.js";
+import { showStageNotice } from "./ui-helpers.js";
 
 const KIOSK_CLASS = "is-kiosk";
 const RESERVED_PARAMS = new Set(["tpl", "kiosk", "autoprint"]);
 
-// 跟 editor.js 的 updateFontFallbackNotice／updateImageFailureNotice 同一套「畫面上一行不擋畫面的
-// 提示列」寫法：kiosk 沒有人會去點 confirm()，問題一律用這個顯示，不彈原生對話框。
+// 跟 editor.js 的字體／圖片提示同一套「畫面上一行不擋畫面的提示列」（ui-helpers.js showStageNotice）：
+// kiosk 沒有人會去點 confirm()，問題一律用這個顯示，不彈原生對話框。
 function showKioskNotice(message) {
-    let notice = els["kiosk-notice"];
-    if (!notice) {
-        notice = document.createElement("div");
-        notice.className = "ts-notice is-negative";
-        notice.appendChild(Object.assign(document.createElement("div"), { className: "content" }));
-        const stage = els["paper-shadow"].parentElement.parentElement;
-        stage.parentElement.insertBefore(notice, stage);
-        els["kiosk-notice"] = notice;
-    }
-    notice.hidden = false;
-    notice.firstChild.textContent = message;
+    showStageNotice("kiosk-notice", message);
 }
 
 /**
@@ -60,7 +51,7 @@ function showKioskConnectButton() {
         button.type = "button";
         button.className = "ts-button is-primary";
         button.textContent = "連線印表機並列印";
-        const stage = els["paper-shadow"].parentElement.parentElement;
+        const stage = els["paper-scroll"].parentElement; // 同 showStageNotice：插在尺規＋紙張那一格正上方
         stage.parentElement.insertBefore(button, stage);
         button.addEventListener("click", async () => {
             button.disabled = true;

@@ -9,7 +9,7 @@ import { SystemDialogAdapter, describePrinterError, interpretRealtimeStatus, isS
 import { getBaseProfile, getEffectiveProfile, schedulePreview } from "./editor.js";
 import { confirmFontFallbacks, describeFontFallbackIssues } from "./batch-export.js";
 import { safeGetItem, safeSetItem } from "../core/storage.js";
-import { createInfoIcon } from "./ui-helpers.js";
+import { createInfoIcon, hideStageNotice, showStageNotice } from "./ui-helpers.js";
 import { renderCalibrationSheet, renderTestPrint } from "./test-print-project.js";
 import { renderPages } from "../core/renderer.js";
 
@@ -46,29 +46,36 @@ async function printPagesInOrder(adapter, results) {
     return { ok: true };
 }
 
+const PRINT_NOTICE_KEY = "print-failure-notice";
+
 export async function printCurrent() {
     if (state.printerBusy) {
         alert("印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次");
         return;
     }
     state.printerBusy = true;
+    hideStageNotice(PRINT_NOTICE_KEY);
     try {
         const results = await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
         if (!confirmFontFallbacks(results)) return;
 
-        // 退回系統列印時只印「還沒成功送到印表機」的頁：failedPageIndex 之前的頁面已經
-        // 實際印到紙上了（USB／Serial 是逐頁送出、送出即列印，不是先排隊再一次印），
-        // 整批重印會讓那些頁面重複印出——紙已經印出來的東西收不回來。
-        let remainingResults = results;
         if (state.usbConnected || state.serialConnected) {
             const adapter = state.usbConnected ? usbAdapter : serialAdapter;
             const outcome = await printPagesInOrder(adapter, results);
             if (outcome.ok) return;
             if (state.usbConnected) state.usbConnected = false; else state.serialConnected = false;
             updatePrinterConnectionUi();
-            const pageLabel = results.length > 1 ? `第 ${outcome.failedPageIndex + 1} 頁「${results[outcome.failedPageIndex].page?.name || ""}」` : "";
-            alert(`列印失敗：${pageLabel}${pageLabel ? "，" : ""}${describePrinterError(outcome.error)}，改用系統列印`);
-            remainingResults = results.slice(outcome.failedPageIndex);
+            const failed = outcome.failedPageIndex;
+            const pageLabel = results.length > 1 ? `第 ${failed + 1}/${results.length} 頁「${results[failed].page?.name || ""}」` : "";
+            const reason = describePrinterError(outcome.error);
+            // 已經有頁面印到紙上（USB／Serial 是送出即列印）就整個中止：剩下的頁不能改走系統列印補印，
+            // 那會把原本同一段連續紙的內容拆到另一個列印工作、中間多切一刀或順序錯亂，印出來的東西收不回來。
+            // 第一頁就失敗（什麼都還沒印）才維持原本單頁時代「直連失敗改用系統列印」的行為。
+            if (failed > 0) {
+                showStageNotice(PRINT_NOTICE_KEY, `列印中止：${pageLabel}失敗（${reason}）。前 ${failed} 頁已印出，其餘頁面沒有列印。`, { dismissible: true });
+                return;
+            }
+            showStageNotice(PRINT_NOTICE_KEY, `直連列印失敗：${pageLabel}${pageLabel ? "，" : ""}${reason}，已改用系統列印。`, { dismissible: true });
         }
 
         // 系統列印對話框一次只能印一份影像，多頁就開多個列印工作，逐一走過去；
@@ -76,9 +83,9 @@ export async function printCurrent() {
         // 沒有「靜默中途失敗」的問題，中止與否的差異對使用者沒有意義。
         const adapter = new SystemDialogAdapter();
         await adapter.connect();
-        for (const result of remainingResults) await adapter.print(result);
+        for (const result of results) await adapter.print(result);
     } catch (err) {
-        alert(`列印失敗：${describePrinterError(err)}`);
+        showStageNotice(PRINT_NOTICE_KEY, `列印失敗：${describePrinterError(err)}`, { dismissible: true });
     } finally {
         state.printerBusy = false;
     }

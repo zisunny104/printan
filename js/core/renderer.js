@@ -13,7 +13,7 @@
 
 import { getPrinterProfile, getPaperWidth } from "./printer-profiles.js";
 import { applyDataToElements } from "./merge.js";
-import { FLOAT_GAP_DOTS, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow } from "./document-model.js";
+import { FLOAT_GAP_DOTS, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow, resolveDividerDrawMode, resolveFill } from "./document-model.js";
 import { dotsToMm, splitRowColumns } from "./units.js";
 import { applyThermalSimulation, toGrayscale, applyDither } from "./dithering.js";
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
@@ -501,6 +501,8 @@ function paintVerticalText(ctx, item, x, y, widthOverride) {
     const widthDots = widthOverride ?? item.widthDots; // widthMode "fixed" 時傳入較窄的框寬，只影響對齊錨點（直書換行本來就不吃欄寬）
     const total = vertical.columns.reduce((sum, c) => sum + c.width, 0);
     const right = el.align === "right" ? x + widthDots : el.align === "center" ? x + (widthDots + total) / 2 : x + total;
+    const inkFill = resolveFill(el.inkFill);
+    const bgFill = resolveFill(el.bgFill);
     ctx.save();
     ctx.beginPath();
     ctx.rect(x, y, widthDots, height);
@@ -508,10 +510,7 @@ function paintVerticalText(ctx, item, x, y, widthOverride) {
     ctx.textBaseline = "top";
     ctx.textAlign = "left";
     if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
-    if (el.inverse) {
-        ctx.fillStyle = "#000";
-        ctx.fillRect(right - total, y, total, height);
-    }
+    if (el.inverse) paintFillRect(ctx, right - total, y, total, height, bgFill);
     let colRight = right;
     for (const col of vertical.columns) {
         const cx = colRight - col.width / 2;
@@ -524,19 +523,23 @@ function paintVerticalText(ctx, item, x, y, widthOverride) {
                 ctx.fillRect(cx - col.width / 2, cellY, col.width, cell.advance);
             }
             const ink = inverse ? "#fff" : "#000";
-            ctx.fillStyle = ink;
             ctx.font = fontString(style);
             if (cell.text) {
-                if (cell.rotated) {
-                    ctx.save();
-                    ctx.translate(cx + style.fontSize / 2, cellY);
-                    ctx.rotate(Math.PI / 2);
-                    ctx.fillText(cell.text, 0, 0);
-                    ctx.restore();
+                if (!inverse && inkFill.mode !== "solid") {
+                    paintPatternVerticalCell(ctx, cell, cx, cellY, style, inkFill);
                 } else {
-                    ctx.textAlign = "center";
-                    ctx.fillText(cell.text, cx, cellY);
-                    ctx.textAlign = "left";
+                    ctx.fillStyle = ink;
+                    if (cell.rotated) {
+                        ctx.save();
+                        ctx.translate(cx + style.fontSize / 2, cellY);
+                        ctx.rotate(Math.PI / 2);
+                        ctx.fillText(cell.text, 0, 0);
+                        ctx.restore();
+                    } else {
+                        ctx.textAlign = "center";
+                        ctx.fillText(cell.text, cx, cellY);
+                        ctx.textAlign = "left";
+                    }
                 }
             }
             if (style.underline || style.strikethrough) {
@@ -626,6 +629,8 @@ function paintText(ctx, item, x, y) {
     const boxX = el.align === "center" ? (widthDots - effWidth) / 2 : el.align === "right" ? (widthDots - effWidth) : 0;
     if (item.vertical) return paintVerticalText(ctx, item, x + boxX, y, effWidth);
     const { lines } = item;
+    const inkFill = resolveFill(el.inkFill);
+    const bgFill = resolveFill(el.bgFill);
     ctx.save();
     ctx.fillStyle = "#000";
     ctx.textBaseline = "top";
@@ -642,10 +647,7 @@ function paintText(ctx, item, x, y) {
         lineY += line.skipBefore || 0;
         const lineX = x + boxX + (line.offsetX || 0);
         const lineW = line.availWidth ?? effWidth;
-        if (el.inverse) {
-            ctx.fillStyle = "#000";
-            ctx.fillRect(lineX, lineY, lineW, line.lineHeightDots);
-        }
+        if (el.inverse) paintFillRect(ctx, lineX, lineY, lineW, line.lineHeightDots, bgFill);
         let cursorX = lineX;
         if (el.align === "center" || el.align === "right") {
             cursorX = el.align === "center" ? lineX + (lineW - line.width) / 2 : lineX + (lineW - line.width);
@@ -660,8 +662,14 @@ function paintText(ctx, item, x, y) {
                 ctx.fillStyle = segInverse ? "#000" : "#fff";
                 ctx.fillRect(cursorX, lineY, segWidth, line.lineHeightDots);
             }
-            ctx.fillStyle = inkColor;
-            ctx.fillText(seg.text, cursorX, lineY);
+            // 墨色花紋只套用在「沒有被反白」的正常墨色段落：反白（整行或局部）部分維持純色互換，
+            // 避免花紋疊在花紋底色上看不清楚，也不用煩惱花紋本身要不要反相
+            if (!segInverse && inkFill.mode !== "solid" && seg.text) {
+                paintPatternText(ctx, seg.text, cursorX, lineY, segWidth, seg.style.fontSize, inkFill);
+            } else {
+                ctx.fillStyle = inkColor;
+                ctx.fillText(seg.text, cursorX, lineY);
+            }
             if (seg.style.underline || seg.style.strikethrough) {
                 ctx.save();
                 ctx.strokeStyle = inkColor;
@@ -689,6 +697,10 @@ function paintText(ctx, item, x, y) {
 
 function paintDivider(ctx, item, x, y) {
     const { el, widthDots } = item;
+    if (resolveDividerDrawMode(el) === "fill") {
+        paintFillRect(ctx, x, y + el.marginTopDots, widthDots, el.thicknessDots, resolveFill(el.fill));
+        return;
+    }
     const lineY = y + el.marginTopDots + el.thicknessDots / 2;
     ctx.save();
     ctx.strokeStyle = "#000";
@@ -701,6 +713,125 @@ function paintDivider(ctx, item, x, y) {
     ctx.lineTo(x + widthDots, lineY);
     ctx.stroke();
     ctx.restore();
+}
+
+// ---- 共用填色（分隔線色塊／文字反白背景／文字本身墨色都靠這幾個函式） ----
+//
+// 網點／漸層：跟 paintImage 熱感模式一樣借用 dithering.js 的排序抖色（orderedDither），差別是
+// 來源不是照片而是自己合成的灰階（halftone＝均勻灰階、依 level 控制網點濃淡，gradient＝沿方向
+// 線性漸層），直接餵給同一顆演算法即可長出規則網點／由淺到深的網點漸層。不分螢幕／熱感模式：
+// 這個花紋本身就是使用者選的視覺效果，兩種預覽都該長一樣（跟 divider 原本的虛線／點線同一邏輯）。
+
+/** 產生一塊 w×h 的填色畫布：solid 是純黑矩形，halftone／gradient 是排序抖色網點。 */
+function renderFillCanvas(w, h, fill) {
+    w = Math.max(1, Math.round(w));
+    h = Math.max(1, Math.round(h));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (fill.mode === "solid") {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, w, h);
+        return canvas;
+    }
+    const imageData = ctx.createImageData(w, h);
+    if (fill.mode === "gradient") {
+        fillGradientGray(imageData, w, h, fill.direction, fill.reverse);
+        applyDither(imageData, "ordered", 128);
+    } else {
+        fillSolidGray(imageData, 128);
+        applyDither(imageData, "ordered", fill.level);
+    }
+    ctx.putImageData(imageData, 0, 0);
+    return canvas;
+}
+
+/** 用填色畫一塊矩形（分隔線色塊、文字整行反白背景都用這個）。solid 直接 fillRect，其餘貼填色畫布。 */
+function paintFillRect(ctx, x, y, w, h, fill) {
+    if (fill.mode === "solid") {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(x, y, w, h);
+        return;
+    }
+    ctx.drawImage(renderFillCanvas(w, h, fill), x, y, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+}
+
+// 文字墨色填花紋：solid 以外的模式沒辦法直接當 fillStyle 用，改用「先在獨立的透明遮罩畫布上
+// 畫黑字、再用 source-atop 疊上填色畫布」——source-atop 只會在遮罩已經有像素（也就是字形本身，
+// 含反鋸齒邊緣）的地方換色，遮罩其餘透明區域不受影響，最後把遮罩貼回主畫布，主畫布上已經畫好
+// 的背景／其他文字完全不會被動到。padX/padY 留一點餘裕避免裁到字母的上下延伸（如 g／y 的下突）。
+function paintPatternText(ctx, text, x, y, segWidth, fontSize, fill) {
+    const padX = 2;
+    const padY = Math.max(2, Math.ceil(fontSize * 0.6));
+    const w = Math.max(1, Math.ceil(segWidth) + padX * 2);
+    const h = Math.max(1, Math.ceil(fontSize) + padY * 2);
+    const mask = document.createElement("canvas");
+    mask.width = w;
+    mask.height = h;
+    const mctx = mask.getContext("2d");
+    mctx.textBaseline = "top";
+    mctx.font = ctx.font;
+    if ("letterSpacing" in mctx) mctx.letterSpacing = ctx.letterSpacing || "0px";
+    mctx.fillStyle = "#000";
+    mctx.fillText(text, padX, padY);
+    mctx.globalCompositeOperation = "source-atop";
+    mctx.drawImage(renderFillCanvas(w, h, fill), 0, 0);
+    ctx.drawImage(mask, x - padX, y - padY);
+}
+
+// 直書版本：cell 可能是旋轉 90 度的西文／數字（見 cell.rotated），遮罩內用同樣的
+// translate+rotate 手法，只是原點換算成遮罩本地座標（見下方兩個分支的註解）。
+function paintPatternVerticalCell(ctx, cell, cx, cellY, style, fill) {
+    const padX = Math.max(2, Math.ceil(style.fontSize * 0.75));
+    const padY = 2;
+    const w = Math.max(1, Math.ceil(style.fontSize) + padX * 2);
+    const h = Math.max(1, Math.ceil(cell.advance) + padY * 2);
+    const mask = document.createElement("canvas");
+    mask.width = w;
+    mask.height = h;
+    const mctx = mask.getContext("2d");
+    mctx.textBaseline = "top";
+    mctx.font = fontString(style);
+    mctx.fillStyle = "#000";
+    if (cell.rotated) {
+        // 主畫布：translate(cx + fontSize/2, cellY) 再轉 90 度；對應遮罩本地原點 (padX + fontSize/2, padY)。
+        mctx.save();
+        mctx.translate(padX + style.fontSize / 2, padY);
+        mctx.rotate(Math.PI / 2);
+        mctx.fillText(cell.text, 0, 0);
+        mctx.restore();
+    } else {
+        // 主畫布：textAlign center、fillText(cx, cellY)；對應遮罩本地原點 (padX, padY)。
+        mctx.textAlign = "center";
+        mctx.fillText(cell.text, padX, padY);
+        mctx.textAlign = "left";
+    }
+    mctx.globalCompositeOperation = "source-atop";
+    mctx.drawImage(renderFillCanvas(w, h, fill), 0, 0);
+    ctx.drawImage(mask, cx - padX, cellY - padY);
+}
+
+function fillSolidGray(imageData, value) {
+    const d = imageData.data;
+    for (let i = 0; i < d.length; i += 4) {
+        d[i] = d[i + 1] = d[i + 2] = value;
+        d[i + 3] = 255;
+    }
+}
+
+function fillGradientGray(imageData, w, h, direction, reverse) {
+    const d = imageData.data;
+    for (let py = 0; py < h; py++) {
+        for (let px = 0; px < w; px++) {
+            const t = direction === "vertical" ? (h > 1 ? py / (h - 1) : 0) : (w > 1 ? px / (w - 1) : 0);
+            const frac = reverse ? 1 - t : t;
+            const value = Math.round(255 * (1 - frac)); // 淺（255）到深（0）
+            const i = (py * w + px) * 4;
+            d[i] = d[i + 1] = d[i + 2] = value;
+            d[i + 3] = 255;
+        }
+    }
 }
 
 function paintImage(ctx, item, x, y, mode) {

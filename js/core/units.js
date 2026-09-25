@@ -10,6 +10,9 @@ export function dotsPerMm(dpi) {
 export function dotsToMm(dots, dpi) {
     return dots / dotsPerMm(dpi);
 }
+export function mmToDots(mm, dpi) {
+    return Math.round(mm * dotsPerMm(dpi));
+}
 
 /** pt↔dots 換算：兩個方向都四捨五入到整數，讓使用者打一個 pt 整數、存回 dots、
  * 再讀出顯示，看到的還是同一個數字，不會有「明明打 12 怎麼變 11.9」的觀感問題。

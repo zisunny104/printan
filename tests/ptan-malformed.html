@@ -21,7 +21,7 @@ pre { margin: 0 0 0 24px; white-space: pre-wrap; }
 //
 // known(...) 是「已知的 core 問題」：目前確實會出錯，測試在出錯時標為 KNOWN（不算失敗）；
 // 一旦 core 修好、不再出錯，這項會變成 FAIL 提醒把它改成一般 test()。
-import { loadProject, serializeProject } from "../js/core/schema.js";
+import { groupPagesByCut, loadProject, serializeProject } from "../js/core/schema.js";
 import { walkElements } from "../js/core/document-model.js";
 import { readPtanFile } from "../js/core/ptan-file.js";
 
@@ -209,6 +209,60 @@ test("row.gap：字串、負數、NaN、null、物件 → 沒有 gap；超大夾
     for (const bad of ["8", "abc", -5, NaN, null, {}, [], Infinity, 0]) assert(gapOf(bad) === undefined, `gap=${String(bad)}`);
     eq([gapOf(9999), gapOf(8.6), gapOf(48), gapOf(1)], [48, 9, 48, 1]);
 });
+// ---- 多頁（pages）壞資料：v3 欄位缺漏或型別錯誤都要退回可用的預設值 ----
+const withPages = (pages, extra = {}) => ({ format: "ptan", version: 3, template: { pages, ...extra } });
+
+test("pages 不是陣列（字串／物件／null）：當成沒有 pages 的舊檔，改讀 template.elements", () => {
+    for (const pages of ["x", { a: 1 }, null, 3]) {
+        const out = survives(withPages(pages, { elements: [{ id: "t1", type: "text", text: "舊內容" }] }));
+        assert(out.ok, out.error);
+        eq(out.project.template.pages.length, 1, JSON.stringify(pages));
+        eq(pageEls(out.project)[0].runs[0].text, "舊內容");
+        eq(out.project.template.pages[0].cutAfter, true);
+    }
+});
+
+test("pages 裡混了非物件：壞的丟掉、好的保留順序", () => {
+    const out = survives(withPages([null, "x", 3, [], { id: "a", name: "好", elements: [], cutAfter: false }, { id: "b" }]));
+    assert(out.ok, out.error);
+    eq(out.project.template.pages.map((p) => p.id), ["a", "b"]);
+});
+
+test("頁面欄位壞值：id／name 缺或不是字串就補、elements 不是陣列變空、cutAfter 只有明確 false 才是 false", () => {
+    const out = survives(withPages([
+        { id: 5, name: "", elements: "nope", cutAfter: "false" },
+        { elements: [{ type: 1 }, { id: "t", type: "text", text: "留下" }], cutAfter: 0 },
+        { id: "c", name: "三", elements: [], cutAfter: false },
+    ]));
+    assert(out.ok, out.error);
+    const pages = out.project.template.pages;
+    assert(pages.every((p) => typeof p.id === "string" && p.id && typeof p.name === "string" && p.name), "id／name 都有補");
+    eq(pages[0].elements, []);
+    eq(pages[1].elements.map((e) => e.type), ["text"], "沒有 type 的元素被丟掉");
+    eq(pages.map((p) => p.cutAfter), [true, true, false], "字串 \"false\"、0 都不算 false");
+});
+
+test("pages 全壞或空陣列：退回一頁空白頁，畫布／列印不會拿到空的 pages", () => {
+    for (const pages of [[], [null, "x"]]) {
+        const out = survives(withPages(pages));
+        assert(out.ok, out.error);
+        eq(out.project.template.pages.length, 1);
+        eq(pageEls(out.project), []);
+    }
+});
+
+test("groupPagesByCut 收到壞輸入不丟例外：非陣列視為沒有頁面，壞頁面照 cutAfter 預設 true 分段", () => {
+    eq(groupPagesByCut(null), []);
+    eq(groupPagesByCut("x"), []);
+    eq(groupPagesByCut([null, { cutAfter: false }, undefined]), [[0], [1, 2]]);
+});
+
+test("readPtanFile：v3 壞頁面的檔案照樣能開", async () => {
+    const out = await withTimeout(readPtanFile(file(JSON.stringify(withPages([{ id: "a", elements: null }, 7])))));
+    assert(out.ok, out.error);
+    eq(out.project.template.pages.length, 1);
+});
+
 let failed = 0;
 let knownCount = 0;
 for (const c of cases) {

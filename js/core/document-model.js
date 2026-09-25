@@ -4,6 +4,32 @@
 
 import { ptToDots } from "./units.js";
 
+/**
+ * 共用的「填色」模型：分隔線色塊、文字反白背景、文字本身墨色都用同一組欄位，交給
+ * renderer.js 同一套排序抖色演算法畫（見 renderer.js renderFillCanvas），不用各自維護
+ * 一套網點／漸層邏輯。mode "solid" 是純黑，等同還沒套用這個功能之前的舊行為。
+ */
+export const FILL_MODES = ["solid", "halftone", "gradient"];
+export function createFill(overrides = {}) {
+    return {
+        mode: "solid", // solid＝純黑｜halftone＝網點｜gradient＝網點漸層
+        level: 128, // halftone 專用：網點濃度 0-255，數字越大網點越密（越黑）
+        direction: "horizontal", // gradient 專用：horizontal | vertical
+        reverse: false, // gradient 專用：反轉深淺方向
+        ...overrides,
+    };
+}
+/** 把可能是舊檔／壞值的 fill 欄位收斂成一組合法值，未設定或不認得的值一律當 solid（舊行為）。 */
+export function resolveFill(fill) {
+    const f = fill && typeof fill === "object" ? fill : {};
+    return {
+        mode: FILL_MODES.includes(f.mode) ? f.mode : "solid",
+        level: typeof f.level === "number" ? f.level : 128,
+        direction: f.direction === "vertical" ? "vertical" : "horizontal",
+        reverse: !!f.reverse,
+    };
+}
+
 let idCounter = 0;
 function nextId(prefix) {
     idCounter += 1;
@@ -35,6 +61,8 @@ export function createTextElement(overrides = {}) {
         letterSpacing: 0, // dots
         bold: false, // run 沒指定粗體時的預設值
         inverse: false, // 整行反白：每一行從左到右鋪滿黑底、文字改白字（舊檔沒有此欄位＝false）
+        inkFill: createFill(), // 文字本身墨色的填色（見 createFill／resolveFill），預設 solid＝純黑，跟舊行為一樣
+        bgFill: createFill(), // 整行反白背景（inverse=true 時才會畫出來）的填色，預設 solid＝純黑底，跟舊行為一樣
         align: "left", // left | center | right
         wrap: true,
         writingMode: "horizontal", // horizontal | vertical（直書：由上而下、行由右而左；舊檔沒有此欄位＝horizontal）
@@ -331,14 +359,25 @@ export function createSpacerElement(overrides = {}) {
     };
 }
 
+/** 分隔線畫法：line＝細線（用 style/thicknessDots 畫實線／虛線／點線，舊檔沒有此欄位＝line）｜
+ * fill＝色塊（佔滿欄寬、高度為 thicknessDots，用 fill 欄位決定純黑／網點／漸層，見 createFill／resolveFill）。
+ * 不認得的值一律當 line，維持舊行為。 */
+export const DIVIDER_DRAW_MODES = ["line", "fill"];
+export function resolveDividerDrawMode(el) {
+    const mode = el.drawMode || "line";
+    return DIVIDER_DRAW_MODES.includes(mode) ? mode : "line";
+}
+
 export function createDividerElement(overrides = {}) {
     return {
         id: nextId("divider"),
         type: "divider",
-        style: "solid", // solid | dashed | dotted
+        style: "solid", // solid | dashed | dotted（drawMode==="line" 時使用）
         thicknessDots: 2,
         marginTopDots: 8,
         marginBottomDots: 8,
+        drawMode: "line", // line | fill，見 resolveDividerDrawMode
+        fill: createFill(), // drawMode==="fill" 時的填色，見 createFill／resolveFill
         ...overrides,
     };
 }
