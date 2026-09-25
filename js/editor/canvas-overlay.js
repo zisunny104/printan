@@ -183,6 +183,18 @@ function attachBlockInteractions(div, origId) {
         document.addEventListener("pointermove", onMove);
         document.addEventListener("pointerup", onUp);
     });
+
+    // 雙擊直接進入行內編輯：不管點之前有沒有選到、選的是不是同一個元素，都跟「先選取、再點一下」
+    // 那條路徑（見上面 onUp 的 editText）分開處理，讓使用者不用先確定選取狀態就能快速改字；
+    // 跟 buildColumnResizeHandle 的雙擊（拆併欄）是不同元素，彼此不衝突。
+    div.addEventListener("dblclick", (e) => {
+        const el = findElementById(currentElements(), origId);
+        if (!el || !["text", "float-block"].includes(el.type)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        selectElementById(origId);
+        inlineEditor.open(origId, { x: e.clientX, y: e.clientY });
+    });
 }
 
 function collectSiblingBoxes(elId) {
