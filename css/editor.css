@@ -1736,3 +1736,24 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
 .is-kiosk .ts-notice {
     margin: 1rem;
 }
+
+/* kiosk 候補配對按鈕（js/editor/kiosk.js showKioskConnectButton，b3 commit 8d0f9f7）：
+   autoprint=1 但沒有已授權印表機時顯示，插入點跟 kiosk-notice 一樣（stage 正上方）。
+   WebUSB／Serial 規格要求配對一定要使用者手勢，繞不過，所以這是 kiosk 畫面唯一能點的
+   東西——螢幕多半是觸控，要夠大夠顯眼、看起來像正式功能而不是除錯用臨時按鈕，跟下面
+   置中的白紙同一條垂直線。class（ts-button is-primary）沿用 b3 給的，這裡疊加尺寸與
+   間距，比照 .pane-card-header .ts-button 那套用 --height 覆寫 Tocas 元件高度的作法。 */
+#kiosk-connect-print {
+    --height: 3.5rem;
+    align-self: center;
+    margin-bottom: 1.5rem;
+    padding-inline: 2rem;
+    font-size: 1.125rem;
+    font-weight: 700;
+    border-radius: 999px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+}
+
+#kiosk-connect-print:active {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .25);
+}
