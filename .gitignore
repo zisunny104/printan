@@ -49,3 +49,6 @@ phpunit.xml
 node_modules/
 npm-debug.log
 yarn-error.log
+
+# Claude Code 背景 agent 的獨立 worktree（內含自己的 .git，不進版本紀錄）
+.claude/
