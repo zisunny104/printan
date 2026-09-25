@@ -58,6 +58,36 @@ export async function renderBatch(project, dataArray = [{}], options = {}) {
     return results;
 }
 
+/**
+ * 多頁版型（project.template.pages）依序渲染，回傳每一頁對應的渲染結果陣列（順序＝列印順序）。
+ * renderTemplate() 是既有的公開單頁 API（其他專案可能直接 import 使用），行為與參數維持不變；
+ * 這個函式是給多頁列印流程（見 printer-settings.js printCurrent／printSilently）用的新入口，
+ * 呼叫慣例（data／options）比照 renderTemplate，只是改吃 project.template.pages 而不是
+ * project.template.elements。舊檔／只有一頁的專案，schema.js migrate() 已經統一補成
+ * 單一隱含頁，這裡不需要另外相容處理。
+ */
+export async function renderPages(project, data = {}, options = {}) {
+    const profile = options.profile || getPrinterProfile(project.printerProfile.id);
+    const paper = getPaperWidth(profile, options.paperWidthId || project.paper.widthId);
+    const assetMap = options.assets instanceof Map ? options.assets : buildAssetMap(project.assets);
+    const pages = project.template?.pages || [];
+
+    const results = [];
+    for (const page of pages) {
+        const mergedElements = applyDataToElements(page.elements, data);
+        const result = await renderElements(mergedElements, {
+            widthDots: paper.printableWidthDots,
+            dpi: profile.dpi.x,
+            assets: assetMap,
+            fontFamily: options.fontFamily || DEFAULT_FONT_FAMILY,
+            mode: options.mode || "screen",
+            thresholdLevel: options.thresholdLevel,
+        });
+        results.push({ ...result, page });
+    }
+    return results;
+}
+
 export const MAX_CANVAS_HEIGHT = 65535;
 
 /** 較底層的入口：直接給一段已經套用完資料的 element tree 進行排版與繪製。 */

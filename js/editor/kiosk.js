@@ -72,11 +72,18 @@ function showKioskConnectButton() {
             button.hidden = true;
             const outcome = await printSilently();
             if (outcome.ok && outcome.issues.length) showKioskNotice(outcome.issues.join("；"));
-            else if (!outcome.ok && outcome.reason === "print-failed") showKioskNotice(`自動列印失敗：${describePrinterError(outcome.error)}，請改用列印鍵`);
+            else if (!outcome.ok && outcome.reason === "print-failed") showKioskNotice(describePrintFailure(outcome));
         });
         els["kiosk-connect-print"] = button;
     }
     button.hidden = false;
+}
+
+// printSilently() 多頁列印中途失敗時，把是第幾頁失敗一併講清楚——使用者才知道前面幾頁已經印出來了，
+// 不是「整份都沒印到」，也知道要從哪一頁開始補印。
+function describePrintFailure(outcome) {
+    const pageInfo = outcome.totalPages > 1 ? `第 ${outcome.failedPageIndex + 1}/${outcome.totalPages} 頁「${outcome.pageName || ""}」` : "";
+    return `自動列印失敗：${pageInfo}${pageInfo ? "，" : ""}${describePrinterError(outcome.error)}，請改用列印鍵`;
 }
 
 // tpl= 只接受同源網址：印表機是實體輸出，風險不算高，但沒必要開放任意第三方網址當版型來源。
@@ -119,7 +126,8 @@ async function loadTemplateFromUrl(url) {
 
 /** query string 裡跟版型變數同名的參數，填進 state.previewData。 */
 function applyVariablesFromQuery(params, project) {
-    const names = new Set(extractPlaceholders(project.template.elements));
+    // 變數要掃全部頁面，不是只有第一頁：kiosk 網址帶的變數值要能填到任何一頁用到的 placeholder。
+    const names = new Set(extractPlaceholders(project.template.pages.flatMap((p) => p.elements)));
     for (const [key, value] of params) {
         if (RESERVED_PARAMS.has(key) || !names.has(key)) continue;
         state.previewData[key] = value;
@@ -154,7 +162,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
         if (state.usbConnected || state.serialConnected) {
             const outcome = await printSilently();
             if (outcome.ok && outcome.issues.length) showKioskNotice(outcome.issues.join("；"));
-            else if (!outcome.ok && outcome.reason === "print-failed") showKioskNotice(`自動列印失敗：${describePrinterError(outcome.error)}，請改用列印鍵`);
+            else if (!outcome.ok && outcome.reason === "print-failed") showKioskNotice(describePrintFailure(outcome));
         } else {
             // 沒有已授權裝置：WebUSB／Serial 規格要求跳選擇窗一定要使用者手勢，做不到全自動，
             // 顯示候補配對按鈕讓人點一次；工具列被 .is-kiosk 隱藏，原本的列印鍵點不到。

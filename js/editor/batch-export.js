@@ -1,4 +1,4 @@
-import { renderTemplate, renderBatch } from "../core/renderer.js";
+import { renderPages } from "../core/renderer.js";
 import { csvToRecords } from "../core/csv.js";
 import { exportToPdf } from "../core/pdf-export.js";
 import { safeGetItem, safeSetItem } from "../core/storage.js";
@@ -29,9 +29,10 @@ export function describeFontFallbackIssues(results) {
 }
 
 export async function exportSinglePdf() {
-    const result = await renderTemplate(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
-    if (!confirmFontFallbacks(result)) return;
-    exportToPdf([result], { fileName: `${state.project.meta.name || "printan"}.pdf` });
+    // 匯出單份 PDF＝把整份專案的每一頁依序輸出，跟「列印」是同一份內容（見 printer-settings.js printCurrent）。
+    const results = await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
+    if (!confirmFontFallbacks(results)) return;
+    exportToPdf(results, { fileName: `${state.project.meta.name || "printan"}.pdf` });
 }
 
 // 匯出跟預覽都要吃同一份批次資料，剖析／驗證邏輯只寫這一處，避免兩邊行為兜不起來
@@ -51,7 +52,12 @@ function parseBatchData() {
 export async function exportBatchPdf() {
     const dataArray = parseBatchData();
     if (!dataArray) return;
-    const results = await renderBatch(state.project, dataArray, { mode: "thermal", profile: getEffectiveProfile() });
+    // 每筆批次資料都要印出整份專案（全部頁面），依「這筆資料的全部頁面」排在一起，
+    // 跟印表機實際列印順序一致（同一筆資料的各頁本來就該接續印出）。
+    const results = [];
+    for (const data of dataArray) {
+        results.push(...await renderPages(state.project, data, { mode: "thermal", profile: getEffectiveProfile() }));
+    }
     if (!confirmFontFallbacks(results)) return;
     exportToPdf(results, { fileName: `${state.project.meta.name || "printan"}-batch.pdf` });
 }
