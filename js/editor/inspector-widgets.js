@@ -135,6 +135,69 @@ export function textInput(value, onInput, type = "text", placeholder = "") {
     return wrap;
 }
 
+/** Figma 式數字調整框（行高倍數／字距這類「不容易一眼判斷該打多少」的數字都適用）：
+ * 左邊圖示可左右拖曳直接「刷」出數值，不用對著瀏覽器內建那兩顆極小的 spinner 箭頭點；
+ * 也能直接點輸入框打數字，或用上下方向鍵微調（按住 Shift＝大步進）。純點擊圖示（沒拖曳）
+ * 等同點輸入框，方便還是可以直接打字。 */
+export function numberStepperInput(value, onChange, { icon, step = 1, bigStep = step * 10, min = -Infinity, max = Infinity, precision = 0 } = {}) {
+    const wrap = document.createElement("div");
+    wrap.className = "ts-input is-small is-fluid number-stepper";
+    const handle = document.createElement("span");
+    handle.className = "number-stepper-handle";
+    handle.setAttribute("aria-hidden", "true");
+    handle.appendChild(iconSpan(icon));
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = step;
+    if (min > -Infinity) input.min = min;
+    if (max < Infinity) input.max = max;
+
+    const scale = 10 ** precision;
+    const clamp = (n) => Math.min(max, Math.max(min, n));
+    const setValue = (n, fire) => {
+        const v = Math.round(clamp(n) * scale) / scale;
+        input.value = v;
+        if (fire) onChange(v);
+    };
+    setValue(value, false);
+
+    input.addEventListener("input", () => {
+        const n = Number(input.value);
+        if (!Number.isNaN(n)) onChange(clamp(n));
+    });
+    input.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+        e.preventDefault();
+        const delta = (e.shiftKey ? bigStep : step) * (e.key === "ArrowUp" ? 1 : -1);
+        setValue((Number(input.value) || 0) + delta, true);
+    });
+
+    handle.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startValue = Number(input.value) || 0;
+        let dragged = false;
+        handle.classList.add("is-dragging");
+        function onMove(ev) {
+            const dx = ev.clientX - startX;
+            if (Math.abs(dx) > 2) dragged = true;
+            const unit = ev.shiftKey ? bigStep : step;
+            setValue(startValue + Math.round(dx / 4) * unit, true);
+        }
+        function onUp() {
+            document.removeEventListener("pointermove", onMove);
+            document.removeEventListener("pointerup", onUp);
+            handle.classList.remove("is-dragging");
+            if (!dragged) input.focus(); // 純點擊沒拖曳＝聚焦輸入框，還是能直接打字
+        }
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+    });
+
+    wrap.append(handle, input);
+    return wrap;
+}
+
 // 下拉選單：跳出 Tocas 自訂樣式清單（同 open-project-dropdown／export-dropdown／row-ratio-dropdown
 // 那組 data-dropdown 觸發機制），不用原生 <select>（開啟時是瀏覽器原生清單方框，樣式蓋不掉）。
 // groups：[[群組標題或 null, [[value, label], ...]], ...]，標題為 null 時不畫 .header 分隔。

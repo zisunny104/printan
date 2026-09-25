@@ -300,6 +300,34 @@ body {
     gap: .5rem;
 }
 
+/* Figma 式數字調整框（inspector-widgets.js numberStepperInput，目前用在行高倍數／字距）：
+   左邊圖示可左右拖曳刷數值，比瀏覽器內建 <input type=number> 那兩顆小到很難點的 spinner 好用，
+   所以把原生 spinner 藏掉，改用這顆圖示當拖曳把手；圖示本身也提示這格是做什麼用的。 */
+.number-stepper-handle {
+    display: inline-flex;
+    align-items: center;
+    padding-inline-start: .6rem;
+    color: var(--ts-gray-500, #888);
+    cursor: ew-resize;
+    touch-action: none;
+    flex: none;
+}
+
+.number-stepper-handle:hover,
+.number-stepper-handle.is-dragging {
+    color: var(--ts-primary-600, #2563eb);
+}
+
+.number-stepper input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+.number-stepper input[type="number"]::-webkit-outer-spin-button,
+.number-stepper input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
 /* 縮放百分比：Tocas ts-input is-basic（無框），寬度與高度對齊旁邊的圖示按鈕，hover 才露出邊框提示可輸入 */
 .ts-input.pane-zoom-value {
     flex: none;

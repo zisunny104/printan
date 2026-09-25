@@ -15,7 +15,7 @@ import {
     primaryFamilyName,
 } from "../core/fonts.js";
 import {
-    alignGroup, IMAGE_FIT_OPTIONS, IMAGE_SIDE_OPTIONS, checkboxInput, dropdownField, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, sectionDivider,
+    alignGroup, IMAGE_FIT_OPTIONS, IMAGE_SIDE_OPTIONS, checkboxInput, dropdownField, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, numberStepperInput, sectionDivider,
     sectionHeader, selectInput, sliderField, textInput,
 } from "./inspector-widgets.js";
 import { getEffectiveProfile, inlineEditor, onModelChange, textSel } from "./editor.js";
@@ -98,7 +98,7 @@ export function renderInspector() {
 const MULTI_FIELDS = [
     { key: "fontSize", label: "字級 (pt)", kind: "number", types: ["text"], runField: true },
     { key: "bold", label: "粗體", kind: "bool", types: ["text"], runField: true },
-    { key: "inverse", label: "整行反白（黑底白字）", kind: "bool", types: ["text"] },
+    { key: "inverse", label: "容器底色反轉（黑底白字）", kind: "bool", types: ["text"] },
     { key: "lineHeight", label: "行高", kind: "number", types: ["text"] },
     { key: "letterSpacing", label: "字距", kind: "number", types: ["text"] },
     { key: "align", label: "對齊", kind: "align", types: ["text", "image", "barcode"] },
@@ -299,6 +299,10 @@ const TEXT_STYLE_PRESET_INFO = "標籤對應 Markdown 的標題階層（H1-H5）
 // 這份清單，任一欄位被手動改動都代表元素不再是單純套用預設的樣子，要清掉 stylePreset 標記。
 const PRESET_BACKED_FIELDS = ["fontSize", "bold", "lineHeight", "letterSpacing"];
 
+// 「容器底色」選單：多一個「無」對應 el.inverse=false（見 buildTextInspector），其餘沿用 fillFields
+// 的模式名稱，但「純黑」在這裡改叫「反轉」，比較貼近使用者實際感受到的效果（黑底白字）。
+const BG_FILL_MODE_OPTIONS = [["none", "無"], ["solid", "反轉"], ["halftone", "網點"], ["gradient", "漸層"]];
+
 // 每個選項左邊放縮小後的實際樣子（字級比例／粗細）、右邊放階層標籤（H1-H5／P），
 // 觸發鈕與選單裡的每一列共用同一份內容，比照 Word／Docs 那種段落樣式下拉選單。
 function styleOptionRow(key) {
@@ -478,7 +482,6 @@ function buildTextInspector(panel, el) {
     ]));
     panel.appendChild(field("對齊", alignGroup(el.align, (v) => { el.align = v; onModelChange({ skipInspector: true }); })));
     panel.appendChild(field(null, checkboxInput(el.bold, (v) => applyParagraphField(el, presetGroup, () => { el.bold = v; }), "預設粗體")));
-    panel.appendChild(field(null, checkboxInput(!!el.inverse, (v) => { el.inverse = v; onModelChange(); }, "整行反白（黑底白字）")));
 
     panel.appendChild(foldSection(`${el.type}.inkFill`, "文字顏色", (body) => {
         const inkFill = resolveFill(el.inkFill);
@@ -487,20 +490,40 @@ function buildTextInspector(panel, el) {
             onModelChange(redraw ? {} : { skipInspector: true });
         }));
     }));
-    if (el.inverse) {
-        panel.appendChild(foldSection(`${el.type}.bgFill`, "反白背景顏色", (body) => {
-            const bgFill = resolveFill(el.bgFill);
-            body.appendChild(fillFields(bgFill, (patch, redraw) => {
-                el.bgFill = { ...bgFill, ...patch };
-                onModelChange(redraw ? {} : { skipInspector: true });
+    // 「容器底色」統一 el.inverse（開關）＋ el.bgFill（樣式）：選「無」等於 inverse=false（bgFill 設定保留，
+    // 下次選別的樣式不用重設）；選反轉／網點／漸層等於 inverse=true 並把 bgFill.mode 設成對應值。
+    // 局部反白（富文字工具列的反白鈕）跟這個相抵的效果在 renderer.js 已經處理，這裡不用管。
+    panel.appendChild(foldSection(`${el.type}.bgFill`, "容器底色", (body) => {
+        const bgFill = resolveFill(el.bgFill);
+        const mode = el.inverse ? bgFill.mode : "none";
+        body.appendChild(field("填色方式", selectInput(BG_FILL_MODE_OPTIONS, mode, (v) => {
+            if (v === "none") { el.inverse = false; onModelChange(); return; }
+            el.inverse = true;
+            el.bgFill = { ...bgFill, mode: v };
+            onModelChange();
+        })));
+        if (mode === "halftone") {
+            body.appendChild(sliderField("網點濃度", bgFill.level, 0, 255, (v) => {
+                el.bgFill = { ...bgFill, level: v };
+                onModelChange({ skipInspector: true });
             }));
-        }));
-    }
+        } else if (mode === "gradient") {
+            body.appendChild(field("方向", selectInput(
+                [["horizontal", "水平"], ["vertical", "垂直"]],
+                bgFill.direction,
+                (v) => { el.bgFill = { ...bgFill, direction: v }; onModelChange({ skipInspector: true }); },
+            )));
+            body.appendChild(field(null, checkboxInput(bgFill.reverse, (v) => {
+                el.bgFill = { ...bgFill, reverse: v };
+                onModelChange({ skipInspector: true });
+            }, "反轉方向（深到淺）")));
+        }
+    }));
 
     panel.appendChild(foldSection(`${el.type}.layout`, "排版", (body) => {
         body.appendChild(fieldRow([
-            ["行高倍數", textInput(el.lineHeight, (v) => applyParagraphField(el, presetGroup, () => { el.lineHeight = v; }), "number")],
-            ["字距 (dot)", textInput(el.letterSpacing, (v) => applyParagraphField(el, presetGroup, () => { el.letterSpacing = v; }), "number")],
+            ["行高倍數", numberStepperInput(el.lineHeight, (v) => applyParagraphField(el, presetGroup, () => { el.lineHeight = v; }), { icon: "text-height", step: 0.1, min: 0.5, precision: 2 })],
+            ["字距 (dot)", numberStepperInput(el.letterSpacing, (v) => applyParagraphField(el, presetGroup, () => { el.letterSpacing = v; }), { icon: "arrows-left-right", step: 1, bigStep: 5 })],
         ]));
         body.appendChild(field("最多行數", textInput(el.maxLines || "", (v) => { el.maxLines = v; onModelChange({ skipInspector: true }); }, "number", "不限")));
         body.appendChild(field(null, checkboxInput(el.wrap, (v) => { el.wrap = v; onModelChange({ skipInspector: true }); }, "自動換行")));
