@@ -36,9 +36,12 @@ function eq(actual, expected, msg = "") {
 
 const file = (text, name = "x.ptan") => new File([text], name);
 const withElements = (elements) => ({ format: "ptan", version: 1, template: { elements } });
-/** 匯入後專案要能被其他程式安全使用：走訪元素樹、再序列化。 */
+// 匯入後一律是 template.pages（單頁也一樣，見 schema.js migrate）；壞檔測試大多只關心「單一隱含頁」
+// 的內容，這個捷徑跟 tests/index.html 的 pageEls 同名同義。
+const pageEls = (project) => project.template.pages[0].elements;
+/** 匯入後專案要能被其他程式安全使用：走訪全部頁面的元素樹、再序列化。 */
 function useProject(project) {
-    walkElements(project.template.elements, () => {});
+    for (const page of project.template.pages) walkElements(page.elements, () => {});
     JSON.parse(serializeProject(project));
 }
 /** 期望：loadProject 不丟例外；失敗時有明確錯誤字串；成功時專案能走訪與序列化。 */
@@ -67,7 +70,7 @@ test("缺 version、version 型別錯誤", () => {
     for (const version of [undefined, "1", null, true, [], {}]) rejects({ format: "ptan", version });
 });
 test("未知的較新 version（含 Infinity 與超大數）要求更新 Printan", () => {
-    for (const version of [3, 99, 1e9, Infinity]) {
+    for (const version of [4, 99, 1e9, Infinity]) {
         const out = rejects({ format: "ptan", version });
         assert(out.error.includes("更新"), out.error);
     }
@@ -82,7 +85,7 @@ test("template／elements 缺少或型別錯誤 → 空的元素列表", () => {
     for (const template of [undefined, null, "x", 5, [], {}, { elements: null }, { elements: {} }, { elements: "x" }, { elements: 5 }]) {
         const out = survives({ format: "ptan", version: 1, template });
         assert(out.ok, "應該成功載入");
-        eq(out.project.template.elements, [], JSON.stringify(template));
+        eq(pageEls(out.project), [], JSON.stringify(template));
     }
 });
 test("variables／assets／meta／printerProfile／paper 型別錯誤 → 預設值", () => {
@@ -98,7 +101,7 @@ test("元素是數字、字串、無 type、未知 type：不當機", () => {
 test("text 元素：runs 不是陣列、text 是數字、什麼都沒有", () => {
     for (const el of [{ type: "text", runs: "abc" }, { type: "text", text: 5 }, { type: "text" }, { type: "text", runs: null }]) {
         const out = survives(withElements([el]));
-        assert(Array.isArray(out.project.template.elements[0].runs), "runs 應被補成陣列：" + JSON.stringify(el));
+        assert(Array.isArray(pageEls(out.project)[0].runs), "runs 應被補成陣列：" + JSON.stringify(el));
     }
 });
 test("row：ratio 不是陣列、columns 是字串或空陣列", () => {
@@ -107,7 +110,7 @@ test("row：ratio 不是陣列、columns 是字串或空陣列", () => {
 test("group：children 缺少或不是陣列 → 空 children", () => {
     for (const el of [{ type: "group" }, { type: "group", children: "x" }, { type: "group", children: 5 }]) {
         const out = survives(withElements([el]));
-        eq(out.project.template.elements[0].children, []);
+        eq(pageEls(out.project)[0].children, []);
     }
 });
 test("尺寸極端值（超大、負數、NaN 字串）能載入與序列化", () => {
@@ -162,7 +165,7 @@ test("readPtanFile：UTF-8 BOM 開頭的檔案能正常讀取", async () => {
 test("readPtanFile：內容是合法 .ptan 但夾雜中文、emoji 與換行也能來回", async () => {
     const out = await withTimeout(readPtanFile(file(JSON.stringify(withElements([{ type: "text", text: "收據 🧾\n第二行" }])))));
     assert(out.ok, out.error);
-    eq(out.project.template.elements[0].runs[0].text, "收據 🧾\n第二行");
+    eq(pageEls(out.project)[0].runs[0].text, "收據 🧾\n第二行");
 });
 
 // ---- 已知的 core 問題（回報給 site-e8／b3，此頁不修 core）----
@@ -202,7 +205,7 @@ test("readPtanFile：含 null 元素的檔案 → onload 內例外，Promise 永
 // ---- 執行 ----
 const list = document.getElementById("list");
 test("row.gap：字串、負數、NaN、null、物件 → 沒有 gap；超大夾 48、小數四捨五入", () => {
-    const gapOf = (gap) => survives(withElements([{ type: "row", ratio: [1, 1], columns: [[], []], gap }])).project.template.elements[0].gap;
+    const gapOf = (gap) => pageEls(survives(withElements([{ type: "row", ratio: [1, 1], columns: [[], []], gap }])).project)[0].gap;
     for (const bad of ["8", "abc", -5, NaN, null, {}, [], Infinity, 0]) assert(gapOf(bad) === undefined, `gap=${String(bad)}`);
     eq([gapOf(9999), gapOf(8.6), gapOf(48), gapOf(1)], [48, 9, 48, 1]);
 });

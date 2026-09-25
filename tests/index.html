@@ -39,9 +39,12 @@ const allIds = (els) => { const out = []; walkElements(els, (e) => out.push(e.id
 
 function sampleProject(elements) {
     const p = createEmptyProject({ name: "t", printerProfileId: "epson-tm-t82ii", paperWidthId: "80mm" });
-    p.template.elements = elements;
+    p.template.pages[0].elements = elements;
     return p;
 }
+// 單頁專案的頁面 elements 捷徑，跟 sampleProject 對稱，測試斷言用起來比每處都寫
+// out.project.template.pages[0].elements 精簡。
+const pageEls = (project) => project.template.pages[0].elements;
 function plainElements() {
     const row = createRowElement([1, 2]);
     row.columns[0].push(createTextElement());
@@ -55,17 +58,17 @@ test("v1 匯出再匯入結果一致", () => {
     const p = sampleProject(plainElements());
     const out = loadProject(serializeProject(p));
     assert(out.ok, out.error);
-    eq(out.project.template.elements, p.template.elements);
+    eq(pageEls(out.project), pageEls(p));
     eq(out.project.meta.name, "t");
     eq(out.project.paper, p.paper);
 });
 test("沒用到群組與內嵌字體時寫 v1", () => {
     eq(JSON.parse(serializeProject(sampleProject(plainElements()))).version, 1);
 });
-test("有群組時寫 v2（含巢狀在 row 內的群組）", () => {
+test("有群組時寫 v2（含巢狀在 row 內的群組；單頁專案沒用到多頁功能，不會因為目前版本是 v3 就跟著升版）", () => {
     const row = createRowElement([1]);
     row.columns[0].push(createGroupElement([createTextElement()]));
-    eq(JSON.parse(serializeProject(sampleProject([row]))).version, PTAN_VERSION);
+    eq(JSON.parse(serializeProject(sampleProject([row]))).version, 2);
 });
 test("有內嵌字體時寫 v2，空陣列仍寫 v1", () => {
     const p = sampleProject(plainElements());
@@ -73,9 +76,12 @@ test("有內嵌字體時寫 v2，空陣列仍寫 v1", () => {
     eq(JSON.parse(serializeProject({ ...p, embeddedFonts: [] })).version, 1);
 });
 test("v1 與 v2 匯入後結構等價", () => {
-    const els = plainElements();
-    const v1 = loadProject(serializeProject(sampleProject(els)));
-    const v2raw = JSON.parse(serializeProject(sampleProject(els)));
+    // 用同一個 sampleProject 實例序列化兩次（而不是各自呼叫 sampleProject），這樣兩邊的
+    // template.pageId 才會相同——序列化單頁 legacy 格式會夾帶頁面 id（見 schema.js），
+    // 不同的 sampleProject() 呼叫各自產生新頁面、id 本來就不會一樣，不是這個測試要驗證的東西。
+    const p = sampleProject(plainElements());
+    const v1 = loadProject(serializeProject(p));
+    const v2raw = JSON.parse(serializeProject(p));
     v2raw.version = 2;
     const v2 = loadProject(v2raw);
     assert(v1.ok && v2.ok);
@@ -86,7 +92,7 @@ test("群組專案來回一致", () => {
     const p = sampleProject([g, createDividerElement()]);
     const out = loadProject(serializeProject(p));
     assert(out.ok, out.error);
-    eq(out.project.template.elements, p.template.elements);
+    eq(pageEls(out.project), pageEls(p));
 });
 test("舊版扁平 text 欄位匯入時轉成 runs（含群組內）", () => {
     const raw = { format: "ptan", version: 1, template: { elements: [
@@ -95,13 +101,13 @@ test("舊版扁平 text 欄位匯入時轉成 runs（含群組內）", () => {
     ] } };
     const out = loadProject(raw);
     assert(out.ok, out.error);
-    eq(out.project.template.elements[0].runs, [{ text: "舊" }]);
-    eq(out.project.template.elements[1].children[0].runs, [{ text: "群" }]);
+    eq(pageEls(out.project)[0].runs, [{ text: "舊" }]);
+    eq(pageEls(out.project)[1].children[0].runs, [{ text: "群" }]);
 });
 test("缺欄位時補預設值", () => {
     const out = loadProject({ format: "ptan", version: 1 });
     assert(out.ok, out.error);
-    eq(out.project.template.elements, []);
+    eq(pageEls(out.project), []);
     eq(out.project.variables, []);
     eq(out.project.assets, []);
 });
@@ -127,11 +133,70 @@ test("readPtanFile：讀入後 embeddedFonts 被移出專案（未知字體不�
     const out = await readPtanFile(new File([text], "a.ptan"));
     assert(out.ok, out.error);
     assert(!("embeddedFonts" in out.project), "embeddedFonts 應被移除");
-    eq(out.project.template.elements.length, 4);
+    eq(pageEls(out.project).length, 4);
 });
 test("readPtanFile：壞檔回傳 ok:false", async () => {
     const out = await readPtanFile(new File(["not json"], "a.ptan"));
     assert(!out.ok && out.error);
+});
+
+// ---- 多頁（pages） ----
+test("新專案預設是單一隱含頁，cutAfter 為 true", () => {
+    const p = createEmptyProject();
+    eq(p.template.pages.length, 1);
+    eq(p.template.pages[0].cutAfter, true);
+    eq(p.template.pages[0].elements, []);
+});
+test("舊檔（沒有 pages）自動包成一頁隱含頁，行為與匯出不變（仍寫回 v1/v2）", () => {
+    const raw = { format: "ptan", version: 1, template: { elements: [bt("舊檔")] } };
+    const out = loadProject(raw);
+    assert(out.ok, out.error);
+    eq(out.project.template.pages.length, 1);
+    eq(out.project.template.pages[0].cutAfter, true);
+    eq(out.project.template.pages[0].elements.map((e) => e.type), ["text"]);
+    eq(JSON.parse(serializeProject(out.project)).version, 1);
+    assert(!("pages" in JSON.parse(serializeProject(out.project)).template), "沒用到多頁時仍寫回 template.elements 形狀");
+});
+test("多頁：新增第二頁後序列化升版為 v3，寫出 template.pages", () => {
+    const p = sampleProject([bt("第一頁")]);
+    p.template.pages.push({ id: "page_2", name: "頁 2", elements: [bt("第二頁")], cutAfter: true });
+    const json = JSON.parse(serializeProject(p));
+    eq(json.version, PTAN_VERSION);
+    eq(json.template.pages.length, 2);
+    assert(!("elements" in json.template), "多頁時不應該還有 template.elements");
+});
+test("多頁：cutAfter 各種組合來回一致（true／false／混合）", () => {
+    for (const combo of [[true, true], [false, false], [true, false], [false, true]]) {
+        const p = sampleProject([bt("A")]);
+        p.template.pages = combo.map((cutAfter, i) => ({ id: `p${i}`, name: `頁 ${i + 1}`, elements: [bt(`內容 ${i}`)], cutAfter }));
+        const out = loadProject(serializeProject(p));
+        assert(out.ok, out.error);
+        eq(out.project.template.pages.map((pg) => pg.cutAfter), combo, JSON.stringify(combo));
+        eq(out.project.template.pages.map((pg) => pg.elements[0].runs[0].text), ["內容 0", "內容 1"]);
+    }
+});
+test("多頁：cutAfter 缺欄位或壞值一律視為 true（維持每頁印完就切紙的預期行為）", () => {
+    const raw = { format: "ptan", version: 3, template: { pages: [
+        { id: "a", name: "頁 1", elements: [] },
+        { id: "b", name: "頁 2", elements: [], cutAfter: "nope" },
+        { id: "c", name: "頁 3", elements: [], cutAfter: false },
+    ] } };
+    const out = loadProject(raw);
+    assert(out.ok, out.error);
+    eq(out.project.template.pages.map((pg) => pg.cutAfter), [true, true, false]);
+});
+test("多頁：pages 是空陣列或壞資料時，退回一頁空白頁（不會讓畫布拿到 undefined）", () => {
+    for (const pages of [[], "not-array", [null, 123, { elements: "not-array" }]]) {
+        const out = loadProject({ format: "ptan", version: 3, template: { pages } });
+        assert(out.ok, out.error);
+        assert(out.project.template.pages.length >= 1, "至少要有一頁");
+        assert(Array.isArray(out.project.template.pages[0].elements));
+    }
+});
+test("多頁：只有一頁但 cutAfter 為 false 時也視為「用到多頁功能」，升版寫 v3", () => {
+    const p = sampleProject([bt("A")]);
+    p.template.pages[0].cutAfter = false;
+    eq(JSON.parse(serializeProject(p)).version, PTAN_VERSION);
 });
 
 // ---- document-model ----
@@ -383,10 +448,10 @@ test("圖文段落：沒有圖片時與純文字元素渲染結果逐點相同",
     assert(a.heightDots === b.heightDots, "高度不同");
     assert(a.canvas.toDataURL() === b.canvas.toDataURL(), "像素不同");
 });
-test("圖文段落：存檔一律 v2，讀回仍是 float-block", () => {
+test("圖文段落：存檔一律 v2（單頁專案，不因為目前版本是 v3 就跟著升版），讀回仍是 float-block", () => {
     const p = sampleProject([createFloatBlockElement({ assetId: "pic" })]);
     const out = loadProject(serializeProject(p));
-    assert(out.ok && out.project.version === PTAN_VERSION && out.project.template.elements[0].type === "float-block");
+    assert(out.ok && out.project.version === 2 && pageEls(out.project)[0].type === "float-block");
 });
 
 // ---- 渲染邊界：不崩潰、canvas 不為 0、高度合理 ----
@@ -438,7 +503,7 @@ test("邊界：v1 檔案含 group／float-block 也能載入", () => {
     const base = createEmptyProject();
     const res = loadProject({ ...base, format: "ptan", version: 1, template: { elements: [bt("v1"), createGroupElement([bt("g")]), createFloatBlockElement({ runs: [{ text: "fb" }] })] } });
     assert(res.ok, res.error);
-    eq(res.project.template.elements.map((e) => e.type), ["text", "group", "float-block"]);
+    eq(pageEls(res.project).map((e) => e.type), ["text", "group", "float-block"]);
 });
 
 test("自動儲存成功：顯示已自動儲存，不用 role=alert", async () => {

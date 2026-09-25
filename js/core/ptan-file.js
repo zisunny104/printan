@@ -13,7 +13,8 @@ export async function downloadPtan(project, fileName = "untitled", { embedFonts 
     let failed = [];
     let out = project;
     if (embedFonts) {
-        const built = await buildEmbeddedFonts(project.template.elements, defaultFamily);
+        const allElements = (project.template?.pages || []).flatMap((p) => p.elements);
+        const built = await buildEmbeddedFonts(allElements, defaultFamily);
         failed = built.failed;
         out = { ...project, embeddedFonts: built.fonts };
     }

@@ -21,7 +21,7 @@ import { wireResizableColumns } from "./resizable-columns.js";
 import { createInlineTextEditor } from "./inline-text-editor.js";
 import { createWorkspaceView } from "./workspace-view.js";
 import { createInfoIcon, wireHelpDialog } from "./ui-helpers.js";
-import { LAST_DRAFT_KEY, els, rt, state } from "./context.js";
+import { LAST_DRAFT_KEY, currentElements, currentPage, els, rt, state } from "./context.js";
 import {
     attemptSilentPrinterReconnect, bindPrinterSettings, loadPrintPrefs, printCurrent, renderMarginRows,
     renderPrintableDotsRows,
@@ -36,6 +36,7 @@ import { bindBatchPanel, endBatchPreview, exportBatchPdf, exportSinglePdf } from
 import { bindEditorShortcuts, recordHistory, resetHistory } from "./history.js";
 import { addElement, insertElement, wireAddMenu } from "./element-actions.js";
 import { bootKioskFromQuery } from "./kiosk.js";
+import { bindPageList, renderPageList } from "./pages.js";
 
 async function init() {
     cacheDom();
@@ -51,6 +52,8 @@ async function init() {
     bindEditorShortcuts();
     bindProjectName();
     renderProjectName();
+    bindPageList();
+    renderPageList();
     wireResizableColumns();
     wireToolbarOverflow();
     workspace.mount();
@@ -86,6 +89,7 @@ function cacheDom() {
         "printer-info-device", "printer-info-firmware", "printer-info-spec", "printer-info-dpi",
         "printer-info-paper", "printer-info-printable", "printer-info-blade", "export-embed-fonts", "export-embed-fonts-row",
         "btn-project-name", "project-name-input", "project-name-text",
+        "page-list", "btn-page-add", "btn-page-split",
     ].forEach((id) => (els[id] = document.getElementById(id)));
 }
 
@@ -420,6 +424,7 @@ function bindFileInputs() {
 
 export function loadProjectIntoEditor(project) {
     state.project = project;
+    state.currentPageIndex = 0;
     state.selectedId = null;
     state.multi = [];
     state.insertionTarget = null;
@@ -432,6 +437,7 @@ export function loadProjectIntoEditor(project) {
     populatePaperWidthTabs();
     populateRecentDrafts();
     renderProjectName();
+    renderPageList();
     onModelChange();
 }
 
@@ -558,7 +564,9 @@ function populateRecentDrafts() {
 // ---- 變數 / 預覽資料 ----
 
 function renderVariables() {
-    const names = extractPlaceholders(state.project.template.elements);
+    // 變數清單彙整全部頁面（不只目前編輯中的這頁），因為批次資料／kiosk query string 的填值
+    // 要涵蓋整份專案會印出來的所有內容，不能因為使用者剛好切到沒用該變數的頁就漏列。
+    const names = extractPlaceholders(state.project.template.pages.flatMap((p) => p.elements));
     state.project.variables = names;
 
     const hasVariables = names.length > 0;
@@ -649,7 +657,7 @@ function updatePaperFrame() {
     // 空白版型的白底＝最短可切下的一張紙（列印頭到切刀的距離），隨縮放與 profile 變動
     els["paper-shadow"].style.setProperty("--paper-min-height", `${bladeOffsetMm * pxPerMm}px`);
     // 版面完全沒有元素時，切刀安全線只是誤導（看起來像渲染壞掉），故不顯示
-    const isEmpty = state.project.template.elements.length === 0;
+    const isEmpty = currentElements().length === 0;
     els["paper-viewport"].classList.toggle("is-empty", isEmpty);
 }
 
@@ -661,7 +669,11 @@ async function updatePreview() {
         const data = state.batchPreview.active
             ? (state.batchPreview.records[state.batchPreview.index] ?? {})
             : state.previewData;
-        result = await renderTemplate(state.project, data, { mode: state.mode, profile: getEffectiveProfile() });
+        // 畫布一次只編輯／預覽目前這一頁：renderTemplate() 是不能更動的公開單頁 API（見 renderer.js
+        // 開頭說明），這裡用一個「借用 template.elements」的殼物件呼叫它，不需要另外複製一份渲染邏輯；
+        // 多頁一次全部列印／匯出改呼叫 renderPages()（見 printer-settings.js／batch-export.js）。
+        const pageProject = { ...state.project, template: { elements: currentElements() } };
+        result = await renderTemplate(pageProject, data, { mode: state.mode, profile: getEffectiveProfile() });
     } catch (err) {
         console.error(err);
         return;
@@ -724,7 +736,7 @@ function updateFontFallbackNotice(failedLabels) {
 export const textSel = { start: 0, end: 0, refresh: null };
 export const inlineEditor = createInlineTextEditor({
     getHost: () => els["paper-shadow"],
-    getElement: (id) => findElementById(state.project.template.elements, id),
+    getElement: (id) => findElementById(currentElements(), id),
     getBlockNode: (id) => els["edit-overlay"]?.querySelector(`.edit-block[data-id="${id}"]`),
     getScale: () => (rt.lastRenderResult ? rt.lastRenderResult.canvas.clientWidth / rt.lastRenderResult.widthDots : 1) || 1,
     onInput: () => onModelChange({ live: true }),

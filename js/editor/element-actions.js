@@ -1,6 +1,6 @@
 import { createTextElement, createFloatBlockElement, createSpacerElement, createDividerElement, createRowElement, createBarcodeElement, DEFAULT_ROW_GAP } from "../core/document-model.js";
 import { resolveTargetArray, findElementById, findContainerOf, removeElements, groupElementsIn, ungroupElementsIn, duplicateElementsIn, moveElementBy, moveElementsBy, moveElementToIndex, moveElementToContainerIn, selectionToIds, idsToSelection, pruneSelectionIn } from "../core/element-tree.js";
-import { els, rt, state } from "./context.js";
+import { currentElements, els, rt, state } from "./context.js";
 import { renderInspector } from "./inspector.js";
 import { containerToTarget, renderOutline } from "./outline.js";
 import { inlineEditor, onModelChange } from "./editor.js";
@@ -41,7 +41,7 @@ export function addElement(kind, { ratio, target } = {}) {
 // 所以先記下來，等 renderEditOverlay() 畫完疊層再處理。
 
 export function insertElement(element) {
-    const target = resolveTargetArray(state.project.template.elements, state.insertionTarget);
+    const target = resolveTargetArray(currentElements(), state.insertionTarget);
     target.push(element);
     state.selectedId = element.id;
     state.multi = [];
@@ -210,7 +210,7 @@ export function deleteElement(id) {
 }
 
 export function deleteElements(ids) {
-    for (const id of removeElements(state.project.template.elements, ids)) {
+    for (const id of removeElements(currentElements(), ids)) {
         if (state.insertionTarget && state.insertionTarget.rowId === id) state.insertionTarget = null;
     }
     pruneSelection();
@@ -219,14 +219,14 @@ export function deleteElements(ids) {
 
 // 建立群組：把同一層的選取元素收進一個新群組（放在最前面那個的位置）；解散則把子元素放回原位
 export function groupElements(ids) {
-    const group = groupElementsIn(state.project.template.elements, ids);
+    const group = groupElementsIn(currentElements(), ids);
     if (!group) return;
     setSelection([group.id]);
     onModelChange();
 }
 
 export function ungroupElements(ids) {
-    const freed = ungroupElementsIn(state.project.template.elements, ids);
+    const freed = ungroupElementsIn(currentElements(), ids);
     if (!freed.length) return;
     setSelection(freed);
     onModelChange();
@@ -237,7 +237,7 @@ export function duplicateElement(id) {
 }
 
 export function duplicateElements(ids) {
-    const clones = duplicateElementsIn(state.project.template.elements, ids);
+    const clones = duplicateElementsIn(currentElements(), ids);
     if (!clones.length) return;
     setSelection(clones);
     onModelChange();
@@ -245,7 +245,7 @@ export function duplicateElements(ids) {
 
 // 元素被刪掉（刪除、復原）之後，把選取範圍裡已經不存在的 id 拿掉
 export function pruneSelection() {
-    Object.assign(state, pruneSelectionIn(state.project.template.elements, state));
+    Object.assign(state, pruneSelectionIn(currentElements(), state));
 }
 
 export function getSelectedIds() {
@@ -257,23 +257,23 @@ export function setSelection(ids) {
 }
 
 export function moveElement(id, direction) {
-    if (moveElementBy(state.project.template.elements, id, direction)) onModelChange();
+    if (moveElementBy(currentElements(), id, direction)) onModelChange();
 }
 
 /** 多選整批上移／下移：同一層內，遇到邊界或前一個也是選取中的就不動，其餘保持相對順序。 */
 export function moveElements(ids, direction) {
-    if (moveElementsBy(state.project.template.elements, ids, direction)) onModelChange();
+    if (moveElementsBy(currentElements(), ids, direction)) onModelChange();
 }
 
 /** 拖曳排序用：把元素移到「同一個容器內、目前索引為 newIndex 的元素之前」。 */
 export function moveElementTo(id, newIndex) {
-    if (moveElementToIndex(state.project.template.elements, id, newIndex)) onModelChange();
+    if (moveElementToIndex(currentElements(), id, newIndex)) onModelChange();
 }
 
 /** 跨容器拖曳：把元素搬到另一個容器陣列的 index 位置（同容器時等同 moveElementTo）。
  *  不能把多欄元素搬進自己底下的欄位（會形成迴圈）。 */
 export function moveElementToContainer(id, targetArray, index) {
-    const { moved, crossed } = moveElementToContainerIn(state.project.template.elements, id, targetArray, index);
+    const { moved, crossed } = moveElementToContainerIn(currentElements(), id, targetArray, index);
     if (!moved) return;
     if (crossed) state.insertionTarget = containerToTarget(targetArray);
     onModelChange();
@@ -284,7 +284,7 @@ export function selectElementById(id, { toggle = false } = {}) {
     if (toggle) {
         // Shift／Ctrl 點選：在同一層內加入或移出選取，跨層就改成單選
         const current = getSelectedIds();
-        const arrayOf = (x) => findContainerOf(state.project.template.elements, x)?.array;
+        const arrayOf = (x) => findContainerOf(currentElements(), x)?.array;
         if (current.length && arrayOf(current[0]) === arrayOf(id)) {
             setSelection(current.includes(id) ? current.filter((x) => x !== id) : [...current, id]);
             renderOutline();
@@ -294,9 +294,9 @@ export function selectElementById(id, { toggle = false } = {}) {
         }
     }
     setSelection([id]);
-    const el = findElementById(state.project.template.elements, id);
+    const el = findElementById(currentElements(), id);
     if (el && el.type !== "row" && el.type !== "group") {
-        const found = findContainerOf(state.project.template.elements, id);
+        const found = findContainerOf(currentElements(), id);
         state.insertionTarget = containerToTarget(found?.array);
     }
     renderOutline();

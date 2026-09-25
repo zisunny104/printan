@@ -11,14 +11,39 @@ import { confirmFontFallbacks, describeFontFallbackIssues } from "./batch-export
 import { safeGetItem, safeSetItem } from "../core/storage.js";
 import { createInfoIcon } from "./ui-helpers.js";
 import { renderCalibrationSheet, renderTestPrint } from "./test-print-project.js";
-import { renderTemplate } from "../core/renderer.js";
+import { renderPages } from "../core/renderer.js";
 
 // ESC/POS 直連列印（WebUSB／WebSerial）用的列印選項：在使用者的走紙／切紙偏好之外，
 // 額外帶入目前印表機 profile 的列印頭最大寬度，讓 buildEscposJob 統一置中輸出
 // （見 printer-adapter.js centerCanvasOnWidth），避免紙寬較窄時印出來的內容偏移；左右邊距校正的補白點數一併帶入。
-function getEscposPrintOptions() {
+// pageCutAfter：多頁列印時每一頁各自的切紙旗標（見 schema.js Page.cutAfter）。跟使用者全域的
+// 「切紙」偏好（state.printPrefs.cutPaper）是「且」的關係——全域偏好本來就是給沒有自動切刀、
+// 或不想切紙的使用者關掉用的，單頁專案沒有 pages 概念之前這個偏好就是唯一開關，多頁專案
+// 加了每頁各自的旗標之後，兩者都要開才真的送切紙指令，維持「全域關掉＝完全不切」的既有行為。
+function getEscposPrintOptions(pageCutAfter = true) {
     const pad = getMarginPad(getEffectiveProfile(), state.project.paper.widthId);
-    return { ...state.printPrefs, targetWidthDots: getPrintHeadWidthDots(getBaseProfile()), padLeftDots: pad.left, padRightDots: pad.right };
+    return {
+        ...state.printPrefs,
+        cutPaper: state.printPrefs.cutPaper && pageCutAfter,
+        targetWidthDots: getPrintHeadWidthDots(getBaseProfile()),
+        padLeftDots: pad.left,
+        padRightDots: pad.right,
+    };
+}
+
+// 依序印出多頁：任何一頁失敗就整個中止（不跳過繼續印剩下的頁），因為列印順序有意義
+// （同一段連續紙、或後面頁面內容承接前面），跳過中間一頁會印出不完整、順序錯亂的結果，
+// 比整個失敗更難察覺、更難補救。回傳 { ok, failedPageIndex, error } 或 { ok: true }。
+async function printPagesInOrder(adapter, results) {
+    for (let i = 0; i < results.length; i++) {
+        const cutAfter = results[i].page?.cutAfter !== false;
+        try {
+            await adapter.print(results[i], getEscposPrintOptions(cutAfter));
+        } catch (err) {
+            return { ok: false, failedPageIndex: i, error: err };
+        }
+    }
+    return { ok: true };
 }
 
 export async function printCurrent() {
@@ -28,32 +53,30 @@ export async function printCurrent() {
     }
     state.printerBusy = true;
     try {
-        const result = await renderTemplate(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
-        if (!confirmFontFallbacks(result)) return;
+        const results = await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
+        if (!confirmFontFallbacks(results)) return;
 
-        if (state.usbConnected) {
-            try {
-                await usbAdapter.print(result, getEscposPrintOptions());
-                return;
-            } catch (err) {
-                state.usbConnected = false;
-                updatePrinterConnectionUi();
-                alert(`列印失敗：${describePrinterError(err)}，改用系統列印`);
-            }
-        } else if (state.serialConnected) {
-            try {
-                await serialAdapter.print(result, getEscposPrintOptions());
-                return;
-            } catch (err) {
-                state.serialConnected = false;
-                updatePrinterConnectionUi();
-                alert(`列印失敗：${describePrinterError(err)}，改用系統列印`);
-            }
+        // 退回系統列印時只印「還沒成功送到印表機」的頁：failedPageIndex 之前的頁面已經
+        // 實際印到紙上了（USB／Serial 是逐頁送出、送出即列印，不是先排隊再一次印），
+        // 整批重印會讓那些頁面重複印出——紙已經印出來的東西收不回來。
+        let remainingResults = results;
+        if (state.usbConnected || state.serialConnected) {
+            const adapter = state.usbConnected ? usbAdapter : serialAdapter;
+            const outcome = await printPagesInOrder(adapter, results);
+            if (outcome.ok) return;
+            if (state.usbConnected) state.usbConnected = false; else state.serialConnected = false;
+            updatePrinterConnectionUi();
+            const pageLabel = results.length > 1 ? `第 ${outcome.failedPageIndex + 1} 頁「${results[outcome.failedPageIndex].page?.name || ""}」` : "";
+            alert(`列印失敗：${pageLabel}${pageLabel ? "，" : ""}${describePrinterError(outcome.error)}，改用系統列印`);
+            remainingResults = results.slice(outcome.failedPageIndex);
         }
 
+        // 系統列印對話框一次只能印一份影像，多頁就開多個列印工作，逐一走過去；
+        // 這裡不像 USB／Serial 失敗就整個中止——系統對話框本身就是使用者手動逐一確認／取消，
+        // 沒有「靜默中途失敗」的問題，中止與否的差異對使用者沒有意義。
         const adapter = new SystemDialogAdapter();
         await adapter.connect();
-        await adapter.print(result);
+        for (const result of remainingResults) await adapter.print(result);
     } catch (err) {
         alert(`列印失敗：${describePrinterError(err)}`);
     } finally {
@@ -62,22 +85,36 @@ export async function printCurrent() {
 }
 
 /**
- * kiosk.js 自動列印用：跟 printCurrent 一樣送印，但兩個地方刻意不一樣——
+ * kiosk.js 自動列印用：跟 printCurrent 一樣依序送印全部頁面，但兩個地方刻意不一樣——
  * 1. 不呼叫 confirmFontFallbacks() 的 confirm()，kiosk 沒有人在旁邊可以點確認；
  * 2. USB／Serial 失敗時不像 printCurrent 退回 SystemDialogAdapter（跳系統列印對話框一樣要人手動
- *    操作，對 kiosk 沒有意義），直接回報失敗給呼叫端自己決定怎麼顯示。
+ *    操作，對 kiosk 沒有意義），直接回報失敗給呼叫端自己決定怎麼顯示（見 kiosk.js showKioskNotice）。
  * 只印已授權裝置：沒有已授權裝置時呼叫端會自己判斷、不呼叫這個函式（見 kiosk.js）。
- * 回傳 { ok, issues } 或 { ok:false, reason, error? }，不在這裡動畫面。
+ * 中途某一頁失敗就中止，不跳過繼續印剩下的頁（理由同 printPagesInOrder）。
+ * 回傳 { ok, issues } 或 { ok:false, reason, error?, failedPageIndex?, pageName? }，不在這裡動畫面。
  */
 export async function printSilently() {
     if (state.printerBusy) return { ok: false, reason: "busy" };
     if (!state.usbConnected && !state.serialConnected) return { ok: false, reason: "not-connected" };
     state.printerBusy = true;
     try {
-        const result = await renderTemplate(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
-        const issues = describeFontFallbackIssues(result);
+        const results = await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
+        const issues = describeFontFallbackIssues(results);
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
-        await adapter.print(result, getEscposPrintOptions());
+        const outcome = await printPagesInOrder(adapter, results);
+        if (!outcome.ok) {
+            state.usbConnected = false;
+            state.serialConnected = false;
+            updatePrinterConnectionUi();
+            return {
+                ok: false,
+                reason: "print-failed",
+                error: outcome.error,
+                failedPageIndex: outcome.failedPageIndex,
+                pageName: results[outcome.failedPageIndex]?.page?.name,
+                totalPages: results.length,
+            };
+        }
         return { ok: true, issues };
     } catch (err) {
         state.usbConnected = false;

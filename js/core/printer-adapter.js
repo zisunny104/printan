@@ -42,10 +42,29 @@ export class SystemDialogAdapter {
             </style>
             </head><body><img src="${dataUrl}"></body></html>`);
         printWindow.document.close();
-        printWindow.onload = () => {
-            printWindow.focus();
-            printWindow.print();
-        };
+        // 一定要等這個視窗的列印動作真的結束（afterprint：使用者按了列印或取消）才 resolve，
+        // 呼叫端多頁迴圈（printer-settings.js printPagesInOrder）才會一份一份開視窗；不等待的話
+        // for 迴圈會在同一瞬間把全部頁面的列印視窗都開出來，容易被瀏覽器 popup blocker 擋掉，
+        // 使用者也會同時面對好幾個列印對話框，而不是依序看到、依序確認。
+        await new Promise((resolve) => {
+            let settled = false;
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                resolve();
+            };
+            printWindow.onload = () => {
+                printWindow.focus();
+                printWindow.print();
+            };
+            printWindow.addEventListener("afterprint", () => {
+                printWindow.close();
+                finish();
+            });
+            // 使用者直接把列印視窗關掉（不是走列印對話框的列印／取消）時 afterprint 不會觸發，
+            // 靠 unload 頂住，避免整個列印流程卡在這一步。
+            printWindow.addEventListener("unload", finish);
+        });
     }
 
     async disconnect() {}

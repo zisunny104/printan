@@ -1,12 +1,17 @@
 import { cloneElementWithNewIds } from "../core/document-model.js";
-import { resolveTargetArray, findElementById, findContainerOf, flattenElements, snapshotElements, restoreElements } from "../core/element-tree.js";
-import { els, state } from "./context.js";
+import { resolveTargetArray, findElementById, findContainerOf, flattenElements } from "../core/element-tree.js";
+import { els, state, currentElements } from "./context.js";
 import { renderInspector } from "./inspector.js";
 import { containerToTarget, renderOutline } from "./outline.js";
 import { onModelChange } from "./editor.js";
 import { deleteElements, duplicateElements, getSelectedIds, groupElements, highlightSelectedBlock, moveElements, pruneSelection, selectElementById, setSelection, ungroupElements } from "./element-actions.js";
+import { renderPageList } from "./pages.js";
 
-// ---- 復原／重做：版面元素樹的快照歷史 ----
+// ---- 復原／重做：版面歷史 ----
+// 快照對象是整個 project.template.pages，不只是目前頁的 elements——
+// 這樣「新增／刪除／合併／分割頁面、頁面排序」這類頁面層級操作也一併進復原堆疊，不會出現
+// 「不小心刪掉一整頁卻復原不了」這種資料遺失風險（見需求單）。頁內編輯（拖曳、打字）只是
+// 剛好也落在同一份快照裡，行為跟改版前一致。
 // 每次 onModelChange 記一份快照；連續變動（拖曳、打字）在 HISTORY_MERGE_MS 內併成同一筆。
 // 歷史第 0 筆是載入時的狀態，所以復原不會退到空白以前。
 
@@ -20,9 +25,15 @@ export function resetHistory() {
     history.at = 0;
 }
 
+// currentPageIndex 故意不放進快照：只是切換目前檢視的頁面、內容沒有變動時不該產生新的復原點
+// （切頁本身不呼叫 recordHistory，見 pages.js setCurrentPage），這裡即使被呼叫到也只比較內容。
+function snapshotPages() {
+    return JSON.stringify(state.project.template.pages);
+}
+
 export function recordHistory() {
     if (history.restoring) return;
-    const snapshot = snapshotElements(state.project.template.elements);
+    const snapshot = snapshotPages();
     if (snapshot === history.stack[history.index]) return;
     const now = Date.now();
     history.stack.length = history.index + 1;
@@ -41,11 +52,13 @@ function stepHistory(direction) {
     if (next < 0 || next >= history.stack.length) return;
     history.index = next;
     history.at = 0;
-    state.project.template.elements = restoreElements(history.stack[next]);
+    state.project.template.pages = JSON.parse(history.stack[next]);
+    state.currentPageIndex = Math.min(state.currentPageIndex, state.project.template.pages.length - 1);
     pruneSelection();
-    if (state.insertionTarget && !findElementById(state.project.template.elements, state.insertionTarget.rowId)) state.insertionTarget = null;
+    if (state.insertionTarget && !findElementById(currentElements(), state.insertionTarget.rowId)) state.insertionTarget = null;
     history.restoring = true;
     try {
+        renderPageList();
         onModelChange();
     } finally {
         history.restoring = false;
@@ -70,9 +83,9 @@ function pasteElements() {
     if (!clipboardElements.length) return;
     const clones = clipboardElements.map((el) => cloneElementWithNewIds(el));
     const ids = getSelectedIds();
-    const found = ids.length ? findContainerOf(state.project.template.elements, ids[ids.length - 1]) : null;
+    const found = ids.length ? findContainerOf(currentElements(), ids[ids.length - 1]) : null;
     if (found) found.array.splice(found.index + 1, 0, ...clones);
-    else resolveTargetArray(state.project.template.elements, state.insertionTarget).push(...clones);
+    else resolveTargetArray(currentElements(), state.insertionTarget).push(...clones);
     setSelection(clones.map((c) => c.id));
     onModelChange();
 }
@@ -90,7 +103,7 @@ function handleEditorShortcut(e) {
         if (isFreeText || !isUndoShortcut) return;
     }
     const ids = getSelectedIds();
-    const root = state.project.template.elements;
+    const root = currentElements();
 
     if (mod && key === "z") {
         stepHistory(e.shiftKey ? 1 : -1);
@@ -155,7 +168,7 @@ function startMarquee(e) {
         }
         box.remove();
         const r = rectOf(ev);
-        const root = state.project.template.elements;
+        const root = currentElements();
         const hits = [...els["edit-overlay"].querySelectorAll(".edit-block")].filter((n) => {
             const b = n.getBoundingClientRect();
             return b.left < r.right && b.right > r.left && b.top < r.bottom && b.bottom > r.top;

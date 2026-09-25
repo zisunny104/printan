@@ -1,6 +1,6 @@
 import { MAX_ROW_COLUMNS, childArrays, findContainerOf, findElementById, mergeRowColumns, splitRowColumn } from "../core/element-tree.js";
 import { splitRowColumns } from "../core/units.js";
-import { els, rt, state } from "./context.js";
+import { currentElements, els, rt, state } from "./context.js";
 import { iconButton } from "./inspector-widgets.js";
 import { inlineEditor, onModelChange, schedulePreviewLive } from "./editor.js";
 import { getSelectedIds, moveElementTo, revealPendingElement, selectElementById } from "./element-actions.js";
@@ -93,7 +93,7 @@ function buildEditBlock(box, scale) {
 /** 點擊選取＋拖曳排序（在同一個容器內，跟大綱面板的上移／下移操作同一個 array）。 */
 // 畫布上點到群組裡的元素：先選整個群組（可整體拖曳），群組已選取時再點才選到裡面的元素
 function outermostGroupId(id) {
-    const root = state.project.template.elements;
+    const root = currentElements();
     let top = null;
     (function walk(elements, chain) {
         for (const el of elements) {
@@ -111,7 +111,7 @@ function attachBlockInteractions(div, origId) {
     div.addEventListener("pointerdown", (e) => {
         if (e.target !== div || e.button !== 0) return;
         const groupId = outermostGroupId(origId);
-        const inside = groupId && getSelectedIds().some((sid) => sid !== groupId && findElementById([findElementById(state.project.template.elements, groupId)], sid));
+        const inside = groupId && getSelectedIds().some((sid) => sid !== groupId && findElementById([findElementById(currentElements(), groupId)], sid));
         const elId = groupId && !inside ? groupId : origId;
         const startX = e.clientX;
         const startY = e.clientY;
@@ -174,7 +174,7 @@ function attachBlockInteractions(div, origId) {
             } else if (!dragging) {
                 // 已選取的文字元素再點一下＝在預覽區直接編輯，插入點落在點擊位置
                 const toggle = ev.shiftKey || ev.ctrlKey || ev.metaKey;
-                const editText = !toggle && state.selectedId === elId && !state.multi.length && ["text", "float-block"].includes(findElementById(state.project.template.elements, elId)?.type);
+                const editText = !toggle && state.selectedId === elId && !state.multi.length && ["text", "float-block"].includes(findElementById(currentElements(), elId)?.type);
                 const enter = elId !== origId && !toggle && getSelectedIds().includes(elId);
                 selectElementById(enter ? origId : elId, { toggle });
                 if (editText) inlineEditor.open(elId, { x: ev.clientX, y: ev.clientY });
@@ -186,7 +186,7 @@ function attachBlockInteractions(div, origId) {
 }
 
 function collectSiblingBoxes(elId) {
-    const found = findContainerOf(state.project.template.elements, elId);
+    const found = findContainerOf(currentElements(), elId);
     if (!found) return null;
     const overlay = els["edit-overlay"];
     const others = found.array
@@ -232,7 +232,7 @@ function clearInsertionLine() {
 
 /** 高度拖曳把手：目前只有 spacer／image 的高度是可以直接調整的數值。
  * box.el 來自 renderer 排版結果，是套用 mail merge 資料時深拷貝出來的節點（見 core/merge.js
- * 的 applyDataToElements），跟 state.project.template.elements 不是同一個物件，
+ * 的 applyDataToElements），跟 currentElements() 不是同一個物件，
  * 所以要修改的話必須用 id 找回真正的 element，直接改 box.el 不會反映到實際專案資料上。 */
 function buildHeightResizeHandle(box, scale) {
     const handle = document.createElement("div");
@@ -244,7 +244,7 @@ function buildHeightResizeHandle(box, scale) {
         e.preventDefault();
         e.stopPropagation();
         handle.classList.add("is-dragging");
-        const realEl = findElementById(state.project.template.elements, box.el.id);
+        const realEl = findElementById(currentElements(), box.el.id);
         if (!realEl) return;
         const startY = e.clientY;
         // 圖片預設是依比例縮放（fit=auto，heightDots 不生效）：從目前畫出的高度起算，並自動切成「拉伸」
@@ -297,7 +297,7 @@ function buildImageResizeHandle(box, item, { side, corner, x, y }, scale) {
     handle.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const realEl = findElementById(state.project.template.elements, box.el.id);
+        const realEl = findElementById(currentElements(), box.el.id);
         if (!realEl) return;
         handle.classList.add("is-dragging");
         const startX = e.clientX;
@@ -352,7 +352,7 @@ function buildTextWidthResizeHandle(box, item, { side, x, y }, scale) {
     handle.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const realEl = findElementById(state.project.template.elements, box.el.id);
+        const realEl = findElementById(currentElements(), box.el.id);
         if (!realEl) return;
         handle.classList.add("is-dragging");
         const startX = e.clientX;
@@ -394,7 +394,7 @@ function buildTextClipIndicator(box, scale) {
 
 /** 欄寬拖曳把手：把兩欄的目前點寬直接當比例使用，拖曳時即時換算成新的 ratio。
  * rowEl 同樣是排版結果裡的深拷貝節點（理由同 buildHeightResizeHandle 的註解），
- * 要修改 ratio 必須用 id 找回 state.project.template.elements 裡真正的 row。 */
+ * 要修改 ratio 必須用 id 找回 currentElements() 裡真正的 row。 */
 function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHeightDots, rowWidthDots, scale) {
     const handle = document.createElement("div");
     handle.className = "edit-resize-handle is-col";
@@ -405,7 +405,7 @@ function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHe
         e.preventDefault();
         e.stopPropagation();
         handle.classList.add("is-dragging");
-        const realRow = findElementById(state.project.template.elements, rowEl.id);
+        const realRow = findElementById(currentElements(), rowEl.id);
         if (!realRow) return;
         const startX = e.clientX;
         const startWidths = splitRowColumns(rowWidthDots, realRow.ratio, realRow.gap).widths;
@@ -434,7 +434,7 @@ function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHe
     // 雙擊分隔線：拿掉這條分割，右欄內容併入左欄
     handle.addEventListener("dblclick", (e) => {
         e.stopPropagation();
-        const realRow = findElementById(state.project.template.elements, rowEl.id);
+        const realRow = findElementById(currentElements(), rowEl.id);
         if (realRow && mergeRowColumns(realRow, colIndex)) onModelChange();
     });
     return handle;
@@ -443,7 +443,7 @@ function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHe
 /** 欄位上方的「＋」：把這一欄對半分成兩欄。 */
 function buildColumnSplitButton(rowId, colIndex, centerXDots, rowYDots, scale) {
     const btn = iconButton("plus", "分割欄位", () => {
-        const realRow = findElementById(state.project.template.elements, rowId);
+        const realRow = findElementById(currentElements(), rowId);
         if (realRow && splitRowColumn(realRow, colIndex)) onModelChange();
     });
     btn.classList.add("edit-col-split");
