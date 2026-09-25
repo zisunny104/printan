@@ -20,13 +20,13 @@
                                 aria-label="新增頁面" data-tooltip="新增頁面">
                                 <span class="ts-icon is-square-plus-icon" aria-hidden="true"></span>
                             </button>
-                            <button type="button" id="btn-outline-close" class="ts-button is-icon is-ghost is-small tablet+:has-hidden"
-                                aria-label="關閉版面結構">
-                                <span class="ts-icon is-xmark-icon" aria-hidden="true"></span>
-                            </button>
                             <button type="button" id="btn-outline-add" class="ts-button is-icon is-ghost is-small"
                                 aria-label="新增元素" aria-haspopup="menu" aria-expanded="false" data-tooltip="新增元素">
                                 <span class="ts-icon is-plus-icon" aria-hidden="true"></span>
+                            </button>
+                            <button type="button" id="btn-outline-close" class="ts-button is-icon is-ghost is-small tablet+:has-hidden"
+                                aria-label="關閉版面結構">
+                                <span class="ts-icon is-xmark-icon" aria-hidden="true"></span>
                             </button>
                         </div>
                         <div class="ts-content is-padded">
