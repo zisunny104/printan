@@ -6,7 +6,7 @@ import {
     resolveDividerDrawMode, resolveFill,
     applyStyleToRange, applyTextStylePreset, getRangeStyle, getTextContent, replaceFullText, TEXT_STYLE_PRESETS,
 } from "../core/document-model.js";
-import { MAX_ROW_GAP, normalizeRowGap, dotsToPt as dotsToPtRaw, ptToDots as ptToDotsRaw } from "../core/units.js";
+import { MAX_ROW_GAP, normalizeRowGap, dotsToPt as dotsToPtRaw, ptToDots as ptToDotsRaw, dotsToMm, mmToDots } from "../core/units.js";
 import { WEB_FONTS, findWebFont, isWebFontFailed } from "../core/web-fonts.js";
 import { applyFieldToElements, findElementById, setRowRatio, splitRowColumn, MAX_ROW_COLUMNS } from "../core/element-tree.js";
 import { createInfoIcon } from "./ui-helpers.js";
@@ -30,6 +30,26 @@ function dotsToPt(dots) {
 }
 function ptToDots(pt) {
     return ptToDotsRaw(pt, getEffectiveProfile().dpi.x);
+}
+// 分隔線粗細：dot 數字本身沒有實體大小概念，改比照 Word／Excel 框線粗細那種「細／普通／粗／特粗」
+// 預設選單，標示 mm 讓使用者看得出「這條多粗」。色塊（fill）模式是拿來當裝飾色塊，預設值比線條粗上
+// 一截。內部資料仍存 dot（渲染公式、.ptan 都是 dot），選單只是換算成 dot 存回去，兩者互相對得起來。
+const DIVIDER_LINE_THICKNESS_PRESETS_MM = [
+    ["細", 0.3], ["普通", 0.5], ["粗", 1], ["特粗", 2],
+];
+const DIVIDER_FILL_THICKNESS_PRESETS_MM = [
+    ["細", 2], ["普通", 4], ["粗", 8], ["特粗", 12],
+];
+function dividerThicknessSelect(el, presets) {
+    const dpiX = getEffectiveProfile().dpi.x;
+    const options = presets.map(([name, mm]) => [String(mmToDots(mm, dpiX)), `${name}（${mm} mm）`]);
+    const current = String(el.thicknessDots);
+    // 舊檔或手動存過的值可能不在預設清單裡：多插一個選項讓目前的值看得到、也不會一開面板就被
+    // 悄悄改成清單第一項（<select> 找不到相符 option 時瀏覽器行為不一定，這裡明確處理掉）。
+    if (!options.some(([v]) => v === current)) {
+        options.unshift([current, `目前（${dotsToMm(el.thicknessDots, dpiX).toFixed(1)} mm）`]);
+    }
+    return selectInput(options, current, (v) => { el.thicknessDots = Number(v); onModelChange({ skipInspector: true }); });
 }
 
 // 選取對象改變時通知訂閱者（小螢幕抽屜據此打開元素設定面板）；同一個元素重繪不會重發
@@ -772,10 +792,10 @@ function buildDividerInspector(panel, el) {
     if (drawMode === "line") {
         panel.appendChild(fieldRow([
             ["樣式", selectInput([["solid", "實線"], ["dashed", "虛線"], ["dotted", "點線"]], el.style, (v) => { el.style = v; onModelChange({ skipInspector: true }); })],
-            ["粗細 (dot)", textInput(el.thicknessDots, (v) => { el.thicknessDots = v; onModelChange({ skipInspector: true }); }, "number")],
+            ["粗細", dividerThicknessSelect(el, DIVIDER_LINE_THICKNESS_PRESETS_MM)],
         ]));
     } else {
-        panel.appendChild(field("高度 (dot)", textInput(el.thicknessDots, (v) => { el.thicknessDots = v; onModelChange({ skipInspector: true }); }, "number")));
+        panel.appendChild(field("高度", dividerThicknessSelect(el, DIVIDER_FILL_THICKNESS_PRESETS_MM)));
         const fill = resolveFill(el.fill);
         panel.appendChild(fillFields(fill, (patch, redraw) => {
             el.fill = { ...fill, ...patch };
