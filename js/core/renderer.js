@@ -524,9 +524,10 @@ function paintVerticalText(ctx, item, x, y, widthOverride) {
         let cellY = y + (item.vAlignOffset || 0);
         for (const cell of col.cells) {
             const { style } = cell;
-            const inverse = !!el.inverse !== style.inverse;
+            // 同 paintText：局部反白疊加在整行反白之上，不相抵
+            const inverse = !!el.inverse || style.inverse;
             if (style.inverse) {
-                ctx.fillStyle = inverse ? "#000" : "#fff";
+                ctx.fillStyle = "#000";
                 ctx.fillRect(cx - col.width / 2, cellY, col.width, cell.advance);
             }
             const ink = inverse ? "#fff" : "#000";
@@ -662,11 +663,12 @@ function paintText(ctx, item, x, y) {
         for (const seg of line.segments) {
             ctx.font = fontString(seg.style);
             const segWidth = ctx.measureText(seg.text).width;
-            // 局部反白與整行反白相抵：整行黑底上的反白段變回白底黑字
-            const segInverse = !!el.inverse !== seg.style.inverse;
+            // 局部反白疊加在整行反白之上（不相抵）：容器底色已經畫在下層，局部反白只是
+            // 再疊一塊實心黑底上去，兩者同時開啟時效果加成而不是互相抵銷回白底黑字
+            const segInverse = !!el.inverse || seg.style.inverse;
             const inkColor = segInverse ? "#fff" : "#000";
             if (seg.style.inverse) {
-                ctx.fillStyle = segInverse ? "#000" : "#fff";
+                ctx.fillStyle = "#000";
                 ctx.fillRect(cursorX, lineY, segWidth, line.lineHeightDots);
             }
             // 文字顏色花紋（網點／漸層）現在反白區塊也會套用，只是黑白對調（invert）跟反白背景疊在一起

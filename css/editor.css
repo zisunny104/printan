@@ -1343,13 +1343,13 @@ body {
     flex: none;
 }
 
+/* 開啟時 Tocas 的 dropdown 模組會用 floating-ui 把選單切成 position:fixed，並把
+   --ts-dropdown-min-width 設成觸發鈕實際寬度（見 tocas.min.js clickEventListener），
+   .ts-dropdown 的 min-width:max(var(--ts-dropdown-min-width), var(--min-width)) 就是靠這個
+   貼齊觸發鈕寬度。這裡原本疊了一個 min-width:100%，在 position:fixed 底下百分比是對「視窗」
+   算，等於整個蓋掉上面那條規則，選單直接撐滿整個畫面寬度——只留 max-height／overflow-y
+   讓長清單（例如字體）可以捲動，寬度交給 Tocas 自己算。 */
 .dropdown-select-menu {
-    /* 原本這裡寫 min-width:100% 想讓選單至少跟觸發鈕一樣寬，但 Tocas 的下拉選單其實是
-       position:fixed（靠 floating-ui 貼齊觸發鈕），fixed 元素的百分比寬度是相對「視窗」算，
-       不是相對觸發鈕——於是選單被撐成跟整個工作區一樣寬，且被 shift 到畫面最左邊，
-       就是使用者說的「下拉的彈出容器大小都異常」。Tocas 自己的 JS 已經會把
-       --ts-dropdown-min-width 設成觸發鈕的實際寬度（見 tocas.min.js autoUpdate），
-       不需要也不能再疊加一個百分比寬度上去。 */
     max-height: 16rem;
     overflow-y: auto;
     box-sizing: border-box;

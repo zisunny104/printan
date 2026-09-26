@@ -147,7 +147,7 @@ export function normalizeTextElement(el) {
 // ---- Run 編輯（比照 Figma：單一文字框 + 選取範圍套用樣式） ----
 // 以下函式把「字元偏移範圍」對應到 runs 陣列的切分/合併，供 editor.js 的富文字編輯器使用。
 
-// inverse＝局部反白（黑底白字）；元素本身也是整行反白時，兩者相抵＝該段變回白底黑字。
+// inverse＝局部反白（黑底白字）；元素本身也是整行反白時，兩者疊加＝維持黑底白字（見 renderer.js paintText）。
 export const RUN_STYLE_FIELDS = ["fontFamily", "fontSize", "bold", "italic", "underline", "strikethrough", "inverse"];
 
 /** 選取範圍內各 run 的某欄位值不一致時的標記值（不會被序列化保存，僅供 UI 顯示「混合」）。 */
