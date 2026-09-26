@@ -15,7 +15,7 @@ import {
     primaryFamilyName,
 } from "../core/fonts.js";
 import {
-    alignGroup, IMAGE_FIT_OPTIONS, IMAGE_SIDE_OPTIONS, checkboxInput, dropdownField, emptyState, field, fieldRow, foldSection, iconButton, iconToggleButton, mkButton, numberStepperInput, sectionDivider,
+    alignGroup, IMAGE_FIT_OPTIONS, IMAGE_SIDE_OPTIONS, checkboxInput, dropdownField, emptyState, field, fieldRow, foldSection, gradientRangeField, iconButton, iconToggleButton, mkButton, numberStepperInput, sectionDivider,
     sectionHeader, selectInput, sliderField, textInput,
 } from "./inspector-widgets.js";
 import { getEffectiveProfile, inlineEditor, onModelChange, textSel } from "./editor.js";
@@ -540,10 +540,7 @@ function buildTextInspector(panel, el) {
             body.appendChild(field("花紋", alignGroup(bgFill.pattern, (v) => setBgFill({ pattern: v }), "花紋", FILL_PATTERN_OPTIONS)));
             body.appendChild(sliderField("網點濃度", bgFill.level, 0, 255, (v) => setBgFill({ level: v })));
         } else if (mode === "gradient") {
-            body.appendChild(field("方向", alignGroup(bgFill.direction, (v) => setBgFill({ direction: v }), "方向", FILL_DIRECTION_OPTIONS)));
-            body.appendChild(sliderField("起點濃度", bgFill.from, 0, 255, (v) => setBgFill({ from: v })));
-            body.appendChild(sliderField("終點濃度", bgFill.to, 0, 255, (v) => setBgFill({ to: v })));
-            body.appendChild(field(null, checkboxInput(bgFill.reverse, (v) => setBgFill({ reverse: v }), bgFill.direction === "radial" ? "反轉方向（由外而內）" : "反轉方向（深到淺）")));
+            body.appendChild(gradientFields(bgFill, (patch) => setBgFill(patch)));
         }
     }));
 
@@ -843,6 +840,23 @@ function buildSpacerInspector(panel, el) {
 // document-model.js createFill／resolveFill）。onChange(patch, needsRedraw)：patch 是要併入
 // 目前 fill 物件的欄位，needsRedraw 是「模式」這類會讓子欄位跟著變、面板要整個重繪的變動；
 // 其餘（濃度／方向／反轉）用 skipInspector，行為比照其它欄位（例如 divider 原本的粗細）。
+//
+// 漸層細項（方向／兩端花紋／濃度／反轉）獨立成一個函式，因為文字墨色、容器底色、分隔線色塊
+// 三處都要一份一模一樣的控制項，原本各自複製一份很容易改一處漏一處（起點/終點濃度原本是
+// 兩條分開的 sliderField，使用者反映「兩個滑桿會衝突、應該像一般漸層調整在同一條、有預覽」，
+// 改用 gradientRangeField 之後三處要一起換，共用寫法比較不會漏）。
+function gradientFields(fill, onChange) {
+    const frag = document.createDocumentFragment();
+    frag.appendChild(field("方向", alignGroup(fill.direction, (v) => onChange({ direction: v }, false), "方向", FILL_DIRECTION_OPTIONS)));
+    frag.appendChild(fieldRow([
+        ["起點花紋", alignGroup(fill.fromPattern, (v) => onChange({ fromPattern: v }, false), "起點花紋", FILL_PATTERN_OPTIONS)],
+        ["終點花紋", alignGroup(fill.toPattern, (v) => onChange({ toPattern: v }, false), "終點花紋", FILL_PATTERN_OPTIONS)],
+    ]));
+    frag.appendChild(gradientRangeField(fill.from, fill.to, (which, v) => onChange({ [which]: v }, false)));
+    frag.appendChild(field(null, checkboxInput(fill.reverse, (v) => onChange({ reverse: v }, false), fill.direction === "radial" ? "反轉方向（由外而內）" : "反轉方向（深到淺）")));
+    return frag;
+}
+
 function fillFields(fill, onChange) {
     const frag = document.createDocumentFragment();
     frag.appendChild(field("填色方式", alignGroup(fill.mode, (v) => onChange({ mode: v }, true), "填色方式", INK_FILL_MODE_OPTIONS)));
@@ -850,10 +864,7 @@ function fillFields(fill, onChange) {
         frag.appendChild(field("花紋", alignGroup(fill.pattern, (v) => onChange({ pattern: v }, false), "花紋", FILL_PATTERN_OPTIONS)));
         frag.appendChild(sliderField("網點濃度", fill.level, 0, 255, (v) => onChange({ level: v }, false)));
     } else if (fill.mode === "gradient") {
-        frag.appendChild(field("方向", alignGroup(fill.direction, (v) => onChange({ direction: v }, false), "方向", FILL_DIRECTION_OPTIONS)));
-        frag.appendChild(sliderField("起點濃度", fill.from, 0, 255, (v) => onChange({ from: v }, false)));
-        frag.appendChild(sliderField("終點濃度", fill.to, 0, 255, (v) => onChange({ to: v }, false)));
-        frag.appendChild(field(null, checkboxInput(fill.reverse, (v) => onChange({ reverse: v }, false), fill.direction === "radial" ? "反轉方向（由外而內）" : "反轉方向（深到淺）")));
+        frag.appendChild(gradientFields(fill, onChange));
     }
     return frag;
 }

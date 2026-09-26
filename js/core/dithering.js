@@ -93,6 +93,30 @@ export function orderedDither(imageData, level = 128, pattern = "dot") {
     return imageData;
 }
 
+// 漸層兩端可以各自選不同花紋（見 document-model.js fromPattern/toPattern）：濃淡跟花紋都要
+// 隨 t（0-1，漸層位置）平滑變化，沒辦法先套濃淡再套花紋分兩次做——花紋的門檻矩陣本身也要跟著
+// t 在兩個矩陣之間線性混合，所以濃淡計算跟花紋混合在同一次掃描內一起做。
+// tOf(x, y) 回傳該像素的漸層位置 0-1；from/to 是兩端墨色濃度 0-255（0＝白／無墨，255＝全黑）。
+export function orderedDitherGradient(imageData, w, h, tOf, fromPattern, toPattern, from, to) {
+    const { data } = imageData;
+    const matrixA = HALFTONE_PATTERNS[fromPattern] || BAYER_4X4;
+    const matrixB = HALFTONE_PATTERNS[toPattern] || BAYER_4X4;
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const t = tOf(x, y);
+            const gray = (255 - from) * (1 - t) + (255 - to) * t;
+            const cellA = matrixA[y % 4][x % 4];
+            const cellB = matrixB[y % 4][x % 4];
+            const mapValue = ((cellA * (1 - t) + cellB * t + 0.5) / 16) * 255;
+            const v = gray < mapValue ? 0 : 255;
+            const i = (y * w + x) * 4;
+            data[i] = data[i + 1] = data[i + 2] = v;
+            data[i + 3] = 255;
+        }
+    }
+    return imageData;
+}
+
 /** 依「取樣方式」名稱分派抖色演算法，圖片元素的網點設定統一從這裡進入。 */
 export function applyDither(imageData, mode = "floyd-steinberg", level = 128, pattern = "dot") {
     if (mode === "ordered") return orderedDither(imageData, level, pattern);

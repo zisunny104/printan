@@ -276,7 +276,10 @@ export function sliderField(labelText, value, min, max, onInput) {
     label.append(labelText, valueTag);
 
     const sliderWrap = document.createElement("div");
-    sliderWrap.className = "ts-slider is-small is-fluid has-top-spaced-small";
+    // Tocas 的滑桿元件其實叫 .ts-range（不是 .ts-slider——那個 class 在 Tocas 裡根本不存在，
+    // 之前打錯了，導致完全沒套用到 Tocas 的樣式／`width:100%`，input[type=range] 用回瀏覽器
+    // 原生預設寬度（Chrome 是 129px），不管容器多寬滑桿看起來永遠只有一小截、用不到容器空間）。
+    sliderWrap.className = "ts-range has-top-spaced-small";
     const input = document.createElement("input");
     input.type = "range";
     input.setAttribute("aria-label", labelText);
@@ -291,6 +294,85 @@ export function sliderField(labelText, value, min, max, onInput) {
 
     wrap.appendChild(label);
     wrap.appendChild(sliderWrap);
+    return wrap;
+}
+
+// 漸層起點／終點濃度：原本是兩條分開的 sliderField，使用者反應「兩個滑桿會有衝突／應該像
+// 一般的漸層調整在同一條，而且有預覽」——改成一條軌道、兩顆可拖曳的端點，軌道背景直接用
+// CSS linear-gradient 即時預覽兩端顏色，中間隨拖曳同步變化。Tocas 沒有現成的雙滑塊元件，
+// 這裡是純手刻的拖曳邏輯，視覺上比照 .ts-range 的軌道／圓形把手（同高度、同主色），維持一致。
+export function gradientRangeField(from, to, onChange) {
+    const wrap = document.createElement("div");
+    wrap.className = "has-top-spaced-small";
+
+    const label = document.createElement("label");
+    label.className = "ts-text is-label field-label-row";
+    const fromTag = document.createElement("span");
+    fromTag.className = "ts-text is-description";
+    const toTag = document.createElement("span");
+    toTag.className = "ts-text is-description";
+    const tags = document.createElement("span");
+    tags.className = "gradient-range-tags";
+    tags.append(fromTag, "→", toTag);
+    label.append("漸層濃度", tags);
+
+    const track = document.createElement("div");
+    track.className = "gradient-range-track";
+    track.setAttribute("aria-hidden", "true");
+
+    const densityToRgb = (v) => { const g = 255 - v; return `rgb(${g},${g},${g})`; };
+    const render = () => {
+        fromTag.textContent = from;
+        toTag.textContent = to;
+        track.style.background = `linear-gradient(to right, ${densityToRgb(from)}, ${densityToRgb(to)})`;
+    };
+
+    function makeThumb(getValue, ariaLabel, which) {
+        const thumb = document.createElement("div");
+        thumb.className = "gradient-range-thumb";
+        thumb.tabIndex = 0;
+        thumb.setAttribute("role", "slider");
+        thumb.setAttribute("aria-label", ariaLabel);
+        thumb.setAttribute("aria-valuemin", "0");
+        thumb.setAttribute("aria-valuemax", "255");
+        const position = () => {
+            thumb.style.left = `${(getValue() / 255) * 100}%`;
+            thumb.setAttribute("aria-valuenow", String(getValue()));
+        };
+        const commit = (v) => {
+            v = Math.max(0, Math.min(255, Math.round(v)));
+            if (which === "from") from = v; else to = v;
+            position();
+            render();
+            onChange(which, v);
+        };
+        thumb.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
+            thumb.focus();
+            thumb.setPointerCapture(e.pointerId);
+            const move = (ev) => {
+                const rect = track.getBoundingClientRect();
+                commit(((ev.clientX - rect.left) / rect.width) * 255);
+            };
+            move(e);
+            thumb.addEventListener("pointermove", move);
+            thumb.addEventListener("pointerup", () => thumb.removeEventListener("pointermove", move), { once: true });
+        });
+        thumb.addEventListener("keydown", (e) => {
+            const step = e.shiftKey ? 10 : 1;
+            if (e.key === "ArrowLeft" || e.key === "ArrowDown") { commit(getValue() - step); e.preventDefault(); }
+            else if (e.key === "ArrowRight" || e.key === "ArrowUp") { commit(getValue() + step); e.preventDefault(); }
+        });
+        position();
+        return thumb;
+    }
+
+    track.appendChild(makeThumb(() => from, "起點濃度", "from"));
+    track.appendChild(makeThumb(() => to, "終點濃度", "to"));
+    render();
+
+    wrap.appendChild(label);
+    wrap.appendChild(track);
     return wrap;
 }
 
