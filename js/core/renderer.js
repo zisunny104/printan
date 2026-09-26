@@ -747,11 +747,11 @@ function renderFillCanvas(w, h, fill, invert = false) {
     }
     const imageData = ctx.createImageData(w, h);
     if (fill.mode === "gradient") {
-        fillGradientGray(imageData, w, h, fill.direction, fill.reverse);
+        fillGradientGray(imageData, w, h, fill.direction, fill.reverse, fill.from, fill.to);
         applyDither(imageData, "ordered", 128);
     } else {
         fillSolidGray(imageData, 128);
-        applyDither(imageData, "ordered", fill.level);
+        applyDither(imageData, "ordered", fill.level, fill.pattern);
     }
     ctx.putImageData(imageData, 0, 0);
     if (invert) {
@@ -835,13 +835,26 @@ function fillSolidGray(imageData, value) {
     }
 }
 
-function fillGradientGray(imageData, w, h, direction, reverse) {
+// direction "radial" 是同心圓：t 用「離中心的距離／到角落的最大距離」算，中心是漸層起點，往外擴到終點。
+// from/to 是使用者設定的兩端墨色濃度（0-255，跟 halftone 的「網點濃度」同一套直覺：0＝白／無墨，255＝全黑），
+// 換算成灰階時要反過來（濃度愈高，灰階愈低愈接近黑）。
+function fillGradientGray(imageData, w, h, direction, reverse, from = 0, to = 255) {
     const d = imageData.data;
+    const cx = (w - 1) / 2;
+    const cy = (h - 1) / 2;
+    const maxR = Math.max(1, Math.hypot(cx, cy));
+    const startGray = 255 - from;
+    const endGray = 255 - to;
     for (let py = 0; py < h; py++) {
         for (let px = 0; px < w; px++) {
-            const t = direction === "vertical" ? (h > 1 ? py / (h - 1) : 0) : (w > 1 ? px / (w - 1) : 0);
+            let t;
+            if (direction === "radial") {
+                t = Math.hypot(px - cx, py - cy) / maxR;
+            } else {
+                t = direction === "vertical" ? (h > 1 ? py / (h - 1) : 0) : (w > 1 ? px / (w - 1) : 0);
+            }
             const frac = reverse ? 1 - t : t;
-            const value = Math.round(255 * (1 - frac)); // 淺（255）到深（0）
+            const value = Math.round(startGray * (1 - frac) + endGray * frac);
             const i = (py * w + px) * 4;
             d[i] = d[i + 1] = d[i + 2] = value;
             d[i + 3] = 255;
