@@ -116,7 +116,7 @@
                         <!-- 容器寬度不夠同時放下所有按鈕時，依上面標的 data-collapse-priority
                              由小到大依序把整顆按鈕收進這個選單，可見按鈕永遠維持原始大小，
                              不需要橫向捲動工具列才找得到——比照 Figma 窄寬度工具列的做法，
-                             同 koilisu/apps/pitrace。JS 邏輯見 editor.js wireToolbarOverflow()。 -->
+                             同 koilisu/apps/pitrace。JS 邏輯見 toolbar.js wireToolbarOverflow()。 -->
                         <div class="pane-menu-wrap" id="toolbarOverflowWrap" hidden>
                             <button type="button" id="btnToolbarOverflow" class="ts-button is-icon is-ghost"
                                 aria-label="更多工具" aria-haspopup="menu" aria-expanded="false"
@@ -163,5 +163,13 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- 多欄比例選單（放在懸浮工具列外，避免干擾方向鍵巡覽，同 pitrace 慣例） -->
+                    <div class="ts-dropdown" id="row-ratio-dropdown">
+                        <a class="item" data-ratio="1,1" id="row-ratio-1-1">1 / 1</a>
+                        <a class="item" data-ratio="2,1" id="row-ratio-2-1">2 / 1</a>
+                        <a class="item" data-ratio="1,2" id="row-ratio-1-2">1 / 2</a>
+                        <a class="item" data-ratio="1,1,1" id="row-ratio-1-1-1">1 / 1 / 1</a>
                     </div>
                 </div>

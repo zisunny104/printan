@@ -15,7 +15,7 @@ import { createInlineTextEditor } from "./inline-text-editor.js";
 import { createWorkspaceView } from "./workspace-view.js";
 import { hideStageNotice, showStageNotice, wireHelpDialog } from "./ui-helpers.js";
 import { currentElements, currentPage, els, rt, state } from "./context.js";
-import { attemptSilentPrinterReconnect, bindPrinterSettings, loadPrintPrefs } from "./printer-settings.js";
+import { attemptSilentPrinterReconnect, bindPrinterSettings, loadPrintPrefs, updateFeedLinesHint } from "./printer-settings.js";
 import { textInput } from "./inspector-widgets.js";
 import { renderInspector } from "./inspector.js";
 import { initMobileDrawers } from "./mobile-drawers.js";
@@ -26,8 +26,9 @@ import { bindEditorShortcuts, recordHistory } from "./history.js";
 import { bootKioskFromQuery } from "./kiosk.js";
 import { bindPageList, renderPageList } from "./pages.js";
 import { bindPagePager, invalidatePageThumbs, renderPageThumbs, revealActivePage, syncPageBoard } from "./page-board.js";
-import { bindFileInputs, bindToolbar, populatePaperWidthTabs, updateFeedLinesHint, wireToolbarOverflow } from "./toolbar.js";
-import { bindProjectName, loadProjectIntoEditor, populateRecentDrafts, renderProjectName, restoreOrCreateProject, scheduleSave } from "./project-io.js";
+import { bindImageFileInput, bindToolbar, wireToolbarOverflow } from "./toolbar.js";
+import { bindOperations, bindProjectName, bindPtanFileInput, populatePaperWidthTabs, renderProjectName } from "./operations.js";
+import { loadProjectIntoEditor, populateRecentDrafts, restoreOrCreateProject, scheduleSave } from "./drafts.js";
 
 async function init() {
     cacheDom();
@@ -36,8 +37,10 @@ async function init() {
     updateFeedLinesHint();
     populatePaperWidthTabs();
     populateRecentDrafts();
+    bindOperations();
+    bindPtanFileInput();
     bindToolbar();
-    bindFileInputs();
+    bindImageFileInput();
     bindBatchPanel();
     bindPrinterSettings();
     bindEditorShortcuts();
@@ -103,8 +106,6 @@ function cacheDom() {
     ].forEach((id) => (els[id] = document.getElementById(id)));
 }
 
-// ---- 頂部工具列 ----
-
 // 目前實際採用的印表機規格：註冊表裡專案指定的 profile，再套上使用者手動覆寫的「可列印點數」。
 // 渲染（renderTemplate 的 options.profile）、預覽紙張框、列印頭寬度、測試列印都要吃這一份，
 // 不然畫面預覽跟實際送出的 raster 寬度會不一致。
@@ -116,8 +117,6 @@ export function getBaseProfile() {
 export function getEffectiveProfile() {
     return withMarginCalibration(getBaseProfile(), state.printPrefs.margins);
 }
-
-// ---- 元素屬性面板 ----
 
 // ---- 變數 / 預覽資料 ----
 
@@ -296,12 +295,6 @@ export const inlineEditor = createInlineTextEditor({
         textSel.refresh?.();
     },
 });
-
-// ---- 列印設定（WebUSB／WebSerial 直連、印表機識別、走紙／切紙／可列印點數偏好） ----
-// 連線狀態、走紙／切紙偏好都是「這台瀏覽器、這台印表機」的本機操作習慣，不寫進 .ptan，
-// 同一份版型換人、換印表機開啟時不應該被綁死。
-
-// ---- 變更彙整：儲存草稿 + 重新渲染 ----
 
 // live=true：畫布／安全線等視覺跟手（rAF 節流，同拖曳把手），不用 schedulePreview() 的 120ms
 // debounce——那個 debounce 會被連續輸入（打字、貼上、按住刪除）不斷重置，畫面卡在舊高度直到停手。

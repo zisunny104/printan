@@ -1,5 +1,5 @@
 <?php defined('PRINTAN_VIEW') || exit; ?>
-            <div id="toolbar" class="pane-toolbar" role="toolbar" aria-label="編輯工具">
+            <div id="operations" class="pane-toolbar" role="toolbar" aria-label="編輯工具">
                 <!-- 左：檔案／版型操作（新增、開啟、匯出）；右：紙張與印表機輸出操作（紙寬、
                      列印設定、列印）。兩組用途不同（前者管版型檔案，後者管實體輸出），分兩側
                      排列比全部擠在一起好找。 -->
@@ -24,7 +24,7 @@
                 </div>
                 <div class="ts-divider is-vertical toolbar-divider"></div>
                 <!-- 專案名稱（state.project.meta.name）：平時顯示為 ts-button，點擊／Enter 切成 ts-input；
-                     Enter 確認、Esc 取消、blur 視同確認，清理與存檔／匯出檔名串接見 js/editor/editor.js（b3） -->
+                     Enter 確認、Esc 取消、blur 視同確認，互動邏輯見 operations.js bindProjectName() -->
                 <div class="project-name-group">
                     <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-project-name"
                         aria-label="專案名稱，點擊重新命名" data-tooltip="點擊重新命名">
@@ -51,4 +51,32 @@
                 <button class="ts-button is-small is-primary is-start-icon" id="btn-print">
                     <span class="ts-icon is-print-icon" aria-hidden="true"></span> 列印
                 </button>
+            </div>
+
+            <!-- 開啟：本機 .ptan 檔案，或最近編輯過、還沒手動匯出的版型（存在瀏覽器 IndexedDB
+                 草稿裡）。清單由 populateRecentDrafts() 動態產生，見「新增」按鈕的說明：
+                 新增空白版型不會刪掉舊的，舊版型會留在這份清單裡可以再打開。 -->
+            <div class="ts-dropdown" id="open-project-dropdown">
+                <a class="item" id="open-project-from-file">
+                    <span class="ts-icon is-folder-open-icon" aria-hidden="true"></span> 從電腦開啟 .ptan 檔…
+                </a>
+                <div class="divider"></div>
+                <div class="header">最近編輯</div>
+                <div id="recent-drafts-list"></div>
+            </div>
+
+            <div class="ts-dropdown" id="export-dropdown">
+                <a class="item" id="btn-save-ptan">
+                    <span class="ts-icon is-download-icon" aria-hidden="true"></span> 匯出 .ptan
+                </a>
+                <div class="item" id="export-embed-fonts-row">
+                    <label class="ts-checkbox is-small">
+                        <input type="checkbox" id="export-embed-fonts">
+                        <div class="text">內嵌字體</div>
+                    </label>
+                    <span class="info-icon" tabindex="0" role="img" aria-label="僅開源字體，檔案會變大" data-tooltip="僅開源字體，檔案會變大" data-trigger="hover focus"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span>
+                </div>
+                <a class="item" id="btn-export-pdf">
+                    <span class="ts-icon is-file-pdf-icon" aria-hidden="true"></span> 匯出 PDF
+                </a>
             </div>

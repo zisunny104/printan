@@ -1,59 +1,16 @@
-// 頂部工具列：新增元素／列印模式切換／匯出／新增或開啟版型的下拉選單、以及工具列窄寬度時的收合邏輯。
-// 從 editor.js 拆出（見 TODO.md「已知但未處理」），維持原本邏輯與註解不變。
+// 懸浮工具列（.canvas-floating-toolbar，partials/canvas.php）：新增元素、螢幕/熱感與
+// 預覽模式切換、窄寬度時的收合選單、新增圖片檔案處理。頂部那條（新增/開啟/匯出/列印）
+// 是 operations.js，兩者是不同的 UI，不共用「工具列」這個名字。
 
-import { getPaperWidth, getPrinterProfile } from "../core/printer-profiles.js";
+import { getPaperWidth } from "../core/printer-profiles.js";
 import { createImageElement } from "../core/document-model.js";
-import { downloadPtan, fileToDataUrl, readPtanFile } from "../core/ptan-file.js";
+import { fileToDataUrl } from "../core/ptan-file.js";
 import { convertHeicIfNeeded } from "../core/heic.js";
-import { createInfoIcon } from "./ui-helpers.js";
 import { els, rt, state } from "./context.js";
 import { addElement, insertElement, wireAddMenu } from "./element-actions.js";
 import { wireOutlineKeyboard } from "./outline.js";
 import { renderEditOverlay } from "./canvas-overlay.js";
-import { exportBatchPdf, exportSinglePdf } from "./batch-export.js";
-import { printCurrent } from "./printer-settings.js";
-import { getEffectiveProfile, onModelChange, schedulePreview } from "./editor.js";
-import { loadProjectIntoEditor, startNewProject } from "./project-io.js";
-
-// 「切紙前走紙行數」走不夠，切刀會切在剛印完、還沒通過切刀位置的內容上：
-// bladeOffsetMm 是切刀跟列印頭之間固定的實體距離，需要應用程式自己走紙走過這段距離，
-// 印表機不會自動幫忙走（見 state.printPrefs 那邊的說明，2026-09 已用實機驗證）。
-// 提示文字依專案內的印表機規格動態產生，開啟不同專案時要重新更新，見 init／loadProjectIntoEditor。
-export function updateFeedLinesHint() {
-    const profile = getPrinterProfile(state.project.printerProfile.id);
-    const bladeOffsetMm = profile.autocutter?.bladeOffsetMm;
-    const label = document.querySelector('label[for="pref-feed-lines"]');
-    label.querySelector(".info-icon")?.remove();
-    label.appendChild(createInfoIcon(bladeOffsetMm
-        ? `${profile.brand} ${profile.model} 切刀距列印頭約 ${bladeOffsetMm}mm，切到內容請調高行數`
-        : "切到內容請調高行數"));
-    els["pref-feed-lines-hint"].hidden = true;
-}
-
-export function populatePaperWidthTabs() {
-    const profile = getPrinterProfile(state.project.printerProfile.id);
-    const wrap = els["paper-width-tabs"];
-    wrap.innerHTML = "";
-    for (const paper of profile.paperWidths) {
-        const label = document.createElement("label");
-        label.className = "item";
-        const input = document.createElement("input");
-        input.type = "radio";
-        input.name = "paper-width";
-        input.value = paper.id;
-        input.checked = paper.id === state.project.paper.widthId;
-        input.addEventListener("change", () => {
-            state.project.paper.widthId = paper.id;
-            onModelChange();
-        });
-        const text = document.createElement("div");
-        text.className = "text";
-        text.textContent = paper.label;
-        label.appendChild(input);
-        label.appendChild(text);
-        wrap.appendChild(label);
-    }
-}
+import { getEffectiveProfile, schedulePreview } from "./editor.js";
 
 // 通用下拉選單開關：開／關／切換，碰撞感知（下方空間不夠時翻到上面顯示），點擊選單外
 // 或按 Esc 都會關閉。{portal:true} 時選單會被搬到 document.body、改用 position:fixed
@@ -231,21 +188,9 @@ export function bindToolbar() {
         els["paper-viewport"].classList.toggle("is-preview-mode", isPreview);
         renderEditOverlay();
     });
-
-    els["btn-new-ptan"].addEventListener("click", startNewProject);
-    els["open-project-from-file"].addEventListener("click", () => els["ptan-file-input"].click());
-    els["export-embed-fonts-row"].addEventListener("click", (e) => e.stopPropagation()); // 勾選時不收起匯出選單
-    els["btn-save-ptan"].addEventListener("click", async () => {
-        const failed = await downloadPtan(state.project, state.project.meta.name || "printan", { embedFonts: els["export-embed-fonts"].checked });
-        if (failed.length) alert(`已匯出，但這些字體沒能內嵌（可能離線）：${failed.join("、")}`);
-    });
-
-    els["btn-export-pdf"].addEventListener("click", exportSinglePdf);
-    els["btn-export-batch-pdf"].addEventListener("click", exportBatchPdf);
-    els["btn-print"].addEventListener("click", printCurrent);
 }
 
-// image-file-input 是整個編輯器共用的單一 hidden input（工具列「新增圖片」與各圖片元素
+// image-file-input 是整個編輯器共用的單一 hidden input（懸浮工具列「新增圖片」與各圖片元素
 // inspector 的「更換圖片」都借用同一個），用這個變數帶「這一次選檔要怎麼處理」，避免像過去
 // 那樣在同一個 input 上疊加第二個 change 監聽器（會兩邊都觸發，多插入一個重複元素）。
 
@@ -279,7 +224,7 @@ async function defaultImageWidthPercent(assetId) {
     return Math.min(100, Math.max(10, Math.round((img.naturalWidth / printable) * 100)));
 }
 
-export function bindFileInputs() {
+export function bindImageFileInput() {
     els["image-file-input"].addEventListener("change", async (e) => {
         const file = e.target.files[0];
         e.target.value = "";
@@ -290,17 +235,5 @@ export function bindFileInputs() {
         if (!assetId) return;
         if (handler) handler(assetId);
         else insertElement(createImageElement({ assetId, widthPercent: await defaultImageWidthPercent(assetId) }));
-    });
-
-    els["ptan-file-input"].addEventListener("change", async (e) => {
-        const file = e.target.files[0];
-        e.target.value = "";
-        if (!file) return;
-        const result = await readPtanFile(file);
-        if (!result.ok) {
-            alert(`開啟失敗：${result.error}`);
-            return;
-        }
-        loadProjectIntoEditor(result.project);
     });
 }
