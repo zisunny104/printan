@@ -8,7 +8,7 @@ import {
 } from "../core/document-model.js";
 import { MAX_ROW_GAP, normalizeRowGap, dotsToPt as dotsToPtRaw, ptToDots as ptToDotsRaw, dotsToMm, mmToDots } from "../core/units.js";
 import { WEB_FONTS, findWebFont, isWebFontFailed } from "../core/web-fonts.js";
-import { applyFieldToElements, findElementById, setRowRatio, splitRowColumn, MAX_ROW_COLUMNS } from "../core/element-tree.js";
+import { applyFieldToElements, findElementById, setRowRatio, splitRowColumn, mergeRowColumns, MAX_ROW_COLUMNS } from "../core/element-tree.js";
 import { createInfoIcon } from "./ui-helpers.js";
 import {
     getLocalFontFamilies, isFontInstalled, isLocalFontAccessSupported, loadLocalFonts, localFontStack,
@@ -934,6 +934,13 @@ function buildRowInspector(panel, el) {
     wrap.appendChild(mkButton("分割欄位", "table-columns", () => {
         if (splitRowColumn(el, el.columns.length - 1)) onModelChange();
     }, { outlined: true }));
+    // 合併最後兩欄：原本只能在畫布上雙擊欄位分隔線的拖曳把手才能做，鍵盤/報讀器使用者沒有替代路徑，
+    // 這裡補一顆跟「分割欄位」對稱的按鈕；欄位比例本身已經可以用上面的文字欄位直接輸入調整。
+    if (el.columns.length > 1) {
+        wrap.appendChild(mkButton("合併欄位", "table-cells-large", () => {
+            if (mergeRowColumns(el, el.columns.length - 2)) onModelChange();
+        }, { outlined: true }));
+    }
     panel.appendChild(wrap);
 }
 

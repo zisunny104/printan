@@ -242,16 +242,42 @@ function clearInsertionLine() {
     els["edit-overlay"]?.querySelector(".edit-insertion-line")?.remove();
 }
 
+// 拖曳把手的鍵盤微調單位（點）：一般步幅／Shift 大步幅，跟 gradientRangeField／numberStepperInput
+// 用的「方向鍵微調＋Shift 加大步幅」是同一套模式，這裡是所有畫布拖曳把手共用的預設值。
+const HANDLE_STEP = 4;
+const HANDLE_BIG_STEP = 20;
+
+// 圖片預設是依比例縮放（fit=auto，heightDots 不生效）：從目前畫出的高度起算，並自動切成「拉伸」
+// 文字預設是 heightMode=auto（高度隨內容）：同樣從目前畫出的高度起算，拖曳才切成 fixed
+function heightStartValue(realEl, box) {
+    return (realEl.type === "image" && realEl.fit !== "stretch") || (realEl.type === "text" && realEl.heightMode !== "fixed")
+        ? box.height : realEl.heightDots;
+}
+
+function applyHeightDots(realEl, newHeight) {
+    if (realEl.type === "image") realEl.fit = "stretch";
+    if (realEl.type === "text") realEl.heightMode = "fixed"; // overflow 沿用原本值（預設 grow，不會無預警少印）
+    realEl.heightDots = Math.max(1, Math.round(newHeight));
+}
+
 /** 高度拖曳把手：目前只有 spacer／image 的高度是可以直接調整的數值。
  * box.el 來自 renderer 排版結果，是套用 mail merge 資料時深拷貝出來的節點（見 core/merge.js
  * 的 applyDataToElements），跟 currentElements() 不是同一個物件，
- * 所以要修改的話必須用 id 找回真正的 element，直接改 box.el 不會反映到實際專案資料上。 */
+ * 所以要修改的話必須用 id 找回真正的 element，直接改 box.el 不會反映到實際專案資料上。
+ * 鍵盤替代：方向鍵（Shift 加大步幅）微調高度，供鍵盤／螢幕報讀器使用者操作，不用只能滑鼠拖曳。 */
 function buildHeightResizeHandle(box, scale) {
     const handle = document.createElement("div");
     handle.className = "edit-resize-handle is-height";
     handle.style.left = `${box.x * scale}px`;
     handle.style.width = `${box.width * scale}px`;
     handle.style.top = `${(box.y + box.height) * scale - 3}px`;
+    handle.tabIndex = 0;
+    handle.setAttribute("role", "slider");
+    handle.setAttribute("aria-orientation", "vertical");
+    handle.setAttribute("aria-label", "調整高度");
+    handle.setAttribute("aria-valuemin", "1");
+    const initialEl = findElementById(currentElements(), box.el.id);
+    if (initialEl) handle.setAttribute("aria-valuenow", String(Math.round(heightStartValue(initialEl, box))));
     handle.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -259,15 +285,10 @@ function buildHeightResizeHandle(box, scale) {
         const realEl = findElementById(currentElements(), box.el.id);
         if (!realEl) return;
         const startY = e.clientY;
-        // 圖片預設是依比例縮放（fit=auto，heightDots 不生效）：從目前畫出的高度起算，並自動切成「拉伸」
-        // 文字預設是 heightMode=auto（高度隨內容）：同樣從目前畫出的高度起算，拖曳才切成 fixed
-        const startHeight = (realEl.type === "image" && realEl.fit !== "stretch") || (realEl.type === "text" && realEl.heightMode !== "fixed")
-            ? box.height : realEl.heightDots;
+        const startHeight = heightStartValue(realEl, box);
         function onMove(ev) {
             const deltaDots = (ev.clientY - startY) / scale;
-            if (realEl.type === "image") realEl.fit = "stretch";
-            if (realEl.type === "text") realEl.heightMode = "fixed"; // overflow 沿用原本值（預設 grow，不會無預警少印）
-            realEl.heightDots = Math.max(1, Math.round(startHeight + deltaDots));
+            applyHeightDots(realEl, startHeight + deltaDots);
             schedulePreviewLive();
         }
         function onUp() {
@@ -278,6 +299,15 @@ function buildHeightResizeHandle(box, scale) {
         }
         document.addEventListener("pointermove", onMove);
         document.addEventListener("pointerup", onUp);
+    });
+    handle.addEventListener("keydown", (e) => {
+        const dir = { ArrowUp: 1, ArrowDown: -1 }[e.key];
+        if (!dir) return;
+        e.preventDefault();
+        const realEl = findElementById(currentElements(), box.el.id);
+        if (!realEl) return;
+        applyHeightDots(realEl, heightStartValue(realEl, box) + (e.shiftKey ? HANDLE_BIG_STEP : HANDLE_STEP) * dir);
+        onModelChange();
     });
     return handle;
 }
@@ -297,8 +327,21 @@ function imageHandleSpecs(box, item) {
     });
 }
 
+// 寬度變化量（growDelta，正值＝變寬）套用到 widthPercent；置中時兩側同時外擴，拖曳時游標位移要乘 2
+// 才會讓被拖的那條邊跟手，鍵盤是直接給「變寬量」不用再乘 factor。
+function applyImageWidthGrow(realEl, box, startWidth, startStretchHeight, growDelta) {
+    const width = Math.min(box.width, Math.max(box.width * 0.01, startWidth + growDelta));
+    realEl.widthPercent = Math.round((width / box.width) * 1000) / 10;
+    if (realEl.fit === "none") realEl.fit = "auto"; // 原尺寸不看寬度百分比，拖寬度就切回符合寬度
+    if (realEl.fit === "stretch" && startStretchHeight > 0) {
+        realEl.heightDots = Math.max(1, Math.round((startStretchHeight * width) / startWidth));
+    }
+}
+
 /** 圖片拖曳縮放：側邊＝只改寬度；下角＝等比縮放，按住 Shift 改為自由拉伸（fit 切成 stretch、高度跟著游標）。
- * 寬度存成 widthPercent；置中時兩側同時外擴，所以游標位移要乘 2 才會讓被拖的那條邊跟手。 */
+ * 寬度存成 widthPercent；置中時兩側同時外擴，所以游標位移要乘 2 才會讓被拖的那條邊跟手。
+ * 鍵盤替代：左右鍵調整寬度（Shift 加大步幅）；下角把手另外支援上下鍵＋Shift 直接改高度（同滑鼠 Shift+拖曳角落的
+ * 自由拉伸），一般拖曳角落等比縮放靠寬度變化反推高度那條分支在鍵盤下沒有對應鍵位，維持只調寬度，影響有限。 */
 function buildImageResizeHandle(box, item, { side, corner, x, y }, scale) {
     const handle = document.createElement("div");
     handle.className = "edit-resize-handle is-img";
@@ -306,6 +349,10 @@ function buildImageResizeHandle(box, item, { side, corner, x, y }, scale) {
     handle.style.cssText = `left:${x * scale - size / 2}px;top:${y * scale - size / 2}px;width:${size}px;height:${size}px;`
         + `background:#fff;border:1.5px solid currentColor;border-radius:2px;color:var(--ts-primary-500,#2b7de9);`
         + `cursor:${corner ? (side === "r" ? "nwse-resize" : "nesw-resize") : "ew-resize"}`;
+    handle.tabIndex = 0;
+    handle.setAttribute("role", "slider");
+    handle.setAttribute("aria-orientation", "horizontal");
+    handle.setAttribute("aria-label", corner ? "調整圖片寬高" : "調整圖片寬度");
     handle.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -322,14 +369,13 @@ function buildImageResizeHandle(box, item, { side, corner, x, y }, scale) {
         function onMove(ev) {
             moved = true;
             const dx = ((ev.clientX - startX) / scale) * (side === "r" ? 1 : -1) * factor;
-            const width = Math.min(box.width, Math.max(box.width * 0.01, startWidth + dx));
-            realEl.widthPercent = Math.round((width / box.width) * 1000) / 10;
-            if (realEl.fit === "none") realEl.fit = "auto"; // 原尺寸不看寬度百分比，拖寬度就切回符合寬度
             if (corner && ev.shiftKey && realEl.type === "image") {
                 realEl.fit = "stretch";
                 realEl.heightDots = Math.max(1, Math.round(startHeight + (ev.clientY - startY) / scale));
-            } else if (realEl.fit === "stretch" && startStretchHeight > 0) {
-                realEl.heightDots = Math.max(1, Math.round((startStretchHeight * width) / startWidth));
+                if (realEl.fit === "none") realEl.fit = "auto";
+                realEl.widthPercent = Math.round((Math.min(box.width, Math.max(box.width * 0.01, startWidth + dx)) / box.width) * 1000) / 10;
+            } else {
+                applyImageWidthGrow(realEl, box, startWidth, startStretchHeight, dx);
             }
             schedulePreviewLive();
         }
@@ -342,6 +388,26 @@ function buildImageResizeHandle(box, item, { side, corner, x, y }, scale) {
         document.addEventListener("pointermove", onMove);
         document.addEventListener("pointerup", onUp);
     });
+    handle.addEventListener("keydown", (e) => {
+        const realEl = findElementById(currentElements(), box.el.id);
+        if (!realEl) return;
+        const step = e.shiftKey ? HANDLE_BIG_STEP : HANDLE_STEP;
+        if (corner && realEl.type === "image") {
+            const vDir = { ArrowUp: 1, ArrowDown: -1 }[e.key];
+            if (vDir) {
+                e.preventDefault();
+                realEl.fit = "stretch";
+                realEl.heightDots = Math.max(1, Math.round((realEl.heightDots || item.drawHeight) + step * vDir));
+                onModelChange();
+                return;
+            }
+        }
+        const hDir = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+        if (!hDir) return;
+        e.preventDefault();
+        applyImageWidthGrow(realEl, box, item.drawWidth, realEl.heightDots, step * hDir);
+        onModelChange();
+    });
     return handle;
 }
 
@@ -353,14 +419,25 @@ function textWidthHandleSpecs(box, item) {
     return sides.map((side) => ({ side, x: box.x + (side === "r" ? box.width : 0), y: box.y + box.height / 2 }));
 }
 
+function applyTextWidthGrow(realEl, colWidth, startWidth, growDelta) {
+    realEl.widthMode = "fixed";
+    realEl.widthDots = Math.max(8, Math.min(colWidth, Math.round(startWidth + growDelta)));
+}
+
 /** 文字自由寬度拖曳：直接存成 widthDots（絕對點數，可小於欄寬），拖曳即切到 widthMode="fixed"。
- * 視覺上沿用圖片把手同一顆小方塊（is-img class），比照 e8 轉達的「沿用圖片縮放把手樣式」。 */
+ * 視覺上沿用圖片把手同一顆小方塊（is-img class），比照 e8 轉達的「沿用圖片縮放把手樣式」。
+ * 鍵盤替代：左右鍵調整寬度（Shift 加大步幅）；等同檢視器裡「寬度 (dot)」欄位能做到的事，這裡補在把手上
+ * 讓鍵盤使用者不用切去檢視器就能微調。 */
 function buildTextWidthResizeHandle(box, item, { side, x, y }, scale) {
     const handle = document.createElement("div");
     handle.className = "edit-resize-handle is-img";
     const size = 10;
     handle.style.cssText = `left:${x * scale - size / 2}px;top:${y * scale - size / 2}px;width:${size}px;height:${size}px;`
         + `background:#fff;border:1.5px solid currentColor;border-radius:2px;color:var(--ts-primary-500,#2b7de9);cursor:ew-resize`;
+    handle.tabIndex = 0;
+    handle.setAttribute("role", "slider");
+    handle.setAttribute("aria-orientation", "horizontal");
+    handle.setAttribute("aria-label", "調整文字寬度");
     handle.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -375,8 +452,7 @@ function buildTextWidthResizeHandle(box, item, { side, x, y }, scale) {
         function onMove(ev) {
             moved = true;
             const dx = ((ev.clientX - startX) / scale) * (side === "r" ? 1 : -1) * factor;
-            realEl.widthMode = "fixed";
-            realEl.widthDots = Math.max(8, Math.min(colWidth, Math.round(startWidth + dx)));
+            applyTextWidthGrow(realEl, colWidth, startWidth, dx);
             schedulePreviewLive();
         }
         function onUp() {
@@ -387,6 +463,17 @@ function buildTextWidthResizeHandle(box, item, { side, x, y }, scale) {
         }
         document.addEventListener("pointermove", onMove);
         document.addEventListener("pointerup", onUp);
+    });
+    handle.addEventListener("keydown", (e) => {
+        const dir = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+        if (!dir) return;
+        e.preventDefault();
+        const realEl = findElementById(currentElements(), box.el.id);
+        if (!realEl) return;
+        const colWidth = item.widthDots;
+        const startWidth = item.boxWidth ?? colWidth;
+        applyTextWidthGrow(realEl, colWidth, startWidth, (e.shiftKey ? HANDLE_BIG_STEP : HANDLE_STEP) * dir);
+        onModelChange();
     });
     return handle;
 }
@@ -406,15 +493,32 @@ function buildTextClipIndicator(box, scale, isVerticalWidthClip) {
     return div;
 }
 
+const COLUMN_MIN_WIDTH = 10;
+
+function applyColumnBoundaryDelta(realRow, startWidths, colIndex, deltaDots) {
+    deltaDots = Math.max(deltaDots, COLUMN_MIN_WIDTH - startWidths[colIndex]);
+    deltaDots = Math.min(deltaDots, startWidths[colIndex + 1] - COLUMN_MIN_WIDTH);
+    const widths = startWidths.slice();
+    widths[colIndex] = Math.round(widths[colIndex] + deltaDots);
+    widths[colIndex + 1] = Math.round(widths[colIndex + 1] - deltaDots);
+    realRow.ratio = widths;
+}
+
 /** 欄寬拖曳把手：把兩欄的目前點寬直接當比例使用，拖曳時即時換算成新的 ratio。
  * rowEl 同樣是排版結果裡的深拷貝節點（理由同 buildHeightResizeHandle 的註解），
- * 要修改 ratio 必須用 id 找回 currentElements() 裡真正的 row。 */
+ * 要修改 ratio 必須用 id 找回 currentElements() 裡真正的 row。
+ * 鍵盤替代：左右鍵調整這條分隔線（Shift 加大步幅）；另外檢視器的「欄位比例」文字欄位本來就能直接輸入
+ * 整組比例，這裡補的是不切去檢視器、直接在把手上微調的等效操作。 */
 function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHeightDots, rowWidthDots, scale) {
     const handle = document.createElement("div");
     handle.className = "edit-resize-handle is-col";
     handle.style.left = `${boundaryXDots * scale - 3}px`;
     handle.style.top = `${rowYDots * scale}px`;
     handle.style.height = `${Math.max(rowHeightDots, 1) * scale}px`;
+    handle.tabIndex = 0;
+    handle.setAttribute("role", "slider");
+    handle.setAttribute("aria-orientation", "horizontal");
+    handle.setAttribute("aria-label", "調整欄寬分隔線");
     handle.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -423,17 +527,11 @@ function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHe
         if (!realRow) return;
         const startX = e.clientX;
         const startWidths = splitRowColumns(rowWidthDots, realRow.ratio, realRow.gap).widths;
-        const minWidth = 10;
         let moved = false;
         function onMove(ev) {
             moved = true;
-            let deltaDots = (ev.clientX - startX) / scale;
-            deltaDots = Math.max(deltaDots, minWidth - startWidths[colIndex]);
-            deltaDots = Math.min(deltaDots, startWidths[colIndex + 1] - minWidth);
-            const widths = startWidths.slice();
-            widths[colIndex] = Math.round(widths[colIndex] + deltaDots);
-            widths[colIndex + 1] = Math.round(widths[colIndex + 1] - deltaDots);
-            realRow.ratio = widths;
+            const deltaDots = (ev.clientX - startX) / scale;
+            applyColumnBoundaryDelta(realRow, startWidths, colIndex, deltaDots);
             schedulePreviewLive();
         }
         function onUp() {
@@ -450,6 +548,16 @@ function buildColumnResizeHandle(rowEl, colIndex, boundaryXDots, rowYDots, rowHe
         e.stopPropagation();
         const realRow = findElementById(currentElements(), rowEl.id);
         if (realRow && mergeRowColumns(realRow, colIndex)) onModelChange();
+    });
+    handle.addEventListener("keydown", (e) => {
+        const dir = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+        if (!dir) return;
+        e.preventDefault();
+        const realRow = findElementById(currentElements(), rowEl.id);
+        if (!realRow) return;
+        const startWidths = splitRowColumns(rowWidthDots, realRow.ratio, realRow.gap).widths;
+        applyColumnBoundaryDelta(realRow, startWidths, colIndex, (e.shiftKey ? HANDLE_BIG_STEP : HANDLE_STEP) * dir);
+        onModelChange();
     });
     return handle;
 }
