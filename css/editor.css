@@ -1433,8 +1433,15 @@ body {
 }
 
 .edit-resize-handle.is-height:hover,
-.edit-resize-handle.is-height.is-dragging {
+.edit-resize-handle.is-height.is-dragging,
+.edit-resize-handle.is-height:focus-visible {
     opacity: .6;
+}
+
+/* 鍵盤 Tab 到把手時，opacity:0 的把手本身還是看不見，需要額外畫外框才知道焦點在哪 */
+.edit-resize-handle.is-height:focus-visible {
+    outline: 2px solid light-dark(#1d4ed8, #93c5fd);
+    outline-offset: 2px;
 }
 
 .edit-resize-handle.is-col {
@@ -1455,8 +1462,14 @@ body {
 }
 
 .edit-resize-handle.is-col:hover::after,
-.edit-resize-handle.is-col.is-dragging::after {
+.edit-resize-handle.is-col.is-dragging::after,
+.edit-resize-handle.is-col:focus-visible::after {
     opacity: .6;
+}
+
+.edit-resize-handle.is-col:focus-visible {
+    outline: 2px solid light-dark(#1d4ed8, #93c5fd);
+    outline-offset: 2px;
 }
 
 /* 圖片縮放把手（canvas-overlay.js buildImageResizeHandle 用 inline style 設定位置、大小、底色、邊框與游標，

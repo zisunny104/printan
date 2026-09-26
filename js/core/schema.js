@@ -28,20 +28,59 @@ export const PTAN_VERSION = 3;
  *                        // （沒有實體切割，兩頁在同一次列印工作裡首尾相接）。
  * }
  *
- * Element（document-model.js 產生）:
+ * 單位慣例（全部元素通用，混淆的話排版會整個跑掉，寫檔前務必確認）：
+ *   - *Dots 結尾的欄位＝「點」，對應目前 Printer Profile 的 DPI（見 units.js），不是 mm 也不是 px；
+ *     熱感紙常見 203dpi，1 mm ≈ 8 dots，僅供估算，實際換算依 printerProfile 而定。
+ *   - *Percent 結尾的欄位＝0-100 的百分比數字（不是 0-1 小數）。
+ *   - row 的 ratio 是「相對比例」，不是絕對點數／百分比（例如 [1,1] 跟 [2,2] 效果相同）。
+ *   - TEXT_STYLE_PRESETS（H1-H5／P）用的是 pt，跟其餘欄位不同；套用後展開出的 fontSize 欄位本身仍是 dots。
+ *
+ * Element（document-model.js 的 create*Element 系列產生；下表是「哪個 type 有哪些欄位」的完整清單，
+ * 逐欄位的預設值／列舉值／行為說明在對應函式的行內註解裡，不重複抄一份在這裡避免兩處不同步）：
  * {
  *   id, type: "text"|"image"|"float-block"|"spacer"|"divider"|"row"|"barcode"|"group",
- *   ...type 專屬欄位,
- *   columns?: Element[][]   // 僅 row 使用：每欄是一個子 element 陣列
- *   ratio?: number[]        // 僅 row 使用：各欄相對比例，例如 [1,1] 或 [2,1]
- *   children?: Element[]    // 僅 group 使用（version 2）
- * 專案層級選用欄位 embeddedFonts?: [{ family, weight, unicodeRange, data }]（version 2；匯出時勾選才有）
+ *
+ *   // type==="text"：見 createTextElement
+ *   runs?, fontFamily?, fontSize?, lineHeight?, letterSpacing?, bold?, inverse?, inkFill?, bgFill?,
+ *   align?, wrap?, writingMode?, maxLines?, widthMode?, widthDots?, heightMode?, heightDots?, overflow?, vAlign?,
+ *
+ *   // type==="image"：見 createImageElement
+ *   assetId?, heightDots?, align?, widthPercent?, fit?, rotation?, cropRect?, brightness?, contrast?, invert?, ditherMode?, thresholdLevel?,
+ *
+ *   // type==="float-block"：text 與 image 兩組欄位都有（見 createFloatBlockElement），額外多 imageSide
+ *   imageSide?,
+ *
+ *   // type==="spacer"：見 createSpacerElement
+ *   // heightDots?（只有這個）
+ *
+ *   // type==="divider"：見 createDividerElement
+ *   style?, thicknessDots?, marginTopDots?, marginBottomDots?, drawMode?, fill?,
+ *
+ *   // type==="row"：見 createRowElement
+ *   ratio?: number[],       // 各欄相對比例，例如 [1,1] 或 [2,1]
+ *   columns?: Element[][],  // 每欄是一個子 element 陣列，長度須與 ratio 一致
+ *   gap?,                   // 欄距（dots），見 units.js normalizeRowGap；0 或未設＝無欄距，匯出時不寫入
+ *
+ *   // type==="barcode"：見 createBarcodeElement
+ *   format?, value?, heightDots?, showText?, align?, textSize?,
+ *
+ *   // type==="group"：見 createGroupElement（version 2）
+ *   children?: Element[],
  * }
+ * 專案層級選用欄位 embeddedFonts?: [{ family, weight, unicodeRange, data }]（version 2；匯出時勾選才有）
+ *
+ * 容錯範圍要注意：migrate()／migrateElements() 只針對 text（normalizeTextElement）與 row（normalizeRow）
+ * 兩種 type 補齊缺漏欄位／收斂壞值；image／float-block／spacer／divider／barcode／group 的欄位不會被
+ * 驗證或補預設值，缺欄位或型別錯誤不會在開檔時報錯，只會在渲染階段用到該欄位時才表現出來（可能是
+ * 排版跑掉、也可能整段元素消失），不會拋例外把整份檔案擋下來。手動或用程式產生 .ptan 時，這些 type
+ * 務必照 document-model.js 對應函式的欄位齊全填寫，不能只填必要欄位、指望缺的會被自動補上。
  *
  * 版本沿革：v1 單頁 elements 陣列；v2 新增 group／圖文段落／直書；v3 template.elements → template.pages
  * （多頁），單頁專案沒真的用到多頁功能時仍序列化成 v1/v2 的 template.elements 形狀，
  * 讓舊版 Printan 與只認得單頁 elements 的外部整合方（renderer.js 是公開的 render-core API，
- * 見該檔案開頭說明）都還能開。
+ * 見該檔案開頭說明）都還能開。手動產生檔案時版本號可以直接寫 3 並用 template.pages 形狀，
+ * loadProject() 的 migrateTemplate() 是先看有沒有 pages 陣列、不是先看 version 決定怎麼解析，
+ * 寫 3 一定會被正確讀取。
  */
 
 let pageIdCounter = 0;
