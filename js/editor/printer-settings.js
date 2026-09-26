@@ -133,6 +133,23 @@ export async function printSilently() {
     }
 }
 
+// 「切紙前走紙行數」走不夠，切刀會切在剛印完、還沒通過切刀位置的內容上：
+// bladeOffsetMm 是切刀跟列印頭之間固定的實體距離，需要應用程式自己走紙走過這段距離，
+// 印表機不會自動幫忙走（見 state.printPrefs 那邊的說明，2026-09 已用實機驗證）。
+// 提示文字依專案內的印表機規格動態產生，開啟不同專案時要重新更新，見 editor.js init／drafts.js loadProjectIntoEditor。
+export function updateFeedLinesHint() {
+    const profile = getPrinterProfile(state.project.printerProfile.id);
+    const bladeOffsetMm = profile.autocutter?.bladeOffsetMm;
+    const label = document.querySelector('label[for="pref-feed-lines"]');
+    label.querySelector(".info-icon")?.remove();
+    label.appendChild(createInfoIcon(bladeOffsetMm
+        ? `${profile.brand} ${profile.model} 切刀距列印頭約 ${bladeOffsetMm}mm，切到內容請調高行數`
+        : "切到內容請調高行數"));
+    els["pref-feed-lines-hint"].hidden = true;
+}
+
+// 連線狀態、走紙／切紙偏好都是「這台瀏覽器、這台印表機」的本機操作習慣，不寫進 .ptan，
+// 同一份版型換人、換印表機開啟時不應該被綁死。
 export function loadPrintPrefs() {
     try {
         const saved = JSON.parse(safeGetItem(PRINT_PREFS_KEY) || "{}");

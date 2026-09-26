@@ -19,9 +19,7 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
 
             <?php require __DIR__ . '/partials/header.php'; ?>
 
-            <?php require __DIR__ . '/partials/toolbar.php'; ?>
-
-            <?php require __DIR__ . '/partials/toolbar-menus.php'; ?>
+            <?php require __DIR__ . '/partials/operations.php'; ?>
 
             <?php require __DIR__ . '/partials/modal-printer.php'; ?>
 

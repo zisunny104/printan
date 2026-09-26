@@ -81,7 +81,7 @@
                             <div class="ts-input is-small is-fluid has-top-spaced-small">
                                 <input type="number" id="pref-feed-lines" min="0" max="20" value="4">
                             </div>
-                            <!-- 內容由 updateFeedLinesHint() 依目前印表機規格動態填入，見 editor.js -->
+                            <!-- 內容由 updateFeedLinesHint() 依目前印表機規格動態填入，見 printer-settings.js -->
                             <div class="ts-text is-description is-small has-top-spaced-small" id="pref-feed-lines-hint"></div>
                             <label class="ts-checkbox has-top-spaced">
                                 <input type="checkbox" id="pref-cut-paper">
@@ -130,7 +130,7 @@
                                     <span class="ts-icon is-eraser-icon" aria-hidden="true"></span> 忘記已授權裝置
                                 </button>
                             </div>
-                            <!-- 內容由 queryPrinterStatus() 動態填入，見 editor.js -->
+                            <!-- 內容由 queryPrinterStatus() 動態填入，見 printer-settings.js -->
                             <div class="ts-text is-description is-small has-top-spaced-small" id="printer-status-result"></div>
                         </div>
                         </div>

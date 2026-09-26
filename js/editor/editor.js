@@ -2,42 +2,33 @@
 // Editor 本身不做排版運算，排版與繪製一律呼叫 core/renderer.js，
 // 確保「編輯器看到的結果」跟「實際輸出結果」用同一套邏輯（見需求單第廿一節）。
 
-import { createEmptyProject, loadProject } from "../core/schema.js";
-import {
-    getPrinterProfile, getPaperWidth, getDefaultPrinterProfileId, withPrintableDotsOverrides,
-    withMarginCalibration,
-} from "../core/printer-profiles.js";
-import { createImageElement, extractPlaceholders } from "../core/document-model.js";
+import { extractPlaceholders } from "../core/document-model.js";
+import { getPaperWidth, getPrinterProfile, withMarginCalibration, withPrintableDotsOverrides } from "../core/printer-profiles.js";
 import { findElementById } from "../core/element-tree.js";
 import { renderTemplate } from "../core/renderer.js";
 
 import { restoreLocalFontsIfGranted } from "../core/fonts.js";
 import { onWebFontStatusChange } from "../core/web-fonts.js";
-import { downloadPtan, readPtanFile, fileToDataUrl } from "../core/ptan-file.js";
-import { convertHeicIfNeeded } from "../core/heic.js";
 
-import { saveDraft, loadDraft, deleteDraft, listRecent, safeGetItem, safeSetItem } from "../core/storage.js";
 import { wireResizableColumns } from "./resizable-columns.js";
 import { createInlineTextEditor } from "./inline-text-editor.js";
 import { createWorkspaceView } from "./workspace-view.js";
-import { createInfoIcon, hideStageNotice, showStageNotice, wireHelpDialog } from "./ui-helpers.js";
-import { LAST_DRAFT_KEY, currentElements, currentPage, els, rt, state } from "./context.js";
-import {
-    attemptSilentPrinterReconnect, bindPrinterSettings, loadPrintPrefs, printCurrent, renderMarginRows,
-    renderPrintableDotsRows,
-} from "./printer-settings.js";
+import { hideStageNotice, showStageNotice, wireHelpDialog } from "./ui-helpers.js";
+import { currentElements, currentPage, els, rt, state } from "./context.js";
+import { attemptSilentPrinterReconnect, bindPrinterSettings, loadPrintPrefs, updateFeedLinesHint } from "./printer-settings.js";
 import { textInput } from "./inspector-widgets.js";
 import { renderInspector } from "./inspector.js";
 import { initMobileDrawers } from "./mobile-drawers.js";
-import { runAutosave } from "./save-status.js";
 import { renderEditOverlay } from "./canvas-overlay.js";
-import { renderOutline, wireOutlineKeyboard } from "./outline.js";
-import { bindBatchPanel, endBatchPreview, exportBatchPdf, exportSinglePdf } from "./batch-export.js";
-import { bindEditorShortcuts, recordHistory, resetHistory } from "./history.js";
-import { addElement, insertElement, wireAddMenu } from "./element-actions.js";
+import { renderOutline } from "./outline.js";
+import { bindBatchPanel } from "./batch-export.js";
+import { bindEditorShortcuts, recordHistory } from "./history.js";
 import { bootKioskFromQuery } from "./kiosk.js";
 import { bindPageList, renderPageList } from "./pages.js";
 import { bindPagePager, invalidatePageThumbs, renderPageThumbs, revealActivePage, syncPageBoard } from "./page-board.js";
+import { bindImageFileInput, bindToolbar, wireToolbarOverflow } from "./toolbar.js";
+import { bindOperations, bindProjectName, bindPtanFileInput, populatePaperWidthTabs, renderProjectName } from "./operations.js";
+import { loadProjectIntoEditor, populateRecentDrafts, restoreOrCreateProject, scheduleSave } from "./drafts.js";
 
 async function init() {
     cacheDom();
@@ -46,8 +37,10 @@ async function init() {
     updateFeedLinesHint();
     populatePaperWidthTabs();
     populateRecentDrafts();
+    bindOperations();
+    bindPtanFileInput();
     bindToolbar();
-    bindFileInputs();
+    bindImageFileInput();
     bindBatchPanel();
     bindPrinterSettings();
     bindEditorShortcuts();
@@ -113,29 +106,6 @@ function cacheDom() {
     ].forEach((id) => (els[id] = document.getElementById(id)));
 }
 
-// ---- 專案初始化 / 還原 ----
-
-async function restoreOrCreateProject() {
-    const lastId = safeGetItem(LAST_DRAFT_KEY);
-    if (lastId) {
-        try {
-            const draft = await loadDraft(lastId);
-            if (draft) {
-                const result = loadProject(draft);
-                if (result.ok) return result.project;
-            }
-        } catch {
-            // IndexedDB 讀取失敗就當作沒有草稿，往下建立新專案
-        }
-    }
-    return createEmptyProject({
-        printerProfileId: getDefaultPrinterProfileId(),
-        paperWidthId: getPrinterProfile(getDefaultPrinterProfileId()).defaultPaperWidthId,
-    });
-}
-
-// ---- 頂部工具列 ----
-
 // 目前實際採用的印表機規格：註冊表裡專案指定的 profile，再套上使用者手動覆寫的「可列印點數」。
 // 渲染（renderTemplate 的 options.profile）、預覽紙張框、列印頭寬度、測試列印都要吃這一份，
 // 不然畫面預覽跟實際送出的 raster 寬度會不一致。
@@ -147,440 +117,6 @@ export function getBaseProfile() {
 export function getEffectiveProfile() {
     return withMarginCalibration(getBaseProfile(), state.printPrefs.margins);
 }
-
-// 「切紙前走紙行數」走不夠，切刀會切在剛印完、還沒通過切刀位置的內容上：
-// bladeOffsetMm 是切刀跟列印頭之間固定的實體距離，需要應用程式自己走紙走過這段距離，
-// 印表機不會自動幫忙走（見 state.printPrefs 那邊的說明，2026-09 已用實機驗證）。
-// 提示文字依專案內的印表機規格動態產生，開啟不同專案時要重新更新，見 init／loadProjectIntoEditor。
-function updateFeedLinesHint() {
-    const profile = getPrinterProfile(state.project.printerProfile.id);
-    const bladeOffsetMm = profile.autocutter?.bladeOffsetMm;
-    const label = document.querySelector('label[for="pref-feed-lines"]');
-    label.querySelector(".info-icon")?.remove();
-    label.appendChild(createInfoIcon(bladeOffsetMm
-        ? `${profile.brand} ${profile.model} 切刀距列印頭約 ${bladeOffsetMm}mm，切到內容請調高行數`
-        : "切到內容請調高行數"));
-    els["pref-feed-lines-hint"].hidden = true;
-}
-
-function populatePaperWidthTabs() {
-    const profile = getPrinterProfile(state.project.printerProfile.id);
-    const wrap = els["paper-width-tabs"];
-    wrap.innerHTML = "";
-    for (const paper of profile.paperWidths) {
-        const label = document.createElement("label");
-        label.className = "item";
-        const input = document.createElement("input");
-        input.type = "radio";
-        input.name = "paper-width";
-        input.value = paper.id;
-        input.checked = paper.id === state.project.paper.widthId;
-        input.addEventListener("change", () => {
-            state.project.paper.widthId = paper.id;
-            onModelChange();
-        });
-        const text = document.createElement("div");
-        text.className = "text";
-        text.textContent = paper.label;
-        label.appendChild(input);
-        label.appendChild(text);
-        wrap.appendChild(label);
-    }
-}
-
-// 通用下拉選單開關：開／關／切換，碰撞感知（下方空間不夠時翻到上面顯示），點擊選單外
-// 或按 Esc 都會關閉。{portal:true} 時選單會被搬到 document.body、改用 position:fixed
-// 算座標，用來跳脫 .canvas-floating-toolbar 的 overflow-x:auto（同一條規則會把
-// overflow-y 一併提升成 auto，選單留在原地會被工具列自己的框裁掉）。
-// 同 koilisu/apps/pitrace js/ui/toolbar.js 的 wireDropdownToggle()。
-function wireDropdownToggle(trigger, menu, onToggle, opts = {}) {
-    const portal = opts.portal;
-    function position() {
-        const rect = trigger.getBoundingClientRect();
-        const shell = trigger.closest(".canvas-floating-toolbar");
-        const shellRect = shell ? shell.getBoundingClientRect() : rect;
-        const gap = 10;
-        menu.style.position = "fixed";
-        menu.style.visibility = "hidden";
-        menu.style.top = "0px";
-        const menuHeight = menu.offsetHeight;
-        const menuWidth = menu.offsetWidth;
-        const fitsBelow = shellRect.bottom + gap + menuHeight <= window.innerHeight - 8;
-        const top = fitsBelow ? shellRect.bottom + gap : Math.max(8, shellRect.top - gap - menuHeight);
-        const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8));
-        menu.style.top = `${top}px`;
-        menu.style.left = `${left}px`;
-        menu.style.visibility = "";
-    }
-    function close() {
-        menu.hidden = true;
-        trigger.setAttribute("aria-expanded", "false");
-        onToggle?.(false);
-    }
-    function open() {
-        menu.hidden = false;
-        trigger.setAttribute("aria-expanded", "true");
-        if (portal) {
-            document.body.appendChild(menu);
-            position();
-        }
-        onToggle?.(true);
-    }
-    function toggle() {
-        if (menu.hidden) open();
-        else close();
-    }
-    document.addEventListener("click", (evt) => {
-        if (!menu.hidden && evt.target !== trigger && !menu.contains(evt.target) && !trigger.contains(evt.target)) close();
-    });
-    document.addEventListener("keydown", (evt) => {
-        if (evt.key === "Escape" && !menu.hidden) {
-            close();
-            trigger.focus();
-        }
-    });
-    return { open, close, toggle };
-}
-
-// 容器變窄放不下整排按鈕時（例如欄寬被拉桿拖窄），依 data-collapse-priority 由小到大
-// 把整顆按鈕完整地收進「更多工具」選單，而不是壓縮/裁切它們，可見按鈕永遠維持原始
-// 大小，也不需要橫向捲動工具列才找得到——比照 Figma 窄寬度工具列的做法，同
-// koilisu/apps/pitrace 的 wireToolbarOverflow()。用 ResizeObserver 量工具列父層的
-// 實際寬度（不是 window 寬度），因為可用寬度還受使用者可拖曳的欄寬拉桿影響。
-function wireToolbarOverflow() {
-    const bar = document.querySelector(".canvas-floating-toolbar");
-    const trigger = document.getElementById("btnToolbarOverflow");
-    const wrap = document.getElementById("toolbarOverflowWrap");
-    const menu = document.getElementById("toolbarOverflowMenu");
-    if (!bar || !trigger || !wrap || !menu) return;
-
-    const units = Array.from(bar.querySelectorAll("[data-collapse-priority]"))
-        .sort((a, b) => Number(a.dataset.collapsePriority) - Number(b.dataset.collapsePriority));
-    // 優先權 -> 該層對應的選單代理按鈕（多欄那層有 4 個比例選項，收合／露出都一起動作）。
-    // 代理按鈕直接呼叫真正控制項的 .click()，沿用它原本的事件邏輯，不用另外複製一份判斷。
-    const proxies = {
-        1: [
-            { menuId: "overflowRatio11", targetId: "row-ratio-1-1" },
-            { menuId: "overflowRatio21", targetId: "row-ratio-2-1" },
-            { menuId: "overflowRatio12", targetId: "row-ratio-1-2" },
-            { menuId: "overflowRatio111", targetId: "row-ratio-1-1-1" },
-        ],
-        2: [{ menuId: "overflowAddSpacer", targetId: "btn-add-spacer" }],
-        3: [{ menuId: "overflowAddBarcode", targetId: "btn-add-barcode" }],
-        4: [{ menuId: "overflowAddDivider", targetId: "btn-add-divider" }],
-        5: [{ menuId: "overflowAddImage", targetId: "btn-add-image" }],
-        6: [{ menuId: "overflowAddText", targetId: "btn-add-text" }],
-    };
-    const allProxies = Object.values(proxies).flat();
-
-    const { toggle, close } = wireDropdownToggle(trigger, menu, null, { portal: true });
-    trigger.addEventListener("click", toggle);
-
-    for (const { menuId, targetId } of allProxies) {
-        document.getElementById(menuId).addEventListener("click", () => {
-            document.getElementById(targetId).click();
-            close();
-            trigger.focus();
-        });
-    }
-
-    // 每次都先全部展開回原始大小再重新量寬度，而不是在既有收合狀態上做增量判斷——
-    // 收合層級只有幾層，重算成本很低，換來的是不管容器寬度怎麼變化都能收斂到同一個
-    // 穩定結果，不用擔心增量邏輯漏判某個中間狀態。
-    function applyCollapse() {
-        units.forEach((u) => u.style.removeProperty("display"));
-        allProxies.forEach(({ menuId }) => { document.getElementById(menuId).hidden = true; });
-        // 先在觸發鈕還藏著的狀態量一次：全部按鈕完整展開、不含「更多工具」鈕本身寬度，
-        // 這樣就放得下的話完全不用收合，觸發鈕也不用出現——不然觸發鈕一開始就佔位量
-        // 寬度，容器明明夠寬也會被誤判成需要收合。
-        wrap.hidden = true;
-        if (bar.scrollWidth <= bar.clientWidth) {
-            if (!menu.hidden) close();
-            return;
-        }
-        // 展開後真的放不下，才需要收合，這種情況下「更多工具」鈕勢必得跟著露出來，
-        // 從這裡開始把它的寬度也算進判斷式，收合迴圈才會收到真正夠用為止。
-        wrap.hidden = false;
-
-        // units 已依 data-collapse-priority 由小到大排序，數字愈小代表愈該優先被收合。
-        // 量測階段：先把目前的溢出量、每顆候選按鈕的寬度全部讀完（純讀取，中間不穿插
-        // 任何 style 寫入），用累加寬度估算要收到第幾顆才夠，避免讀寫交錯逼出同步 reflow。
-        let overflow = bar.scrollWidth - bar.clientWidth;
-        const gap = parseFloat(getComputedStyle(bar).columnGap) || 0;
-        let collapseCount = 0;
-        for (let i = 0; i < units.length && overflow > 0; i++) {
-            overflow -= units[i].getBoundingClientRect().width + gap;
-            collapseCount = i + 1;
-        }
-
-        // 寫入階段：一次把估算出需要收合的按鈕全部設成 display:none，中間不再穿插寬度讀取。
-        for (let i = 0; i < collapseCount; i++) {
-            const priority = units[i].dataset.collapsePriority;
-            units[i].style.display = "none";
-            proxies[priority].forEach(({ menuId }) => { document.getElementById(menuId).hidden = false; });
-        }
-
-        // 保險：寬度估算沒算到的邊界效應（subpixel 捨入等）導致還是放不下，才退回逐顆
-        // 收合＋重新量測——這是罕見的補漏路徑，一般情況下不會跑到這裡。
-        for (let i = collapseCount; i < units.length && bar.scrollWidth > bar.clientWidth; i++) {
-            const priority = units[i].dataset.collapsePriority;
-            units[i].style.display = "none";
-            proxies[priority].forEach(({ menuId }) => { document.getElementById(menuId).hidden = false; });
-        }
-    }
-
-    // 觀察的不是 bar 自己，是它錨定的父層 #canvasPane：bar 是 width:max-content、
-    // max-width 相對父層，收合到只剩內容需要的寬度後，父層之後變寬 bar 也不會再變，
-    // 只盯著 bar 會導致容器變寬後收合狀態永遠無法還原。
-    new ResizeObserver(applyCollapse).observe(bar.parentElement);
-    applyCollapse();
-}
-
-function bindToolbar() {
-    els["btn-add-text"].addEventListener("click", () => addElement("text"));
-    els["btn-add-spacer"].addEventListener("click", () => addElement("spacer"));
-    els["btn-add-divider"].addEventListener("click", () => addElement("divider"));
-    els["btn-add-barcode"].addEventListener("click", () => addElement("barcode"));
-    els["btn-add-image"].addEventListener("click", () => addElement("image"));
-
-    document.querySelectorAll("#row-ratio-dropdown .item[data-ratio]").forEach((item) => {
-        item.addEventListener("click", () => addElement("row", { ratio: item.dataset.ratio.split(",").map(Number) }));
-    });
-
-    wireAddMenu();
-    wireOutlineKeyboard();
-
-    els["btn-toggle-thermal"].addEventListener("click", () => {
-        state.mode = state.mode === "screen" ? "thermal" : "screen";
-        els["btn-toggle-thermal"].classList.toggle("is-active", state.mode === "thermal");
-        schedulePreview();
-    });
-
-    els["btn-toggle-preview-mode"].addEventListener("click", () => {
-        state.viewMode = state.viewMode === "edit" ? "preview" : "edit";
-        const isPreview = state.viewMode === "preview";
-        els["btn-toggle-preview-mode"].classList.toggle("is-active", isPreview);
-        els["btn-toggle-preview-mode"].setAttribute("aria-pressed", String(isPreview));
-        els["paper-viewport"].classList.toggle("is-preview-mode", isPreview);
-        renderEditOverlay();
-    });
-
-    els["btn-new-ptan"].addEventListener("click", startNewProject);
-    els["open-project-from-file"].addEventListener("click", () => els["ptan-file-input"].click());
-    els["export-embed-fonts-row"].addEventListener("click", (e) => e.stopPropagation()); // 勾選時不收起匯出選單
-    els["btn-save-ptan"].addEventListener("click", async () => {
-        const failed = await downloadPtan(state.project, state.project.meta.name || "printan", { embedFonts: els["export-embed-fonts"].checked });
-        if (failed.length) alert(`已匯出，但這些字體沒能內嵌（可能離線）：${failed.join("、")}`);
-    });
-
-    els["btn-export-pdf"].addEventListener("click", exportSinglePdf);
-    els["btn-export-batch-pdf"].addEventListener("click", exportBatchPdf);
-    els["btn-print"].addEventListener("click", printCurrent);
-}
-
-// image-file-input 是整個編輯器共用的單一 hidden input（工具列「新增圖片」與各圖片元素
-// inspector 的「更換圖片」都借用同一個），用這個變數帶「這一次選檔要怎麼處理」，避免像過去
-// 那樣在同一個 input 上疊加第二個 change 監聽器（會兩邊都觸發，多插入一個重複元素）。
-
-const SAFE_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]); // 與匯入 .ptan 的白名單一致
-
-async function handleImageFileSelected(file) {
-    let converted;
-    try {
-        converted = await convertHeicIfNeeded(file);
-    } catch (err) {
-        alert(`HEIC 轉換失敗：${err.message}`);
-        return null;
-    }
-    if (!SAFE_IMAGE_TYPES.has(converted.type)) {
-        alert("只支援 PNG、JPEG、GIF、WebP 圖片");
-        return null;
-    }
-    const dataUrl = await fileToDataUrl(converted);
-    const assetId = `asset_${Date.now().toString(36)}`;
-    state.project.assets.push({ id: assetId, type: converted.type, dataUrl });
-    return assetId;
-}
-
-// 新圖片的預設寬度：小圖（logo、圖示）不放大到滿版，照原始像素寬佔可列印寬的比例；大圖一律 100%
-async function defaultImageWidthPercent(assetId) {
-    const asset = state.project.assets.find((a) => a.id === assetId);
-    const img = new Image();
-    img.src = asset?.dataUrl || "";
-    try { await img.decode(); } catch { return 100; }
-    const printable = getPaperWidth(getEffectiveProfile(), state.project.paper.widthId).printableWidthDots;
-    return Math.min(100, Math.max(10, Math.round((img.naturalWidth / printable) * 100)));
-}
-
-function bindFileInputs() {
-    els["image-file-input"].addEventListener("change", async (e) => {
-        const file = e.target.files[0];
-        e.target.value = "";
-        const handler = rt.imageFileInputHandler;
-        rt.imageFileInputHandler = null;
-        if (!file) return;
-        const assetId = await handleImageFileSelected(file);
-        if (!assetId) return;
-        if (handler) handler(assetId);
-        else insertElement(createImageElement({ assetId, widthPercent: await defaultImageWidthPercent(assetId) }));
-    });
-
-    els["ptan-file-input"].addEventListener("change", async (e) => {
-        const file = e.target.files[0];
-        e.target.value = "";
-        if (!file) return;
-        const result = await readPtanFile(file);
-        if (!result.ok) {
-            alert(`開啟失敗：${result.error}`);
-            return;
-        }
-        loadProjectIntoEditor(result.project);
-    });
-}
-
-// ---- 新增空白版型 / 開啟最近編輯（IndexedDB 草稿）----
-// 「新增」不會刪除目前版型：目前版型早就被 scheduleSave 自動存進 IndexedDB 了，
-// 換成空白版型後舊的還在，可以從「開啟」下拉選單的「最近編輯」清單找回來。
-
-export function loadProjectIntoEditor(project) {
-    state.project = project;
-    state.currentPageIndex = 0;
-    state.selectedId = null;
-    state.multi = [];
-    state.insertionTarget = null;
-    state.previewData = {};
-    resetHistory();
-    endBatchPreview();
-    updateFeedLinesHint();
-    renderPrintableDotsRows();
-    renderMarginRows();
-    populatePaperWidthTabs();
-    populateRecentDrafts();
-    renderProjectName();
-    renderPageList();
-    onModelChange();
-}
-
-function startNewProject() {
-    loadProjectIntoEditor(createEmptyProject({
-        printerProfileId: state.project.printerProfile.id,
-        paperWidthId: state.project.paper.widthId,
-    }));
-}
-
-// ---- 工具列「專案名稱」欄位：平時是 ts-button，點擊／Enter 切成 ts-input ----
-// 顯示與輸入框共用 state.project.meta.name；儲存草稿／匯出 .ptan／匯出 PDF 檔名
-// 已經直接讀這個欄位（見 btn-save-ptan、batch-export.js），這裡不用另外接。
-function renderProjectName() {
-    const name = state.project.meta.name || "未命名專案";
-    els["project-name-text"].textContent = name;
-    els["project-name-text"].title = name; // 名稱太長被裁切時，滑鼠停留看得到完整名稱
-}
-
-function bindProjectName() {
-    const btn = els["btn-project-name"];
-    const input = els["project-name-input"];
-    const inputWrap = els["project-name-input-wrap"]; // Tocas ts-input 外層，顯示／隱藏切換的是它
-    let cancelling = false;
-
-    function enterEdit() {
-        input.value = state.project.meta.name || "";
-        btn.hidden = true;
-        inputWrap.hidden = false;
-        input.focus();
-        input.select();
-    }
-    function exitEdit() {
-        inputWrap.hidden = true;
-        btn.hidden = false;
-    }
-    // Enter／blur（含點別處、Tab 走焦點）都算確認；Esc 用 cancelling 旗標跳過這裡的寫入，只還原顯示
-    function commit() {
-        if (cancelling) {
-            cancelling = false;
-            exitEdit();
-            return;
-        }
-        const next = input.value.trim().slice(0, 60) || "未命名專案";
-        if (next !== state.project.meta.name) {
-            state.project.meta.name = next;
-            renderProjectName();
-            onModelChange();
-        }
-        exitEdit();
-    }
-
-    btn.addEventListener("click", enterEdit);
-    input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-            e.preventDefault();
-            input.blur(); // 交給 blur 監聽器統一處理，避免兩套 commit 邏輯
-        } else if (e.key === "Escape") {
-            e.preventDefault();
-            cancelling = true;
-            input.blur();
-        }
-    });
-    input.addEventListener("blur", commit);
-}
-
-function populateRecentDrafts() {
-    const list = els["recent-drafts-list"];
-    list.innerHTML = "";
-    const recent = listRecent().filter((r) => r.id !== state.project.id);
-    if (recent.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "ts-text is-description is-small recent-draft-empty";
-        empty.textContent = "尚無其他最近編輯的版型";
-        list.appendChild(empty);
-        return;
-    }
-    for (const r of recent) {
-        const row = document.createElement("div");
-        row.className = "item recent-draft-item";
-
-        const info = document.createElement("span");
-        info.className = "recent-draft-info";
-        const name = document.createElement("span");
-        name.className = "recent-draft-name";
-        name.textContent = r.name || "未命名版型";
-        const time = document.createElement("span");
-        time.className = "ts-text is-description is-small recent-draft-time";
-        time.textContent = new Date(r.updatedAt).toLocaleString("zh-TW", { hour12: false });
-        info.append(name, time);
-
-        const del = document.createElement("button");
-        del.type = "button";
-        del.className = "ts-button is-icon is-tiny recent-draft-delete";
-        del.dataset.tooltip = "刪除這份草稿";
-        del.setAttribute("aria-label", "刪除這份草稿");
-        del.innerHTML = '<span class="ts-icon is-trash-icon" aria-hidden="true"></span>';
-        del.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            await deleteDraft(r.id);
-            populateRecentDrafts();
-        });
-
-        row.append(info, del);
-        row.addEventListener("click", async () => {
-            const draft = await loadDraft(r.id);
-            if (!draft) {
-                populateRecentDrafts();
-                return;
-            }
-            const result = loadProject(draft);
-            if (!result.ok) {
-                alert(`開啟失敗：${result.error}`);
-                return;
-            }
-            safeSetItem(LAST_DRAFT_KEY, r.id);
-            loadProjectIntoEditor(result.project);
-        });
-        list.appendChild(row);
-    }
-}
-
-// ---- 元素屬性面板 ----
 
 // ---- 變數 / 預覽資料 ----
 
@@ -760,13 +296,6 @@ export const inlineEditor = createInlineTextEditor({
     },
 });
 
-// ---- 列印設定（WebUSB／WebSerial 直連、印表機識別、走紙／切紙／可列印點數偏好） ----
-// 連線狀態、走紙／切紙偏好都是「這台瀏覽器、這台印表機」的本機操作習慣，不寫進 .ptan，
-// 同一份版型換人、換印表機開啟時不應該被綁死。
-
-// ---- 變更彙整：儲存草稿 + 重新渲染 ----
-
-let saveTimer = null;
 // live=true：畫布／安全線等視覺跟手（rAF 節流，同拖曳把手），不用 schedulePreview() 的 120ms
 // debounce——那個 debounce 會被連續輸入（打字、貼上、按住刪除）不斷重置，畫面卡在舊高度直到停手。
 export function onModelChange({ skipInspector = false, live = false } = {}) {
@@ -800,16 +329,6 @@ export function schedulePreviewLive() {
         }
         liveBusy = false;
     });
-}
-
-function scheduleSave() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(async () => {
-        const id = await runAutosave(els["save-status"], () => saveDraft(state.project));
-        if (!id) return;
-        safeSetItem(LAST_DRAFT_KEY, id);
-        populateRecentDrafts();
-    }, 500);
 }
 
 init();

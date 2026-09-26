@@ -1897,12 +1897,12 @@ body {
         display: none;
     }
 
-    #toolbar > .ts-buttons {
+    #operations > .ts-buttons {
         display: flex;
         flex: 1 0 100%;
     }
 
-    #toolbar > .ts-buttons > .ts-button {
+    #operations > .ts-buttons > .ts-button {
         flex: 1 1 0;
     }
 
@@ -1937,7 +1937,7 @@ body {
 }
 
 @media (width < 768px) and (pointer: coarse) {
-    #toolbar .ts-button.is-small,
+    #operations .ts-button.is-small,
     #paper-width-tabs .item {
         min-height: 2.5rem;
     }
@@ -2175,7 +2175,7 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
     max-width: 100%;
 }
 
-/* 小螢幕工具列每組各自整行（見上方 #toolbar > .ts-buttons 規則），專案名稱跟著同一套排法 */
+/* 小螢幕工具列每組各自整行（見上方 #operations > .ts-buttons 規則），專案名稱跟著同一套排法 */
 @media (width < 768px) {
     .project-name-group {
         flex: 1 0 100%;
@@ -2199,12 +2199,12 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
    外部系統（測驗機、配對後的售票機等）用網址直接指定版型＋自動列印，畫面不能看出是
    printan 編輯器：工具列、版面結構、元素設定、頁首頁尾全部藏起來，只留畫布／預覽區，
    並讓它填滿整個視窗（不分斷點，kiosk 螢幕尺寸不定，直接比照桌面版三欄的滿版高度作法）。
-   隱藏用的選擇器盡量抓既有 id（#app-header／#toolbar／#outlineSidebar／#inspectorDock／
+   隱藏用的選擇器盡量抓既有 id（#app-header／#operations／#outlineSidebar／#inspectorDock／
    #colResizerLeft／#colResizerRight／#app-footer），specificity 天然贏過原本斷點規則，
    不用 !important；只有 .mobile-panel-bar 底下是 Tocas 斷點工具類（tablet+:has-hidden），
    不確定其 specificity，用 !important 保險。 */
 .is-kiosk #app-header,
-.is-kiosk #toolbar,
+.is-kiosk #operations,
 .is-kiosk #outlineSidebar,
 .is-kiosk #inspectorDock,
 .is-kiosk #colResizerLeft,
