@@ -21,6 +21,8 @@ export function createFill(overrides = {}) {
         reverse: false, // gradient 專用：反轉深淺方向
         from: 0, // gradient 專用：起點濃度 0-255（0＝白／無墨，255＝全黑），跟 halftone level 同一套直覺
         to: 255, // gradient 專用：終點濃度 0-255
+        fromPattern: "dot", // gradient 專用：起點端的網點花紋，跟 toPattern 之間依 t 線性混合過渡
+        toPattern: "dot", // gradient 專用：終點端的網點花紋
         ...overrides,
     };
 }
@@ -35,6 +37,8 @@ export function resolveFill(fill) {
         reverse: !!f.reverse,
         from: typeof f.from === "number" ? f.from : 0,
         to: typeof f.to === "number" ? f.to : 255,
+        fromPattern: FILL_PATTERNS.includes(f.fromPattern) ? f.fromPattern : "dot",
+        toPattern: FILL_PATTERNS.includes(f.toPattern) ? f.toPattern : "dot",
     };
 }
 

@@ -15,7 +15,7 @@ import { getPrinterProfile, getPaperWidth } from "./printer-profiles.js";
 import { applyDataToElements } from "./merge.js";
 import { FLOAT_GAP_DOTS, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow, resolveTextVAlign, resolveDividerDrawMode, resolveFill } from "./document-model.js";
 import { dotsToMm, splitRowColumns } from "./units.js";
-import { applyThermalSimulation, toGrayscale, applyDither } from "./dithering.js";
+import { applyThermalSimulation, toGrayscale, applyDither, orderedDitherGradient } from "./dithering.js";
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
 import { ensureWebFonts } from "./web-fonts.js";
 
@@ -749,8 +749,8 @@ function renderFillCanvas(w, h, fill, invert = false) {
     }
     const imageData = ctx.createImageData(w, h);
     if (fill.mode === "gradient") {
-        fillGradientGray(imageData, w, h, fill.direction, fill.reverse, fill.from, fill.to);
-        applyDither(imageData, "ordered", 128);
+        const tOf = gradientT(w, h, fill.direction, fill.reverse);
+        orderedDitherGradient(imageData, w, h, tOf, fill.fromPattern, fill.toPattern, fill.from, fill.to);
     } else {
         fillSolidGray(imageData, 128);
         applyDither(imageData, "ordered", fill.level, fill.pattern);
@@ -838,30 +838,20 @@ function fillSolidGray(imageData, value) {
 }
 
 // direction "radial" 是同心圓：t 用「離中心的距離／到角落的最大距離」算，中心是漸層起點，往外擴到終點。
-// from/to 是使用者設定的兩端墨色濃度（0-255，跟 halftone 的「網點濃度」同一套直覺：0＝白／無墨，255＝全黑），
-// 換算成灰階時要反過來（濃度愈高，灰階愈低愈接近黑）。
-function fillGradientGray(imageData, w, h, direction, reverse, from = 0, to = 255) {
-    const d = imageData.data;
+// 回傳一個 (px,py) -> 0-1 的函式，renderFillCanvas 算漸層濃淡跟花紋混合都靠它算 t。
+function gradientT(w, h, direction, reverse) {
     const cx = (w - 1) / 2;
     const cy = (h - 1) / 2;
     const maxR = Math.max(1, Math.hypot(cx, cy));
-    const startGray = 255 - from;
-    const endGray = 255 - to;
-    for (let py = 0; py < h; py++) {
-        for (let px = 0; px < w; px++) {
-            let t;
-            if (direction === "radial") {
-                t = Math.hypot(px - cx, py - cy) / maxR;
-            } else {
-                t = direction === "vertical" ? (h > 1 ? py / (h - 1) : 0) : (w > 1 ? px / (w - 1) : 0);
-            }
-            const frac = reverse ? 1 - t : t;
-            const value = Math.round(startGray * (1 - frac) + endGray * frac);
-            const i = (py * w + px) * 4;
-            d[i] = d[i + 1] = d[i + 2] = value;
-            d[i + 3] = 255;
+    return (px, py) => {
+        let t;
+        if (direction === "radial") {
+            t = Math.hypot(px - cx, py - cy) / maxR;
+        } else {
+            t = direction === "vertical" ? (h > 1 ? py / (h - 1) : 0) : (w > 1 ? px / (w - 1) : 0);
         }
-    }
+        return reverse ? 1 - t : t;
+    };
 }
 
 function paintImage(ctx, item, x, y, mode) {

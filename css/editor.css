@@ -1544,6 +1544,42 @@ body {
     align-items: baseline;
 }
 
+.gradient-range-tags {
+    display: flex;
+    align-items: baseline;
+    gap: .35rem;
+}
+
+/* 漸層起點／終點濃度的雙端拖曳條：軌道高度／圓角、把手大小跟顏色比照 Tocas .ts-range
+   （見 tocas.min.css .ts-range input 的 height:calc(1.15rem/2)、thumb 1.15rem 圓形），
+   維持跟其它滑桿一致的視覺語言，只是這裡沒辦法用原生 <input type=range>（要兩顆把手）。 */
+.gradient-range-track {
+    position: relative;
+    height: calc(1.15rem / 2);
+    margin-top: .6rem;
+    border-radius: var(--ts-border-radius-element);
+    background: var(--ts-gray-200);
+}
+
+.gradient-range-thumb {
+    position: absolute;
+    top: 50%;
+    width: 1.15rem;
+    height: 1.15rem;
+    margin-left: -.575rem;
+    transform: translateY(-50%);
+    border-radius: 100rem;
+    background: var(--ts-primary-700);
+    box-shadow: 0 0 0 2px var(--ts-page-background-default);
+    cursor: pointer;
+    touch-action: none;
+}
+
+.gradient-range-thumb:focus-visible {
+    outline: 2px solid var(--ts-primary-700);
+    outline-offset: 2px;
+}
+
 .pane-collapse-toggle .ts-icon {
     transition: transform .15s ease;
 }
