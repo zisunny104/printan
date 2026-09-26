@@ -309,7 +309,18 @@ const SWATCH_GRADIENT = fillSwatch("linear-gradient(135deg, #000, #fff)");
 const INK_FILL_MODE_OPTIONS = [["solid", "純黑", SWATCH_SOLID], ["halftone", "網點", SWATCH_HALFTONE], ["gradient", "漸層", SWATCH_GRADIENT]];
 // 「無」「反轉」是狀態／動作不是顏色，用圖示比色票更好懂；網點／漸層是實際填色效果，用色票。
 const BG_FILL_MODE_OPTIONS = [["none", "無", "ban"], ["solid", "反轉", "circle-half-stroke"], ["halftone", "網點", SWATCH_HALFTONE], ["gradient", "漸層", SWATCH_GRADIENT]];
-const FILL_DIRECTION_OPTIONS = [["horizontal", "水平", fillSwatch("linear-gradient(90deg, #000, #fff)")], ["vertical", "垂直", fillSwatch("linear-gradient(180deg, #000, #fff)")]];
+const FILL_DIRECTION_OPTIONS = [
+    ["horizontal", "水平", fillSwatch("linear-gradient(90deg, #000, #fff)")],
+    ["vertical", "垂直", fillSwatch("linear-gradient(180deg, #000, #fff)")],
+    ["radial", "同心圓", fillSwatch("radial-gradient(circle, #000, #fff)")],
+];
+// 網點花紋（dot／line／cross，見 dithering.js HALFTONE_PATTERNS）：色票直接用 CSS 重製三種花紋的示意圖，
+// 跟其餘填色按鈕一樣一眼看出差異，不用套用了才知道長怎樣。
+const FILL_PATTERN_OPTIONS = [
+    ["dot", "網點", fillSwatch("radial-gradient(circle, #000 34%, transparent 36%) 0 0/40% 40%, #fff")],
+    ["line", "橫線", fillSwatch("repeating-linear-gradient(#000, #000 2px, #fff 2px, #fff 4px)")],
+    ["cross", "菱形", fillSwatch("repeating-linear-gradient(45deg, #000, #000 1.5px, #fff 1.5px, #fff 4px), repeating-linear-gradient(-45deg, #000, #000 1.5px, #fff 1.5px, #fff 4px)")],
+];
 
 // 每個選項左邊放縮小後的實際樣子（字級比例／粗細）、右邊放階層標籤（H1-H5／P），
 // 觸發鈕與選單裡的每一列共用同一份內容，比照 Word／Docs 那種段落樣式下拉選單。
@@ -318,7 +329,10 @@ function styleOptionRow(key) {
     const preset = TEXT_STYLE_PRESETS[key];
     const sample = document.createElement("span");
     sample.className = "style-preset-sample";
-    sample.style.fontSize = `${Math.round(preset.fontSizePt * 1.3)}px`; // pt 數字偏小，*1.3 讓縮圖看得出對比
+    // pt 數字偏小，*1.3 讓縮圖看得出對比；但 H1~H5 實際字級差距很大（8pt~20pt），直接照比例縮放
+    // 會讓選單每一列高度落差很大（H1 那列爆大、H5 那列擠成一條），這裡夾在合理範圍內讓每列高度接近一致，
+    // 大小關係還是看得出來（H1 明顯比 H5 大），只是不會整個選單看起來忽大忽小。
+    sample.style.fontSize = `${Math.min(22, Math.max(14, Math.round(preset.fontSizePt * 1.3)))}px`;
     sample.style.fontWeight = preset.bold ? "700" : "400";
     sample.textContent = "Aa";
     const label = document.createElement("span");
@@ -521,21 +535,15 @@ function buildTextInspector(panel, el) {
             el.bgFill = { ...bgFill, mode: v };
             onModelChange();
         }, "填色方式", BG_FILL_MODE_OPTIONS)));
+        const setBgFill = (patch) => { el.bgFill = { ...resolveFill(el.bgFill), ...patch }; onModelChange({ skipInspector: true }); };
         if (mode === "halftone") {
-            body.appendChild(sliderField("網點濃度", bgFill.level, 0, 255, (v) => {
-                el.bgFill = { ...bgFill, level: v };
-                onModelChange({ skipInspector: true });
-            }));
+            body.appendChild(field("花紋", alignGroup(bgFill.pattern, (v) => setBgFill({ pattern: v }), "花紋", FILL_PATTERN_OPTIONS)));
+            body.appendChild(sliderField("網點濃度", bgFill.level, 0, 255, (v) => setBgFill({ level: v })));
         } else if (mode === "gradient") {
-            body.appendChild(field("方向", alignGroup(
-                bgFill.direction,
-                (v) => { el.bgFill = { ...bgFill, direction: v }; onModelChange({ skipInspector: true }); },
-                "方向", FILL_DIRECTION_OPTIONS,
-            )));
-            body.appendChild(field(null, checkboxInput(bgFill.reverse, (v) => {
-                el.bgFill = { ...bgFill, reverse: v };
-                onModelChange({ skipInspector: true });
-            }, "反轉方向（深到淺）")));
+            body.appendChild(field("方向", alignGroup(bgFill.direction, (v) => setBgFill({ direction: v }), "方向", FILL_DIRECTION_OPTIONS)));
+            body.appendChild(sliderField("起點濃度", bgFill.from, 0, 255, (v) => setBgFill({ from: v })));
+            body.appendChild(sliderField("終點濃度", bgFill.to, 0, 255, (v) => setBgFill({ to: v })));
+            body.appendChild(field(null, checkboxInput(bgFill.reverse, (v) => setBgFill({ reverse: v }), bgFill.direction === "radial" ? "反轉方向（由外而內）" : "反轉方向（深到淺）")));
         }
     }));
 
@@ -839,10 +847,13 @@ function fillFields(fill, onChange) {
     const frag = document.createDocumentFragment();
     frag.appendChild(field("填色方式", alignGroup(fill.mode, (v) => onChange({ mode: v }, true), "填色方式", INK_FILL_MODE_OPTIONS)));
     if (fill.mode === "halftone") {
+        frag.appendChild(field("花紋", alignGroup(fill.pattern, (v) => onChange({ pattern: v }, false), "花紋", FILL_PATTERN_OPTIONS)));
         frag.appendChild(sliderField("網點濃度", fill.level, 0, 255, (v) => onChange({ level: v }, false)));
     } else if (fill.mode === "gradient") {
         frag.appendChild(field("方向", alignGroup(fill.direction, (v) => onChange({ direction: v }, false), "方向", FILL_DIRECTION_OPTIONS)));
-        frag.appendChild(field(null, checkboxInput(fill.reverse, (v) => onChange({ reverse: v }, false), "反轉方向（深到淺）")));
+        frag.appendChild(sliderField("起點濃度", fill.from, 0, 255, (v) => onChange({ from: v }, false)));
+        frag.appendChild(sliderField("終點濃度", fill.to, 0, 255, (v) => onChange({ to: v }, false)));
+        frag.appendChild(field(null, checkboxInput(fill.reverse, (v) => onChange({ reverse: v }, false), fill.direction === "radial" ? "反轉方向（由外而內）" : "反轉方向（深到淺）")));
     }
     return frag;
 }

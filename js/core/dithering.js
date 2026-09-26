@@ -59,15 +59,33 @@ const BAYER_4X4 = [
     [3, 11, 1, 9],
     [15, 7, 13, 5],
 ];
+// 橫線網屏：同一列門檻值都一樣，同一塊灰階區域整列一起變黑/變白，形成橫線而不是散開的點。
+const LINE_4X4 = [
+    [2, 2, 2, 2],
+    [6, 6, 6, 6],
+    [10, 10, 10, 10],
+    [14, 14, 14, 14],
+];
+// 菱形網點（十字網屏）：門檻值由中心往四角遞增，同一塊灰階區域從中心方塊往外擴成菱形，
+// 跟 BAYER_4X4 的散開網點、LINE_4X4 的橫線比起來，中間調會呈現十字/方格感的網紋。
+const CROSS_4X4 = [
+    [15, 7, 7, 15],
+    [7, 0, 0, 7],
+    [7, 0, 0, 7],
+    [15, 7, 7, 15],
+];
+export const HALFTONE_PATTERNS = { dot: BAYER_4X4, line: LINE_4X4, cross: CROSS_4X4 };
 
-/** 4x4 Bayer matrix 排序抖色，呈現規則網點（印刷網屏）效果，跟誤差擴散比起來邊緣較銳利、噪點較規律。 */
-export function orderedDither(imageData, level = 128) {
+/** 排序抖色，呈現規則網點（印刷網屏）效果，跟誤差擴散比起來邊緣較銳利、噪點較規律。
+ *  pattern 決定門檻矩陣的花紋：dot＝散開網點（預設）｜line＝橫線網屏｜cross＝菱形網點。 */
+export function orderedDither(imageData, level = 128, pattern = "dot") {
+    const matrix = HALFTONE_PATTERNS[pattern] || BAYER_4X4;
     const { width, height, data } = imageData;
     const bias = level - 128;
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const i = (y * width + x) * 4;
-            const mapValue = ((BAYER_4X4[y % 4][x % 4] + 0.5) / 16) * 255;
+            const mapValue = ((matrix[y % 4][x % 4] + 0.5) / 16) * 255;
             const v = data[i] - bias < mapValue ? 0 : 255;
             data[i] = data[i + 1] = data[i + 2] = v;
         }
@@ -76,8 +94,8 @@ export function orderedDither(imageData, level = 128) {
 }
 
 /** 依「取樣方式」名稱分派抖色演算法，圖片元素的網點設定統一從這裡進入。 */
-export function applyDither(imageData, mode = "floyd-steinberg", level = 128) {
-    if (mode === "ordered") return orderedDither(imageData, level);
+export function applyDither(imageData, mode = "floyd-steinberg", level = 128, pattern = "dot") {
+    if (mode === "ordered") return orderedDither(imageData, level, pattern);
     if (mode === "threshold") return threshold(imageData, level);
     return floydSteinberg(imageData, level);
 }
