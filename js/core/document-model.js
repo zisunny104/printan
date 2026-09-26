@@ -10,17 +10,17 @@ import { ptToDots } from "./units.js";
  * 一套網點／漸層邏輯。mode "solid" 是純黑，等同還沒套用這個功能之前的舊行為。
  */
 export const FILL_MODES = ["solid", "halftone", "gradient"];
-export const FILL_PATTERNS = ["dot", "line", "grid"]; // halftone／gradient 共用的網點花紋（見 dithering.js PATTERN_MATRICES）
-export const FILL_DIRECTIONS = ["horizontal", "vertical", "radial"]; // gradient 專用，radial＝以中心點放射的同心圓漸層
+export const FILL_PATTERNS = ["dot", "line", "cross"]; // halftone 專用花紋，見 dithering.js HALFTONE_PATTERNS
+export const FILL_DIRECTIONS = ["horizontal", "vertical", "radial"]; // gradient 專用，radial＝同心圓（由中心向外）
 export function createFill(overrides = {}) {
     return {
         mode: "solid", // solid＝純黑｜halftone＝網點｜gradient＝網點漸層
-        pattern: "dot", // halftone／gradient 共用：網點花紋（dot＝圓點｜line＝橫線｜grid＝網格）
         level: 128, // halftone 專用：網點濃度 0-255，數字越大網點越密（越黑）
-        direction: "horizontal", // gradient 專用：horizontal | vertical | radial
-        reverse: false, // gradient 專用：反轉深淺方向（radial 時無意義，忽略）
-        from: 255, // gradient 專用：淺端灰階值 0-255
-        to: 0, // gradient 專用：深端灰階值 0-255
+        pattern: "dot", // halftone 專用：dot＝散開網點｜line＝橫線網屏｜cross＝菱形網點
+        direction: "horizontal", // gradient 專用：horizontal | vertical | radial（同心圓）
+        reverse: false, // gradient 專用：反轉深淺方向
+        from: 0, // gradient 專用：起點濃度 0-255（0＝白／無墨，255＝全黑），跟 halftone level 同一套直覺
+        to: 255, // gradient 專用：終點濃度 0-255
         ...overrides,
     };
 }
@@ -29,12 +29,12 @@ export function resolveFill(fill) {
     const f = fill && typeof fill === "object" ? fill : {};
     return {
         mode: FILL_MODES.includes(f.mode) ? f.mode : "solid",
-        pattern: FILL_PATTERNS.includes(f.pattern) ? f.pattern : "dot",
         level: typeof f.level === "number" ? f.level : 128,
+        pattern: FILL_PATTERNS.includes(f.pattern) ? f.pattern : "dot",
         direction: FILL_DIRECTIONS.includes(f.direction) ? f.direction : "horizontal",
         reverse: !!f.reverse,
-        from: typeof f.from === "number" ? f.from : 255,
-        to: typeof f.to === "number" ? f.to : 0,
+        from: typeof f.from === "number" ? f.from : 0,
+        to: typeof f.to === "number" ? f.to : 255,
     };
 }
 

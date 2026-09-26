@@ -533,8 +533,8 @@ function paintVerticalText(ctx, item, x, y, widthOverride) {
             const ink = inverse ? "#fff" : "#000";
             ctx.font = fontString(style);
             if (cell.text) {
-                if (!inverse && inkFill.mode !== "solid") {
-                    paintPatternVerticalCell(ctx, cell, cx, cellY, style, inkFill);
+                if (inkFill.mode !== "solid") {
+                    paintPatternVerticalCell(ctx, cell, cx, cellY, style, inkFill, inverse);
                 } else {
                     ctx.fillStyle = ink;
                     if (cell.rotated) {
@@ -671,10 +671,10 @@ function paintText(ctx, item, x, y) {
                 ctx.fillStyle = "#000";
                 ctx.fillRect(cursorX, lineY, segWidth, line.lineHeightDots);
             }
-            // 墨色花紋只套用在「沒有被反白」的正常墨色段落：反白（整行或局部）部分維持純色互換，
-            // 避免花紋疊在花紋底色上看不清楚，也不用煩惱花紋本身要不要反相
-            if (!segInverse && inkFill.mode !== "solid" && seg.text) {
-                paintPatternText(ctx, seg.text, cursorX, lineY, segWidth, seg.style.fontSize, inkFill);
+            // 文字顏色花紋（網點／漸層）現在反白區塊也會套用，只是黑白對調（invert）跟反白背景疊在一起
+            // 才看得出對比，而不是像以前一樣反白就整個退回純色——這樣容器底色跟文字顏色才能真的疊加。
+            if (inkFill.mode !== "solid" && seg.text) {
+                paintPatternText(ctx, seg.text, cursorX, lineY, segWidth, seg.style.fontSize, inkFill, segInverse);
             } else {
                 ctx.fillStyle = inkColor;
                 ctx.fillText(seg.text, cursorX, lineY);
@@ -731,8 +731,11 @@ function paintDivider(ctx, item, x, y) {
 // 線性漸層），直接餵給同一顆演算法即可長出規則網點／由淺到深的網點漸層。不分螢幕／熱感模式：
 // 這個花紋本身就是使用者選的視覺效果，兩種預覽都該長一樣（跟 divider 原本的虛線／點線同一邏輯）。
 
-/** 產生一塊 w×h 的填色畫布：solid 是純黑矩形，halftone／gradient 是排序抖色網點。 */
-function renderFillCanvas(w, h, fill) {
+/** 產生一塊 w×h 的填色畫布：solid 是純黑矩形，halftone／gradient 是排序抖色網點。
+ *  invert：黑白全部對調（同一個花紋的負片），用在「反白」場合底色跟花紋文字要疊在一起時，
+ *  維持看得出對比——不是重新算一次花紋，是同一張畫布用 canvas 的 difference 混合模式整張反相，
+ *  保證跟原本花紋是同一套點位/漸層，只是深淺對調。 */
+function renderFillCanvas(w, h, fill, invert = false) {
     w = Math.max(1, Math.round(w));
     h = Math.max(1, Math.round(h));
     const canvas = document.createElement("canvas");
@@ -740,37 +743,42 @@ function renderFillCanvas(w, h, fill) {
     canvas.height = h;
     const ctx = canvas.getContext("2d");
     if (fill.mode === "solid") {
-        ctx.fillStyle = "#000";
+        ctx.fillStyle = invert ? "#fff" : "#000";
         ctx.fillRect(0, 0, w, h);
         return canvas;
     }
     const imageData = ctx.createImageData(w, h);
     if (fill.mode === "gradient") {
         fillGradientGray(imageData, w, h, fill.direction, fill.reverse, fill.from, fill.to);
-        applyDither(imageData, "ordered", 128, fill.pattern);
+        applyDither(imageData, "ordered", 128);
     } else {
         fillSolidGray(imageData, 128);
         applyDither(imageData, "ordered", fill.level, fill.pattern);
     }
     ctx.putImageData(imageData, 0, 0);
+    if (invert) {
+        ctx.globalCompositeOperation = "difference";
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, w, h);
+    }
     return canvas;
 }
 
 /** 用填色畫一塊矩形（分隔線色塊、文字整行反白背景都用這個）。solid 直接 fillRect，其餘貼填色畫布。 */
-function paintFillRect(ctx, x, y, w, h, fill) {
+function paintFillRect(ctx, x, y, w, h, fill, invert = false) {
     if (fill.mode === "solid") {
-        ctx.fillStyle = "#000";
+        ctx.fillStyle = invert ? "#fff" : "#000";
         ctx.fillRect(x, y, w, h);
         return;
     }
-    ctx.drawImage(renderFillCanvas(w, h, fill), x, y, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+    ctx.drawImage(renderFillCanvas(w, h, fill, invert), x, y, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
 }
 
 // 文字墨色填花紋：solid 以外的模式沒辦法直接當 fillStyle 用，改用「先在獨立的透明遮罩畫布上
 // 畫黑字、再用 source-atop 疊上填色畫布」——source-atop 只會在遮罩已經有像素（也就是字形本身，
 // 含反鋸齒邊緣）的地方換色，遮罩其餘透明區域不受影響，最後把遮罩貼回主畫布，主畫布上已經畫好
 // 的背景／其他文字完全不會被動到。padX/padY 留一點餘裕避免裁到字母的上下延伸（如 g／y 的下突）。
-function paintPatternText(ctx, text, x, y, segWidth, fontSize, fill) {
+function paintPatternText(ctx, text, x, y, segWidth, fontSize, fill, invert = false) {
     const padX = 2;
     const padY = Math.max(2, Math.ceil(fontSize * 0.6));
     const w = Math.max(1, Math.ceil(segWidth) + padX * 2);
@@ -785,13 +793,13 @@ function paintPatternText(ctx, text, x, y, segWidth, fontSize, fill) {
     mctx.fillStyle = "#000";
     mctx.fillText(text, padX, padY);
     mctx.globalCompositeOperation = "source-atop";
-    mctx.drawImage(renderFillCanvas(w, h, fill), 0, 0);
+    mctx.drawImage(renderFillCanvas(w, h, fill, invert), 0, 0);
     ctx.drawImage(mask, x - padX, y - padY);
 }
 
 // 直書版本：cell 可能是旋轉 90 度的西文／數字（見 cell.rotated），遮罩內用同樣的
 // translate+rotate 手法，只是原點換算成遮罩本地座標（見下方兩個分支的註解）。
-function paintPatternVerticalCell(ctx, cell, cx, cellY, style, fill) {
+function paintPatternVerticalCell(ctx, cell, cx, cellY, style, fill, invert = false) {
     const padX = Math.max(2, Math.ceil(style.fontSize * 0.75));
     const padY = 2;
     const w = Math.max(1, Math.ceil(style.fontSize) + padX * 2);
@@ -817,7 +825,7 @@ function paintPatternVerticalCell(ctx, cell, cx, cellY, style, fill) {
         mctx.textAlign = "left";
     }
     mctx.globalCompositeOperation = "source-atop";
-    mctx.drawImage(renderFillCanvas(w, h, fill), 0, 0);
+    mctx.drawImage(renderFillCanvas(w, h, fill, invert), 0, 0);
     ctx.drawImage(mask, cx - padX, cellY - padY);
 }
 
@@ -829,24 +837,26 @@ function fillSolidGray(imageData, value) {
     }
 }
 
-function fillGradientGray(imageData, w, h, direction, reverse, from = 255, to = 0) {
+// direction "radial" 是同心圓：t 用「離中心的距離／到角落的最大距離」算，中心是漸層起點，往外擴到終點。
+// from/to 是使用者設定的兩端墨色濃度（0-255，跟 halftone 的「網點濃度」同一套直覺：0＝白／無墨，255＝全黑），
+// 換算成灰階時要反過來（濃度愈高，灰階愈低愈接近黑）。
+function fillGradientGray(imageData, w, h, direction, reverse, from = 0, to = 255) {
     const d = imageData.data;
-    // radial：以畫布中心為圓心，距離 0（中心）到最遠角落正規化成 0-1，無方向可反轉（中心永遠是起點）
     const cx = (w - 1) / 2;
     const cy = (h - 1) / 2;
-    const maxDist = Math.hypot(cx, cy) || 1;
+    const maxR = Math.max(1, Math.hypot(cx, cy));
+    const startGray = 255 - from;
+    const endGray = 255 - to;
     for (let py = 0; py < h; py++) {
         for (let px = 0; px < w; px++) {
             let t;
             if (direction === "radial") {
-                t = Math.min(1, Math.hypot(px - cx, py - cy) / maxDist);
-            } else if (direction === "vertical") {
-                t = h > 1 ? py / (h - 1) : 0;
+                t = Math.hypot(px - cx, py - cy) / maxR;
             } else {
-                t = w > 1 ? px / (w - 1) : 0;
+                t = direction === "vertical" ? (h > 1 ? py / (h - 1) : 0) : (w > 1 ? px / (w - 1) : 0);
             }
-            const frac = direction !== "radial" && reverse ? 1 - t : t;
-            const value = Math.round(from + (to - from) * frac); // from＝起點灰階、to＝終點灰階，皆可由使用者調整
+            const frac = reverse ? 1 - t : t;
+            const value = Math.round(startGray * (1 - frac) + endGray * frac);
             const i = (py * w + px) * 4;
             d[i] = d[i + 1] = d[i + 2] = value;
             d[i + 3] = 255;

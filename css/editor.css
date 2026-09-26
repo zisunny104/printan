@@ -348,10 +348,11 @@ body {
 .style-preset-trigger-content,
 .style-preset-item {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: .75rem;
     width: 100%;
+    min-height: 1.75rem; /* 各階層字級差很多，固定最小列高避免選單列忽大忽小 */
 }
 
 .style-preset-sample {
@@ -1351,6 +1352,13 @@ body {
 .dropdown-select-menu {
     max-height: 16rem;
     overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.dropdown-select-menu .item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* ---- 編輯模式畫布疊層：每個元素的虛線外框、拖曳排序、拖曳縮放把手 ---- */
