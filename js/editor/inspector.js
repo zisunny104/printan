@@ -318,7 +318,10 @@ function styleOptionRow(key) {
     const preset = TEXT_STYLE_PRESETS[key];
     const sample = document.createElement("span");
     sample.className = "style-preset-sample";
-    sample.style.fontSize = `${Math.round(preset.fontSizePt * 1.3)}px`; // pt 數字偏小，*1.3 讓縮圖看得出對比
+    // pt 數字偏小，*1.3 讓縮圖看得出對比；但 H1~H5 實際字級差距很大（8pt~20pt），直接照比例縮放
+    // 會讓選單每一列高度落差很大（H1 那列爆大、H5 那列擠成一條），這裡夾在合理範圍內讓每列高度接近一致，
+    // 大小關係還是看得出來（H1 明顯比 H5 大），只是不會整個選單看起來忽大忽小。
+    sample.style.fontSize = `${Math.min(22, Math.max(14, Math.round(preset.fontSizePt * 1.3)))}px`;
     sample.style.fontWeight = preset.bold ? "700" : "400";
     sample.textContent = "Aa";
     const label = document.createElement("span");

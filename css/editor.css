@@ -348,10 +348,11 @@ body {
 .style-preset-trigger-content,
 .style-preset-item {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: .75rem;
     width: 100%;
+    min-height: 1.75rem; /* 各階層字級差很多，固定最小列高避免選單列忽大忽小 */
 }
 
 .style-preset-sample {
@@ -1343,9 +1344,21 @@ body {
 }
 
 .dropdown-select-menu {
-    min-width: 100%;
+    /* 原本這裡寫 min-width:100% 想讓選單至少跟觸發鈕一樣寬，但 Tocas 的下拉選單其實是
+       position:fixed（靠 floating-ui 貼齊觸發鈕），fixed 元素的百分比寬度是相對「視窗」算，
+       不是相對觸發鈕——於是選單被撐成跟整個工作區一樣寬，且被 shift 到畫面最左邊，
+       就是使用者說的「下拉的彈出容器大小都異常」。Tocas 自己的 JS 已經會把
+       --ts-dropdown-min-width 設成觸發鈕的實際寬度（見 tocas.min.js autoUpdate），
+       不需要也不能再疊加一個百分比寬度上去。 */
     max-height: 16rem;
     overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.dropdown-select-menu .item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* ---- 編輯模式畫布疊層：每個元素的虛線外框、拖曳排序、拖曳縮放把手 ---- */
