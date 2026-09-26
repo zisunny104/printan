@@ -10,12 +10,17 @@ import { ptToDots } from "./units.js";
  * 一套網點／漸層邏輯。mode "solid" 是純黑，等同還沒套用這個功能之前的舊行為。
  */
 export const FILL_MODES = ["solid", "halftone", "gradient"];
+export const FILL_PATTERNS = ["dot", "line", "grid"]; // halftone／gradient 共用的網點花紋（見 dithering.js PATTERN_MATRICES）
+export const FILL_DIRECTIONS = ["horizontal", "vertical", "radial"]; // gradient 專用，radial＝以中心點放射的同心圓漸層
 export function createFill(overrides = {}) {
     return {
         mode: "solid", // solid＝純黑｜halftone＝網點｜gradient＝網點漸層
+        pattern: "dot", // halftone／gradient 共用：網點花紋（dot＝圓點｜line＝橫線｜grid＝網格）
         level: 128, // halftone 專用：網點濃度 0-255，數字越大網點越密（越黑）
-        direction: "horizontal", // gradient 專用：horizontal | vertical
-        reverse: false, // gradient 專用：反轉深淺方向
+        direction: "horizontal", // gradient 專用：horizontal | vertical | radial
+        reverse: false, // gradient 專用：反轉深淺方向（radial 時無意義，忽略）
+        from: 255, // gradient 專用：淺端灰階值 0-255
+        to: 0, // gradient 專用：深端灰階值 0-255
         ...overrides,
     };
 }
@@ -24,9 +29,12 @@ export function resolveFill(fill) {
     const f = fill && typeof fill === "object" ? fill : {};
     return {
         mode: FILL_MODES.includes(f.mode) ? f.mode : "solid",
+        pattern: FILL_PATTERNS.includes(f.pattern) ? f.pattern : "dot",
         level: typeof f.level === "number" ? f.level : 128,
-        direction: f.direction === "vertical" ? "vertical" : "horizontal",
+        direction: FILL_DIRECTIONS.includes(f.direction) ? f.direction : "horizontal",
         reverse: !!f.reverse,
+        from: typeof f.from === "number" ? f.from : 255,
+        to: typeof f.to === "number" ? f.to : 0,
     };
 }
 
@@ -139,7 +147,7 @@ export function normalizeTextElement(el) {
 // ---- Run 編輯（比照 Figma：單一文字框 + 選取範圍套用樣式） ----
 // 以下函式把「字元偏移範圍」對應到 runs 陣列的切分/合併，供 editor.js 的富文字編輯器使用。
 
-// inverse＝局部反白（黑底白字）；元素本身也是整行反白時，兩者相抵＝該段變回白底黑字。
+// inverse＝局部反白（黑底白字）；元素本身也是整行反白時，兩者疊加＝維持黑底白字（見 renderer.js paintText）。
 export const RUN_STYLE_FIELDS = ["fontFamily", "fontSize", "bold", "italic", "underline", "strikethrough", "inverse"];
 
 /** 選取範圍內各 run 的某欄位值不一致時的標記值（不會被序列化保存，僅供 UI 顯示「混合」）。 */

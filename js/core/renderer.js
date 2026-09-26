@@ -524,9 +524,10 @@ function paintVerticalText(ctx, item, x, y, widthOverride) {
         let cellY = y + (item.vAlignOffset || 0);
         for (const cell of col.cells) {
             const { style } = cell;
-            const inverse = !!el.inverse !== style.inverse;
+            // 同 paintText：局部反白疊加在整行反白之上，不相抵
+            const inverse = !!el.inverse || style.inverse;
             if (style.inverse) {
-                ctx.fillStyle = inverse ? "#000" : "#fff";
+                ctx.fillStyle = "#000";
                 ctx.fillRect(cx - col.width / 2, cellY, col.width, cell.advance);
             }
             const ink = inverse ? "#fff" : "#000";
@@ -662,11 +663,12 @@ function paintText(ctx, item, x, y) {
         for (const seg of line.segments) {
             ctx.font = fontString(seg.style);
             const segWidth = ctx.measureText(seg.text).width;
-            // 局部反白與整行反白相抵：整行黑底上的反白段變回白底黑字
-            const segInverse = !!el.inverse !== seg.style.inverse;
+            // 局部反白疊加在整行反白之上（不相抵）：容器底色已經畫在下層，局部反白只是
+            // 再疊一塊實心黑底上去，兩者同時開啟時效果加成而不是互相抵銷回白底黑字
+            const segInverse = !!el.inverse || seg.style.inverse;
             const inkColor = segInverse ? "#fff" : "#000";
             if (seg.style.inverse) {
-                ctx.fillStyle = segInverse ? "#000" : "#fff";
+                ctx.fillStyle = "#000";
                 ctx.fillRect(cursorX, lineY, segWidth, line.lineHeightDots);
             }
             // 墨色花紋只套用在「沒有被反白」的正常墨色段落：反白（整行或局部）部分維持純色互換，
@@ -744,11 +746,11 @@ function renderFillCanvas(w, h, fill) {
     }
     const imageData = ctx.createImageData(w, h);
     if (fill.mode === "gradient") {
-        fillGradientGray(imageData, w, h, fill.direction, fill.reverse);
-        applyDither(imageData, "ordered", 128);
+        fillGradientGray(imageData, w, h, fill.direction, fill.reverse, fill.from, fill.to);
+        applyDither(imageData, "ordered", 128, fill.pattern);
     } else {
         fillSolidGray(imageData, 128);
-        applyDither(imageData, "ordered", fill.level);
+        applyDither(imageData, "ordered", fill.level, fill.pattern);
     }
     ctx.putImageData(imageData, 0, 0);
     return canvas;
@@ -827,13 +829,24 @@ function fillSolidGray(imageData, value) {
     }
 }
 
-function fillGradientGray(imageData, w, h, direction, reverse) {
+function fillGradientGray(imageData, w, h, direction, reverse, from = 255, to = 0) {
     const d = imageData.data;
+    // radial：以畫布中心為圓心，距離 0（中心）到最遠角落正規化成 0-1，無方向可反轉（中心永遠是起點）
+    const cx = (w - 1) / 2;
+    const cy = (h - 1) / 2;
+    const maxDist = Math.hypot(cx, cy) || 1;
     for (let py = 0; py < h; py++) {
         for (let px = 0; px < w; px++) {
-            const t = direction === "vertical" ? (h > 1 ? py / (h - 1) : 0) : (w > 1 ? px / (w - 1) : 0);
-            const frac = reverse ? 1 - t : t;
-            const value = Math.round(255 * (1 - frac)); // 淺（255）到深（0）
+            let t;
+            if (direction === "radial") {
+                t = Math.min(1, Math.hypot(px - cx, py - cy) / maxDist);
+            } else if (direction === "vertical") {
+                t = h > 1 ? py / (h - 1) : 0;
+            } else {
+                t = w > 1 ? px / (w - 1) : 0;
+            }
+            const frac = direction !== "radial" && reverse ? 1 - t : t;
+            const value = Math.round(from + (to - from) * frac); // from＝起點灰階、to＝終點灰階，皆可由使用者調整
             const i = (py * w + px) * 4;
             d[i] = d[i + 1] = d[i + 2] = value;
             d[i + 3] = 255;

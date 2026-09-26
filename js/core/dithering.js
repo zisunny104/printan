@@ -60,14 +60,25 @@ const BAYER_4X4 = [
     [15, 7, 13, 5],
 ];
 
-/** 4x4 Bayer matrix 排序抖色，呈現規則網點（印刷網屏）效果，跟誤差擴散比起來邊緣較銳利、噪點較規律。 */
-export function orderedDither(imageData, level = 128) {
+// 橫線網屏：閾值只隨列（y）變化，同一列所有像素一起翻黑／翻白，呈現規則橫線而非圓點。
+const LINE_ROWS = [1, 5, 9, 13];
+const LINE_4X4 = LINE_ROWS.map((v) => [v, v, v, v]);
+
+// 網格網屏：橫線＋直線各自的閾值取較小值，讓兩個方向的線同時變粗，呈現交叉網格。
+const GRID_4X4 = LINE_ROWS.map((ry) => LINE_ROWS.map((rx) => Math.min(ry, rx)));
+
+/** halftone／gradient 共用的網點花紋矩陣，key 對應 document-model.js 的 FILL_PATTERNS。 */
+const PATTERN_MATRICES = { dot: BAYER_4X4, line: LINE_4X4, grid: GRID_4X4 };
+
+/** 4x4 排序抖色矩陣，預設 Bayer（規則圓點網屏），pattern 可換成橫線／網格，跟誤差擴散比起來邊緣較銳利、噪點較規律。 */
+export function orderedDither(imageData, level = 128, pattern = "dot") {
     const { width, height, data } = imageData;
+    const matrix = PATTERN_MATRICES[pattern] || BAYER_4X4;
     const bias = level - 128;
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const i = (y * width + x) * 4;
-            const mapValue = ((BAYER_4X4[y % 4][x % 4] + 0.5) / 16) * 255;
+            const mapValue = ((matrix[y % 4][x % 4] + 0.5) / 16) * 255;
             const v = data[i] - bias < mapValue ? 0 : 255;
             data[i] = data[i + 1] = data[i + 2] = v;
         }
@@ -75,9 +86,9 @@ export function orderedDither(imageData, level = 128) {
     return imageData;
 }
 
-/** 依「取樣方式」名稱分派抖色演算法，圖片元素的網點設定統一從這裡進入。 */
-export function applyDither(imageData, mode = "floyd-steinberg", level = 128) {
-    if (mode === "ordered") return orderedDither(imageData, level);
+/** 依「取樣方式」名稱分派抖色演算法，圖片元素的網點設定統一從這裡進入；pattern 只有 ordered 模式吃得到。 */
+export function applyDither(imageData, mode = "floyd-steinberg", level = 128, pattern = "dot") {
+    if (mode === "ordered") return orderedDither(imageData, level, pattern);
     if (mode === "threshold") return threshold(imageData, level);
     return floydSteinberg(imageData, level);
 }
