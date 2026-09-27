@@ -1,36 +1,32 @@
-// Kiosk 模式：外部系統（例如測驗網站選到某個結果、或別的應用配對後）用網址 query string
-// 觸發 printan 用指定版型＋變數值直接列印，畫面看不出是 printan。
-// 這個模組只管「用 query string 驅動」這一層——資料怎麼送到這個網址（測驗邏輯、配對代碼）
-// 是呼叫端自己的事，這裡不做任何後端配對機制，純前端讀 query string。
+// Kiosk 模式：外部系統（例如測驗網站選到某個結果、或別的應用配對後）把 printan 嵌在 iframe 裡，
+// 用指定範本＋postMessage 送進來的變數值直接列印，畫面看不出是 printan。
+// 這個模組只管「kiosk 這一層」怎麼跟父視窗交換資料——資料本身怎麼產生（測驗邏輯、配對代碼）
+// 是父視窗自己的事，這裡不做任何後端配對機制。
 //
-// 支援的 query 參數：
-//   tpl=<.ptan 網址>   指定版型，限同源（不接受任意第三方網址，也不是 IndexedDB 草稿 id，
-//                      這樣才能跨裝置／跨部署使用同一份版型檔）
+// 支援的 query 參數（只有這些，其餘一律忽略——變數值不再從網址列讀，全部走 postMessage）：
+//   tpl=<.ptan 網址>   指定範本，限同源（不接受任意第三方網址，也不是 IndexedDB 草稿 id，
+//                      這樣才能跨裝置／跨部署使用同一份範本檔）
 //   kiosk=1            切 <html class="is-kiosk">，給 CSS 隱藏工具列／大綱／檢視器等編輯介面用
 //                      （實際隱藏規則不在這裡，這裡只掛 class）
-//   autoprint=1        印表機先前已被瀏覽器授權過，就不需要使用者手勢直接印；
-//                      沒授權過的裝置本來就一定要跳系統選擇窗（WebUSB／Serial 規格要求使用者手勢），
-//                      這種情況不強求全自動，改顯示 #kiosk-connect-print 候補配對按鈕讓人點一次
-//                      （工具列被 kiosk CSS 藏起來，原本的列印鍵點不到）；配對成功後接著印，
-//                      這台裝置之後再開同一個網址就會被上面的靜默重連直接接上，不用再點第二次
-//   jobId=<字串>       選填，工單識別碼。只用來原樣帶回 postMessage 回報，讓呼叫端在連續兩筆
-//                      工單時能對得上是哪一筆；不影響列印或變數比對本身
-//   parentOrigin=<origin> 選填，開啟下面兩項 postMessage 功能用的信任來源；沒帶這個參數，
-//                      postMessage 完全不會送出也不會接收，行為跟原本一模一樣（純 query string 單向）
-//   其餘參數：比照版型內用到的變數名稱，自動填進 state.previewData（見 editor.js renderVariables）
+//   jobId=<字串>       選填，工單識別碼初始值；收到 submit-job 時會被訊息裡的 jobId 覆蓋。
+//                      只用來原樣帶回 postMessage 回報，讓父視窗在連續兩筆工單時對得上是哪一筆
+//   parentOrigin=<origin> 父視窗 origin，回報與接收資料都只信任這個來源；沒給就退而用
+//                      document.referrer 的 origin（iframe 嵌入時瀏覽器通常會帶）；兩者都拿不到，
+//                      這個 kiosk session 就沒有任何安全的對象可以送資料／收資料，整組功能不會動作
 //
-// postMessage（選用，需要 parentOrigin= 才會啟用；不用這個管道時，維持原本純 query string 單向流程）：
-//   printan → 父視窗（回報，任何時候只要 parentOrigin 有給就會送）：
+// postMessage 協定：
+//   printan → 父視窗（回報，只要判斷得出 parentOrigin 就會送，targetOrigin 一律是 parentOrigin，
+//   不用 "*"，避免工單內容——姓名／留言等——洩漏給不明頁面）：
 //     { source: "printan-kiosk", jobId, status: "ready"|"printed"|"print_failed"|"needs_connect", ...細節欄位 }
-//     targetOrigin 一律是 parentOrigin，不會用 "*"，避免工單內容（姓名／留言等）洩漏給不明頁面
-//   父視窗 → printan（選用的送入管道，取代／補充塞在網址列的變數）：
+//     ready 代表範本已載入完成，可以送 submit-job 了。
+//   父視窗 → printan（送資料，唯一的資料輸入管道）：
 //     { type: "printan:submit-job", jobId, data: { 變數名: 值 } }
-//     收到後套用到 state.previewData（跟 query 參數比對版型 {{var}} 的規則一樣），重新預覽，
-//     並視同 autoprint 觸發一次列印流程；event.origin 必須等於 parentOrigin 且 event.source 必須是
-//     window.parent，其餘一律忽略——這樣 tpl+kiosk+autoprint 網址可以留乾淨，姓名/留言/照片網址
-//     改用 postMessage 送，不受網址長度限制
+//     data 裡的鍵值比照範本 {{var}} 的規則套進 state.previewData（文字變數直接代換；照片變數是
+//     圖片元素 assetId 用 {{var}} 佔位，值需為 https:// 開頭網址，見 renderer.js resolveImage），
+//     套用完立刻重新預覽並觸發一次列印（有已授權印表機就直接印，沒有就顯示候補配對按鈕）。
+//     event.origin 必須等於 parentOrigin 且 event.source 必須是 window.parent，其餘一律忽略。
 //
-// 已知限制：如果版型剛好有變數叫 tpl／kiosk／autoprint／jobId／parentOrigin，會被當保留字吃掉、
+// 已知限制：如果範本剛好有變數叫 tpl／kiosk／jobId／parentOrigin，會被當保留字吃掉、
 // 進不了 previewData，這種邊角案例不特別處理。
 
 import { extractPlaceholders } from "../core/document-model.js";
@@ -42,7 +38,7 @@ import { attemptSilentPrinterReconnect, connectPrinter, printSilently } from "./
 import { showStageNotice } from "./ui-helpers.js";
 
 const KIOSK_CLASS = "is-kiosk";
-const RESERVED_PARAMS = new Set(["tpl", "kiosk", "autoprint", "jobId", "parentOrigin"]);
+const RESERVED_PARAMS = new Set(["tpl", "kiosk", "jobId", "parentOrigin"]);
 
 // 這次工單的識別碼與回報／接收用的信任 origin；只有 bootKioskFromQuery 在跑，模組層級變數夠用，
 // 不需要放進 state（跟編輯器畫面狀態無關，是這個 kiosk session 專屬的一次性資訊）。
@@ -56,7 +52,7 @@ function showKioskNotice(message) {
 }
 
 /**
- * autoprint=1 但沒有已授權裝置時顯示：WebUSB／Serial 規格要求配對一定要使用者手勢，
+ * 沒有已授權裝置時顯示：WebUSB／Serial 規格要求配對一定要使用者手勢，
  * 工具列整組被 .is-kiosk 的 CSS 隱藏，畫面上沒有東西可點，所以另外準備一顆 kiosk 專用按鈕。
  * id：#kiosk-connect-print，樣式（大小、位置）給 89 接手，這裡只做行為：
  * 點下去走跟「連線印表機」按鈕（printer-settings.js 的 connectPrinter）同一套配對流程，
@@ -99,7 +95,7 @@ function describePrintFailure(outcome) {
 }
 
 // parentOrigin= 沒給就用 document.referrer 的 origin 當預設（iframe 嵌入時瀏覽器會自動帶，
-// 除非父頁面設了 Referrer-Policy 擋掉）；兩者都沒有就回傳 null，postMessage 功能整組不啟用。
+// 除非父頁面設了 Referrer-Policy 擋掉）；兩者都沒有就回傳 null，這個 kiosk session 整組不動作。
 // 跟 isAllowedTemplateUrl 不同的是這裡允許跨源——父視窗本來就大多是別的網站（例如 chunghsingshashin）。
 function resolveParentOrigin(params) {
     const explicit = params.get("parentOrigin");
@@ -147,7 +143,7 @@ function reportPrintOutcome(outcome) {
     reportJobStatus("print_failed", { message: describePrinterError(outcome.error) });
 }
 
-// tpl= 只接受同源網址：印表機是實體輸出，風險不算高，但沒必要開放任意第三方網址當版型來源。
+// tpl= 只接受同源網址：印表機是實體輸出，風險不算高，但沒必要開放任意第三方網址當範本來源。
 function isAllowedTemplateUrl(url) {
     try {
         return new URL(url, location.href).origin === location.origin;
@@ -159,7 +155,7 @@ function isAllowedTemplateUrl(url) {
 /** 抓 tpl= 指定的 .ptan 內容、解析、註冊內嵌字體，回傳 project；失敗回傳 null 並顯示提示。 */
 async function loadTemplateFromUrl(url) {
     if (!isAllowedTemplateUrl(url)) {
-        showKioskNotice("版型網址不允許（僅接受同源網址）");
+        showKioskNotice("範本網址不允許（僅接受同源網址）");
         return null;
     }
     let text;
@@ -168,12 +164,12 @@ async function loadTemplateFromUrl(url) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         text = await res.text();
     } catch {
-        showKioskNotice("版型讀取失敗，請確認網址是否正確");
+        showKioskNotice("範本讀取失敗，請確認網址是否正確");
         return null;
     }
     const result = loadProject(text);
     if (!result.ok) {
-        showKioskNotice("版型內容有誤，無法開啟");
+        showKioskNotice("範本內容有誤，無法開啟");
         return null;
     }
     if (result.project.embeddedFonts) {
@@ -185,27 +181,17 @@ async function loadTemplateFromUrl(url) {
     return result.project;
 }
 
-/**
- * 跟版型變數同名的鍵值填進 state.previewData；entries 可以是 URLSearchParams（query string）
- * 或 Object.entries(data)（postMessage 送入的資料），兩種來源套用規則完全一樣。
- */
-function applyVariables(entries, project) {
-    // 變數要掃全部頁面，不是只有第一頁：kiosk 帶的變數值要能填到任何一頁用到的 placeholder。
+/** 把 submit-job 送來的 data 套進 state.previewData，只收範本裡實際用到的變數名稱。 */
+function applyVariablesFromData(data, project) {
+    // 變數要掃全部頁面，不是只有第一頁：kiosk 送來的變數值要能填到任何一頁用到的 placeholder。
     const names = new Set(extractPlaceholders(project.template.pages.flatMap((p) => p.elements)));
-    for (const [key, value] of entries) {
+    for (const [key, value] of Object.entries(data)) {
         if (RESERVED_PARAMS.has(key) || !names.has(key)) continue;
         state.previewData[key] = value;
     }
 }
 
-/**
- * 讀網址 query string，有 tpl= 就切換成 kiosk 流程；沒有就什麼都不做（一般編輯器行為不受影響）。
- * 要在 editor.js 的 init() 完成一般初始化（含靜默重連印表機）之後呼叫，回傳是否進了 kiosk 流程。
- * loadProjectIntoEditor／schedulePreview 由呼叫端（editor.js）傳進來，避免這個檔案反過來 import
- * editor.js 造成循環依賴。
- */
-// autoprint=1 開場自動觸發一次，或父視窗用 postMessage 送 submit-job 時比照觸發一次；
-// 兩邊共用同一套「已授權裝置就直接印，沒有就顯示候補配對按鈕」邏輯與回報。
+// 收到 submit-job 就觸發一次：已授權裝置就直接印，沒有就顯示候補配對按鈕；不論哪種結果都回報。
 async function runAutoprintFlow() {
     await attemptSilentPrinterReconnect();
     if (state.usbConnected || state.serialConnected) {
@@ -221,6 +207,12 @@ async function runAutoprintFlow() {
     }
 }
 
+/**
+ * 讀網址 query string，有 tpl= 就切換成 kiosk 流程；沒有就什麼都不做（一般編輯器行為不受影響）。
+ * 要在 editor.js 的 init() 完成一般初始化（含靜默重連印表機）之後呼叫，回傳是否進了 kiosk 流程。
+ * loadProjectIntoEditor／schedulePreview 由呼叫端（editor.js）傳進來，避免這個檔案反過來 import
+ * editor.js 造成循環依賴。
+ */
 export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview) {
     const params = new URLSearchParams(location.search);
     const tplUrl = params.get("tpl");
@@ -235,28 +227,25 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     reportTargetOrigin = resolveParentOrigin(params);
 
     loadProjectIntoEditor(project);
-    // loadProjectIntoEditor 內部已經呼叫過一次 onModelChange()／schedulePreview()，
-    // 但那時 previewData 還沒套用 query 變數，這裡套用完變數後要再排一次預覽更新，
-    // 讓畫面（跟接下來 autoprint 要印出來的內容）反映實際變數值。
-    applyVariables(params, project);
     schedulePreview();
 
-    if (reportTargetOrigin) {
-        // 選用送入管道：只有 parentOrigin 判斷得出來才開放，且嚴格比對 event.origin／event.source，
-        // 其餘一律忽略。父視窗可以先用乾淨網址（tpl+kiosk+autoprint+jobId+parentOrigin）載入，
-        // 載入完再用這個管道補姓名/留言/照片網址進來，不受網址長度限制。
-        window.addEventListener("message", (event) => {
-            if (event.origin !== reportTargetOrigin || event.source !== window.parent) return;
-            const msg = event.data;
-            if (!msg || msg.type !== "printan:submit-job") return;
-            if (msg.jobId) currentJobId = msg.jobId;
-            if (msg.data && typeof msg.data === "object") applyVariables(Object.entries(msg.data), project);
-            schedulePreview();
-            void runAutoprintFlow();
-        });
-        reportJobStatus("ready");
+    if (!reportTargetOrigin) {
+        // 判斷不出安全的父視窗 origin：既沒有 parentOrigin 也讀不到 referrer，沒有可信任的對象
+        // 可以送資料進來，這個 kiosk session 就只顯示範本本身，不會有任何 postMessage 動作。
+        return true;
     }
 
-    if (params.get("autoprint") === "1") await runAutoprintFlow();
+    // 唯一的資料輸入管道：父視窗收到 ready 之後送 submit-job 帶變數值進來，套用完立刻觸發列印。
+    // 嚴格比對 event.origin／event.source，其餘一律忽略。
+    window.addEventListener("message", (event) => {
+        if (event.origin !== reportTargetOrigin || event.source !== window.parent) return;
+        const msg = event.data;
+        if (!msg || msg.type !== "printan:submit-job") return;
+        if (msg.jobId) currentJobId = msg.jobId;
+        if (msg.data && typeof msg.data === "object") applyVariablesFromData(msg.data, project);
+        schedulePreview();
+        void runAutoprintFlow();
+    });
+    reportJobStatus("ready");
     return true;
 }
