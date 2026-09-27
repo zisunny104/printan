@@ -55,7 +55,7 @@ cd printan
 
 2. 配置網頁伺服器（需支援 PHP）
 
-3. 直接訪問 `index.php`
+3. 直接造訪 `index.php`
 
 ### 與 KoiLiSu 開利手整合
 
