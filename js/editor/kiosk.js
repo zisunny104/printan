@@ -242,6 +242,10 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
         const msg = event.data;
         if (!msg || msg.type !== "printan:submit-job") return;
         if (msg.jobId) currentJobId = msg.jobId;
+        // 每筆 submit-job 都是獨立工單，先清空再套用新資料：同一個 iframe 連續處理第二筆工單時，
+        // 如果這筆沒帶到跟上一筆一樣的變數名稱（例如少了 photoB），不能讓上一位客人的舊值殘留、
+        // 印到這一份收據上。
+        state.previewData = {};
         if (msg.data && typeof msg.data === "object") applyVariablesFromData(msg.data, project);
         schedulePreview();
         void runAutoprintFlow();

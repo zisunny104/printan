@@ -101,9 +101,9 @@ window.addEventListener("message", (event) => {
 
 ## 已知限制
 
-- 一個 `<iframe>` 一次只認得「最新一次」`submit-job` 的變數（後蓋前）；要處理下一筆工單，通常是
-  重新指派 `iframe.src`（換一份新的 `tpl`／`jobId`）或另開一個 iframe，而不是對著同一個已經印完
-  的 iframe 再送一次 `submit-job`（技術上可以，但目前沒有特別測試連續送多筆的畫面狀態重置）。
+- 每一筆 `submit-job` 都是獨立工單：收到新的一筆會先清空上一筆的變數值再套用，不會殘留（例如
+  這筆沒帶 `photoB`，畫面上不會留著上一位客人的 `photoB`）。可以對同一個已經印完的 iframe
+  連續送下一筆 `submit-job`，不用每筆都重新指派 `iframe.src`。
 - `jobId`／`parentOrigin` 若剛好跟範本裡的變數同名會被當保留字吃掉，這種邊角案例不特別處理。
 - 這是破壞性 API（沒有向後相容舊版純 query string 塞資料的方式）；如果你串接的是舊版 printan，
   請先確認部署的版本已經包含這個變更。
