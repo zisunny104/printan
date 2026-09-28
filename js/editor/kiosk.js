@@ -275,6 +275,12 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
 
     if (params.get("kiosk") === "1") document.documentElement.classList.add(KIOSK_CLASS);
 
+    // origin 要在讀範本之前先算出來：範本讀取失敗（網址錯、範本內容壞掉、同源檢查沒過……）
+    // 也要能回報給父視窗，不然父視窗只會看到「一直沒收到 ready」，完全不知道是什麼問題、
+    // 也無從在自己的畫面上顯示錯誤原因給現場人員看——只能盯著 iframe 裡那行小提示字。
+    currentJobId = params.get("jobId") || null;
+    reportTargetOrigin = resolveParentOrigin(params);
+
     const tplUrls = tplParam.split(",").map((s) => s.trim()).filter(Boolean);
     if (!tplUrls.length) return true;
     const isMulti = tplUrls.length > 1;
@@ -283,12 +289,14 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     const projects = [];
     for (const url of tplUrls) {
         const project = await loadTemplateFromUrl(url);
-        if (!project) return true; // 任一份讀取失敗就整個中止，維持 kiosk 外觀顯示錯誤提示，不退回一般編輯畫面
+        if (!project) {
+            // 任一份讀取失敗就整個中止，維持 kiosk 外觀顯示錯誤提示，不退回一般編輯畫面；
+            // 同時盡量回報給父視窗（沒有 reportTargetOrigin 就跟以前一樣完全不動作）。
+            reportJobStatus("load_failed", { message: `範本載入失敗：${url}` });
+            return true;
+        }
         projects.push(project);
     }
-
-    currentJobId = params.get("jobId") || null;
-    reportTargetOrigin = resolveParentOrigin(params);
 
     if (!isMulti) {
         loadProjectIntoEditor(projects[0]);
