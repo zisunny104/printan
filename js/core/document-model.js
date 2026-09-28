@@ -42,6 +42,31 @@ export function resolveFill(fill) {
     };
 }
 
+/**
+ * 共用的「外框」模型：容器類元素（圖片／多欄／群組／條碼／文字框）共用同一組欄位，
+ * style/thicknessDots 沿用分隔線線條模式（drawMode==="line"）已經有的畫法詞彙，不用
+ * 另外發明一套框線邏輯（見 createDividerElement、renderer.js paintDivider）。
+ * visible 預設 false：舊檔沒有 border 欄位＝沒有外框，跟舊行為一樣。
+ */
+export const BORDER_STYLES = ["solid", "dashed", "dotted"];
+export function createBorder(overrides = {}) {
+    return {
+        visible: false,
+        style: "solid",
+        thicknessDots: 2, // 跟分隔線線條模式同預設粗細
+        ...overrides,
+    };
+}
+/** 把可能是舊檔／壞值的 border 欄位收斂成一組合法值，未設定一律當「沒有外框」（舊行為）。 */
+export function resolveBorder(border) {
+    const b = border && typeof border === "object" ? border : {};
+    return {
+        visible: !!b.visible,
+        style: BORDER_STYLES.includes(b.style) ? b.style : "solid",
+        thicknessDots: typeof b.thicknessDots === "number" && b.thicknessDots > 0 ? b.thicknessDots : 2,
+    };
+}
+
 let idCounter = 0;
 function nextId(prefix) {
     idCounter += 1;
@@ -85,6 +110,8 @@ export function createTextElement(overrides = {}) {
         heightDots: 0, // heightMode==="fixed" 時的框高（dots）
         overflow: "grow", // heightMode==="fixed" 時：grow＝heightDots 當最小高度、內容較高則自動變高｜clip＝固定高度、超出內容真的不印出，見 resolveTextOverflow
         vAlign: "top", // 內容在框內的垂直位置：top｜middle｜bottom。框高剛好等於內容時看不出差異，只有 heightMode="fixed" 且框比內容高（或 auto 但沒填滿）時才有作用；換模板套不同長度內容時，靠這個維持版面觀感一致，見 resolveTextVAlign
+        border: createBorder(), // 文字框外框，常見於做一個方框提示／備註，見 createBorder
+        cornerRadiusDots: 0, // 圓角半徑，0＝直角；渲染時會依框寬高夾住上限，見 renderer.js clampCornerRadius
         ...overrides,
     };
 }
@@ -346,6 +373,8 @@ export function createImageElement(overrides = {}) {
         invert: false,
         ditherMode: "floyd-steinberg", // floyd-steinberg | ordered | threshold，決定熱感模式下怎麼轉成網點
         thresholdLevel: 128, // 僅 ditherMode === "threshold" 時使用，0-255
+        border: createBorder(), // 圖片外框，見 createBorder
+        cornerRadiusDots: 0, // 圓角半徑：>0 時圖片本身也會被裁成圓角（不只是外框轉角），見 renderer.js paintImage
         ...overrides,
     };
 }
@@ -410,13 +439,22 @@ export function createRowElement(ratio = [1], overrides = {}) {
         type: "row",
         ratio,
         columns: ratio.map(() => []),
+        border: createBorder(), // 多欄外框，框住整個 row 的實際排版高度（依子元素排版結果後畫），見 renderer.js
+        cornerRadiusDots: 0,
         ...overrides,
     };
 }
 
 /** 群組：把多個元素當成一個單位（直向流動，寬度同所在欄）。 */
 export function createGroupElement(children = [], overrides = {}) {
-    return { id: nextId("group"), type: "group", children, ...overrides };
+    return {
+        id: nextId("group"),
+        type: "group",
+        children,
+        border: createBorder(), // 群組外框，同 row，框住子元素排版後的實際高度
+        cornerRadiusDots: 0,
+        ...overrides,
+    };
 }
 
 /**
@@ -433,6 +471,8 @@ export function createBarcodeElement(overrides = {}) {
         heightDots: 160, // 條碼本身高度；QR 為正方形邊長
         showText: true,
         align: "center",
+        border: createBorder(), // 條碼外框，見 createBorder
+        cornerRadiusDots: 0, // 圓角時條碼本身也會被裁圓角，QR 邊界模組較密集時建議保守使用避免影響掃描
         ...overrides,
     };
 }
