@@ -17,7 +17,8 @@ pre { margin: 0 0 0 24px; white-space: pre-wrap; }
 <script type="module">
 // 只測純函式與檔案讀寫，跟 tests/index.html 同一套跑法（開啟頁面即執行，標題顯示 PASS／FAIL）。
 import {
-    applyTextStylePreset, createGroupElement, createTextElement, TEXT_STYLE_PRESETS, walkElements,
+    applyTextStylePreset, createBorder, createGroupElement, createImageElement, createRowElement, createTextElement,
+    resolveBorder, TEXT_STYLE_PRESETS, walkElements,
 } from "../js/core/document-model.js";
 import { createEmptyProject, groupPagesByCut, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
 import { renderPages, renderTemplate } from "../js/core/renderer.js";
@@ -351,6 +352,48 @@ test("cutAfter 組合：每一種 3 頁組合存檔再讀回，cutAfter 與分�
         eq(out.project.template.pages.map((p) => p.cutAfter), combo, JSON.stringify(combo));
         eq(groupPagesByCut(out.project.template.pages), groupPagesByCut(raw.template.pages), JSON.stringify(combo));
     }
+});
+
+// ---- 外框／圓角（border／cornerRadiusDots，見 document-model.js createBorder/resolveBorder） ----
+test("createBorder：預設沒有外框（visible=false），跟舊行為一致", () => {
+    eq(createBorder(), { visible: false, style: "solid", thicknessDots: 2 });
+});
+test("resolveBorder：未設定／不是物件一律當沒有外框", () => {
+    for (const bad of [undefined, null, "x", 5, []]) {
+        eq(resolveBorder(bad), { visible: false, style: "solid", thicknessDots: 2 }, JSON.stringify(bad));
+    }
+});
+test("resolveBorder：不認得的 style、非正數 thicknessDots 收斂成預設值，其餘欄位不受影響", () => {
+    eq(resolveBorder({ visible: true, style: "bogus", thicknessDots: -5 }), { visible: true, style: "solid", thicknessDots: 2 });
+    eq(resolveBorder({ visible: true, thicknessDots: 0 }).thicknessDots, 2);
+    eq(resolveBorder({ visible: true, style: "dashed", thicknessDots: 6 }), { visible: true, style: "dashed", thicknessDots: 6 });
+});
+test("image／row／group／barcode／text 建構函式預設帶 border（無外框）與 cornerRadiusDots:0", () => {
+    for (const el of [createImageElement(), createRowElement([1]), createGroupElement([]), createTextElement()]) {
+        eq(el.border, createBorder(), el.type);
+        eq(el.cornerRadiusDots, 0, el.type);
+    }
+});
+test("舊檔（沒有 border／cornerRadiusDots 欄位）載入後不需要 migration，渲染端 resolveBorder 視為無外框", () => {
+    const out = loadProject(clone(V1_FILE)); // V1_FILE 的元素本來就沒有這兩個欄位
+    assert(out.ok, out.error);
+    const i1 = pageEls(out.project)[3];
+    assert(!("border" in i1), "舊檔不該自己冒出 border 欄位");
+    assert(!("cornerRadiusDots" in i1));
+    eq(resolveBorder(i1.border).visible, false);
+});
+test("外框＋圓角的元素存檔再讀回：欄位原樣保留", async () => {
+    const p = createEmptyProject({ name: "外框", printerProfileId: "epson-tm-t82ii", paperWidthId: "58mm" });
+    const img = createImageElement({ id: "i1", assetId: "a1", border: createBorder({ visible: true, style: "dashed", thicknessDots: 4 }), cornerRadiusDots: 12 });
+    const row = createRowElement([1, 1], { id: "r1", border: createBorder({ visible: true }), cornerRadiusDots: 6 });
+    p.template.pages[0].elements = [img, row];
+    const back = await readPtanFile(new File([serializeProject(p)], "border.ptan"));
+    assert(back.ok, back.error);
+    const [gotImg, gotRow] = pageEls(back.project);
+    eq(gotImg.border, img.border);
+    eq(gotImg.cornerRadiusDots, 12);
+    eq(gotRow.border, row.border);
+    eq(gotRow.cornerRadiusDots, 6);
 });
 
 let failed = 0;
