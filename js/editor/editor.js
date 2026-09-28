@@ -109,13 +109,15 @@ function cacheDom() {
 // 目前實際採用的印表機規格：註冊表裡專案指定的 profile，再套上使用者手動覆寫的「可列印點數」。
 // 渲染（renderTemplate 的 options.profile）、預覽紙張框、列印頭寬度、測試列印都要吃這一份，
 // 不然畫面預覽跟實際送出的 raster 寬度會不一致。
-export function getBaseProfile() {
-    return withPrintableDotsOverrides(getPrinterProfile(state.project.printerProfile.id), state.printPrefs.printableDots);
+// project 參數預設是目前編輯中的 state.project；kiosk.js 多範本模式沒有把範本載進編輯器 state，
+// 但一樣需要算出正確的 profile 給渲染／送印參數用，所以留這個口子讓它傳進自己手上的 project。
+export function getBaseProfile(project = state.project) {
+    return withPrintableDotsOverrides(getPrinterProfile(project.printerProfile.id), state.printPrefs.printableDots);
 }
 
 // 再套上左右邊距校正（可列印寬度扣掉補白）；列印頭寬度、印表機資訊要用校正前的 getBaseProfile()
-export function getEffectiveProfile() {
-    return withMarginCalibration(getBaseProfile(), state.printPrefs.margins);
+export function getEffectiveProfile(project = state.project) {
+    return withMarginCalibration(getBaseProfile(project), state.printPrefs.margins);
 }
 
 // ---- 變數 / 預覽資料 ----
