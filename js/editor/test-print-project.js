@@ -14,11 +14,13 @@ import { applyDither } from "../core/dithering.js";
 
 const FONT = DEFAULT_FONT_FAMILY;
 
-function makeCanvas(width, height) {
+// willReadFrequently：同一張畫布會反覆 getImageData 的用途（抖色樣本）才開，改用軟體繪圖後端讀回較快，
+// 也不會觸發瀏覽器的 readback 效能警告；其餘只畫不讀的畫布維持預設。
+function makeCanvas(width, height, { willReadFrequently = false } = {}) {
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently });
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, width, height);
     ctx.fillStyle = "#000";
@@ -151,7 +153,7 @@ const DITHER_SWATCH_H = { grad: 56, label: 18 };
 function buildDitherSwatch(widthDots) {
     const modes = [["floyd-steinberg", "誤差擴散"], ["ordered", "網點"], ["threshold", "閾值"]];
     const { grad: gradH, label: labelH } = DITHER_SWATCH_H;
-    const { canvas, ctx } = makeCanvas(widthDots, gradH + labelH);
+    const { canvas, ctx } = makeCanvas(widthDots, gradH + labelH, { willReadFrequently: true });
     const cellW = Math.floor(widthDots / modes.length);
     modes.forEach(([mode, label], i) => {
         const x0 = i * cellW;
