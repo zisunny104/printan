@@ -270,10 +270,13 @@ async function runMultiAutoprintFlow(projects, data, gapDots) {
  */
 export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview) {
     const params = new URLSearchParams(location.search);
+    // kiosk=1 要獨立於 tpl= 判斷式之外先套用：外部網站嵌入 iframe 時 tpl= 若漏帶或載入失敗，
+    // 沒有這行畫面會整個回退成可編輯的完整編輯器（工具列、大綱、印表機連線都在），嵌入方等於
+    // 意外把整個 app 暴露出去，不是預期中乾淨的列印預覽。
+    if (params.get("kiosk") === "1") document.documentElement.classList.add(KIOSK_CLASS);
+
     const tplParam = params.get("tpl");
     if (!tplParam) return false;
-
-    if (params.get("kiosk") === "1") document.documentElement.classList.add(KIOSK_CLASS);
 
     // origin 要在讀範本之前先算出來：範本讀取失敗（網址錯、範本內容壞掉、同源檢查沒過……）
     // 也要能回報給父視窗，不然父視窗只會看到「一直沒收到 ready」，完全不知道是什麼問題、
