@@ -2287,7 +2287,10 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
 .is-kiosk #paper-viewport .pane-card-header,
 .is-kiosk #safe-area-guide,
 .is-kiosk .page-pager,
-.is-kiosk .page-frame-label {
+.is-kiosk .page-frame-label,
+.is-kiosk #ruler-corner,
+.is-kiosk #ruler-h,
+.is-kiosk #ruler-v {
     display: none;
 }
 
@@ -2335,6 +2338,21 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
     min-height: 0;
 }
 
+/* 整個工作區（畫布、尺規、紙張）在範本載入前不顯示：kiosk 剛開啟或範本載入失敗時沒有東西可預覽，
+   不該留一張空白的紙。用 visibility 而非 display 是為了保住滿版高度，範本載入後（kiosk.js 加上
+   .kiosk-preview）直接顯示，畫面不會因為版面重排而跳動。 */
+.is-kiosk:not(.kiosk-preview) .editor-canvas-pane {
+    visibility: hidden;
+}
+
+/* 錯誤提示列與配對按鈕是插在工作區容器裡面（見 ui-helpers.js showStageNotice、kiosk.js
+   showKioskConnectButton），範本載入失敗時現場人員要靠它們得知原因、完成配對，
+   不能跟著工作區一起藏起來。visibility 可以由子層覆寫回 visible。 */
+.is-kiosk:not(.kiosk-preview) .editor-canvas-pane .ts-notice,
+.is-kiosk:not(.kiosk-preview) .editor-canvas-pane #kiosk-connect-print {
+    visibility: visible;
+}
+
 .is-kiosk .editor-canvas-pane > #paper-viewport {
     flex: 1 1 0;
     min-height: 0;
@@ -2347,6 +2365,9 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
 
 .is-kiosk .paper-viewport-stage {
     flex: 1 1 0;
+    /* 尺規改用 display:none 藏起來（不是 [hidden] 屬性），:has(#ruler-v:not([hidden])) 那條
+       對稱留白規則還是會命中、多留一欄空白，這裡強制蓋回單欄，紙張才會真的置中。 */
+    grid-template-columns: minmax(0, 1fr) !important;
 }
 
 /* 紙張比螢幕小很多時，置中填滿整個畫面（一般編輯模式是靠上方便長紙捲動，kiosk 沒有這個顧慮） */

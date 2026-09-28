@@ -48,6 +48,7 @@ import { attemptSilentPrinterReconnect, connectPrinter, printComposedSilently, p
 import { showStageNotice } from "./ui-helpers.js";
 
 const KIOSK_CLASS = "is-kiosk";
+const KIOSK_PREVIEW_CLASS = "kiosk-preview";
 const RESERVED_PARAMS = new Set(["tpl", "kiosk", "jobId", "parentOrigin", "gapDots"]);
 
 // 這次工單的識別碼與回報／接收用的信任 origin；只有 bootKioskFromQuery 在跑，模組層級變數夠用，
@@ -304,6 +305,11 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     if (!isMulti) {
         loadProjectIntoEditor(projects[0]);
         schedulePreview();
+        // 範本載入完成才顯示畫布：kiosk 剛開啟、範本還沒到之前，畫面上不該先出現一張空白的紙，
+        // 看起來像沒填內容的編輯區。多範本模式本來就不進編輯器、不預覽，這個 class 也就不會加。
+        if (document.documentElement.classList.contains(KIOSK_CLASS)) {
+            document.documentElement.classList.add(KIOSK_PREVIEW_CLASS);
+        }
     }
 
     if (!reportTargetOrigin) {
