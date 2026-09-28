@@ -13,7 +13,7 @@
 
 import { getPrinterProfile, getPaperWidth } from "./printer-profiles.js";
 import { applyDataToElements } from "./merge.js";
-import { FLOAT_GAP_DOTS, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow, resolveTextVAlign, resolveDividerDrawMode, resolveFill } from "./document-model.js";
+import { FLOAT_GAP_DOTS, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow, resolveTextVAlign, resolveDividerDrawMode, resolveFill, resolveBorder } from "./document-model.js";
 import { dotsToMm, splitRowColumns } from "./units.js";
 import { applyThermalSimulation, toGrayscale, applyDither, orderedDitherGradient } from "./dithering.js";
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
@@ -618,7 +618,13 @@ function paint(items, ctx, xBase, yBase, fontFamily, mode) {
         else if (el.type === "barcode") paintBarcode(ctx, item, xBase, absY);
         else if (el.type === "row") {
             for (const col of item.columns) paint(col.items, ctx, xBase + col.x, absY, fontFamily, mode);
-        } else if (el.type === "group") paint(item.children, ctx, xBase, absY, fontFamily, mode);
+            // row 本身沒有排版前就知道的固定高度（由子元素排版結果決定），外框要等子元素都畫完、
+            // 拿到 item.height（layoutColumn 算出來的 rowHeight）之後才畫，畫在最上層當最後一筆
+            paintBoxBorder(ctx, xBase, absY, item.widthDots, item.height, el);
+        } else if (el.type === "group") {
+            paint(item.children, ctx, xBase, absY, fontFamily, mode);
+            paintBoxBorder(ctx, xBase, absY, item.widthDots, item.height, el);
+        }
     }
 }
 
@@ -630,12 +636,16 @@ function paintFloatBlock(ctx, item, x, y, mode) {
 }
 
 function paintText(ctx, item, x, y) {
-    const { el, widthDots, boxWidth, clipHeight } = item;
+    const { el, widthDots, boxWidth, clipHeight, height } = item;
     // widthMode "fixed" 時 boxWidth < widthDots（欄寬）：align 兼作框在欄內的水平位置（同圖片 align 雙重用途），
     // "left" 框貼欄左緣、"right" 貼欄右緣、"center" 置中；boxWidth 未設（一般 text／float-block 內文）退回整欄寬、boxX=0，行為不變。
     const effWidth = boxWidth ?? widthDots;
     const boxX = el.align === "center" ? (widthDots - effWidth) / 2 : el.align === "right" ? (widthDots - effWidth) : 0;
-    if (item.vertical) return paintVerticalText(ctx, item, x + boxX, y, effWidth);
+    if (item.vertical) {
+        paintVerticalText(ctx, item, x + boxX, y, effWidth);
+        paintBoxBorder(ctx, x + boxX, y, effWidth, height, el);
+        return;
+    }
     const { lines } = item;
     const inkFill = resolveFill(el.inkFill);
     const bgFill = resolveFill(el.bgFill);
@@ -702,6 +712,7 @@ function paintText(ctx, item, x, y) {
         lineY += line.lineHeightDots;
     }
     ctx.restore();
+    paintBoxBorder(ctx, x + boxX, y, effWidth, height, el);
 }
 
 function paintDivider(ctx, item, x, y) {
@@ -714,12 +725,55 @@ function paintDivider(ctx, item, x, y) {
     ctx.save();
     ctx.strokeStyle = "#000";
     ctx.lineWidth = el.thicknessDots;
-    if (el.style === "dashed") ctx.setLineDash([el.thicknessDots * 3, el.thicknessDots * 2]);
-    else if (el.style === "dotted") ctx.setLineDash([el.thicknessDots, el.thicknessDots * 2]);
-    else ctx.setLineDash([]);
+    setLineDashForStyle(ctx, el.style, el.thicknessDots);
     ctx.beginPath();
     ctx.moveTo(x, lineY);
     ctx.lineTo(x + widthDots, lineY);
+    ctx.stroke();
+    ctx.restore();
+}
+
+// ---- 容器外框／圓角（圖片／多欄／群組／條碼／文字框共用，見 document-model.js createBorder） ----
+
+/** 虛線／點線的 dash 間隔比例跟分隔線線條模式共用同一套（見 paintDivider），外框粗細不同時視覺才會一致。 */
+function setLineDashForStyle(ctx, style, thicknessDots) {
+    if (style === "dashed") ctx.setLineDash([thicknessDots * 3, thicknessDots * 2]);
+    else if (style === "dotted") ctx.setLineDash([thicknessDots, thicknessDots * 2]);
+    else ctx.setLineDash([]);
+}
+
+/** 圓角半徑不能超過框本身能容許的最大值（半寬／半高），否則四個圓角會重疊產生怪形狀。 */
+function clampCornerRadius(radius, w, h) {
+    return Math.max(0, Math.min(radius || 0, w / 2, h / 2));
+}
+
+/** 畫一個圓角矩形路徑（不 stroke／fill，呼叫端接著 clip() 或 stroke()）。r<=0 時退化成直角矩形。 */
+function roundedRectPath(ctx, x, y, w, h, r) {
+    const rr = clampCornerRadius(r, w, h);
+    ctx.beginPath();
+    if (rr <= 0) {
+        ctx.rect(x, y, w, h);
+        return;
+    }
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+}
+
+/** 畫容器外框（描邊沿著圓角矩形路徑內縮半個線寬，避免線粗一半畫到框外）。visible=false（舊檔沒有 border 欄位）就不畫，維持舊行為。 */
+function paintBoxBorder(ctx, x, y, w, h, el) {
+    const border = resolveBorder(el.border);
+    if (!border.visible || w <= 0 || h <= 0) return;
+    const radius = clampCornerRadius(el.cornerRadiusDots, w, h);
+    const inset = border.thicknessDots / 2;
+    ctx.save();
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = border.thicknessDots;
+    setLineDashForStyle(ctx, border.style, border.thicknessDots);
+    roundedRectPath(ctx, x + inset, y + inset, Math.max(0, w - border.thicknessDots), Math.max(0, h - border.thicknessDots), Math.max(0, radius - inset));
     ctx.stroke();
     ctx.restore();
 }
@@ -880,7 +934,18 @@ function paintImage(ctx, item, x, y, mode) {
     let drawX = x;
     if (el.align === "center") drawX = x + (widthDots - drawWidth) / 2;
     else if (el.align === "right") drawX = x + (widthDots - drawWidth);
+
+    // 圓角時圖片內容本身也要被裁掉（不只是外框轉角看起來圓），所以先 clip 再貼圖；
+    // 外框描邊則要在 clip 範圍外畫（不然線的外半部會被裁掉），所以 restore 之後才畫。
+    const radius = clampCornerRadius(el.cornerRadiusDots, drawWidth, drawHeight);
+    if (radius > 0) {
+        ctx.save();
+        roundedRectPath(ctx, drawX, y, drawWidth, drawHeight, radius);
+        ctx.clip();
+    }
     ctx.drawImage(temp, drawX, y, drawWidth, drawHeight);
+    if (radius > 0) ctx.restore();
+    paintBoxBorder(ctx, drawX, y, drawWidth, drawHeight, el);
 }
 
 // 把來源圖片依 rotation 旋轉、依 cropRect（旋轉後座標系，0-1 正規化）取窗格，縮放畫進
@@ -919,5 +984,13 @@ function paintBarcode(ctx, item, x, y) {
     let drawX = x;
     if (el.align === "center") drawX = x + Math.round((widthDots - drawWidth) / 2); // 整數 dot 對齊，條碼線寬才不會被抗鋸齒吃掉
     else if (el.align === "right") drawX = x + (widthDots - drawWidth);
+    const radius = clampCornerRadius(el.cornerRadiusDots, drawWidth, drawHeight);
+    if (radius > 0) {
+        ctx.save();
+        roundedRectPath(ctx, drawX, y, drawWidth, drawHeight, radius);
+        ctx.clip();
+    }
     ctx.drawImage(item.barcodeCanvas, drawX, y, drawWidth, drawHeight);
+    if (radius > 0) ctx.restore();
+    paintBoxBorder(ctx, drawX, y, drawWidth, drawHeight, el);
 }
