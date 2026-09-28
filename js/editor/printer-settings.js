@@ -20,12 +20,14 @@ import { renderPages } from "../core/renderer.js";
 // 「切紙」偏好（state.printPrefs.cutPaper）是「且」的關係——全域偏好本來就是給沒有自動切刀、
 // 或不想切紙的使用者關掉用的，單頁專案沒有 pages 概念之前這個偏好就是唯一開關，多頁專案
 // 加了每頁各自的旗標之後，兩者都要開才真的送切紙指令，維持「全域關掉＝完全不切」的既有行為。
-function getEscposPrintOptions(pageCutAfter = true) {
-    const pad = getMarginPad(getEffectiveProfile(), state.project.paper.widthId);
+// project 參數預設是 state.project；kiosk.js 多範本模式（printComposedSilently）沒有單一
+// state.project 可用，傳自己手上第一份範本的 project 進來算 profile／紙寬，見 getBaseProfile。
+function getEscposPrintOptions(pageCutAfter = true, project = state.project) {
+    const pad = getMarginPad(getEffectiveProfile(project), project.paper.widthId);
     return {
         ...state.printPrefs,
         cutPaper: state.printPrefs.cutPaper && pageCutAfter,
-        targetWidthDots: getPrintHeadWidthDots(getBaseProfile()),
+        targetWidthDots: getPrintHeadWidthDots(getBaseProfile(project)),
         padLeftDots: pad.left,
         padRightDots: pad.right,
     };
@@ -137,6 +139,37 @@ export async function printSilently() {
         state.serialConnected = false;
         updatePrinterConnectionUi();
         return { ok: false, reason: "print-failed", error: err };
+    } finally {
+        state.printerBusy = false;
+    }
+}
+
+/**
+ * kiosk.js 多範本模式用：跟 printSilently 一樣靜默送印，但吃的是呼叫端已經用 compose.js
+ * renderProjects()／composeResults() 合成好的單一畫布（見 kiosk.js runMultiAutoprintFlow），
+ * 不是 state.project——多範本合成不經過單一專案的編輯器 state，沒有「頁」的概念，永遠當成一頁、
+ * 一定切紙（cutAfter 恆真，多範本合成本來就是一張完整收據，沒有「這一頁先不切給下一頁接著印」的情境）。
+ * profile 參數：多範本模式沒有 state.project 可用來算列印頭寬度／邊距補白，呼叫端傳第一份範本的
+ * project 進來（見 getEscposPrintOptions 的 project 參數）。
+ * 回傳格式跟 printSilently 一致，呼叫端（kiosk.js）不用分兩套處理。
+ */
+export async function printComposedSilently(composed, project) {
+    if (state.printerBusy) return { ok: false, reason: "busy" };
+    if (!state.usbConnected && !state.serialConnected) return { ok: false, reason: "not-connected" };
+    state.printerBusy = true;
+    try {
+        const result = state.printPrefs.rotate180 ? { ...composed, canvas: rotateCanvas180(composed.canvas) } : composed;
+        const issues = describeFontFallbackIssues([result]);
+        const adapter = state.usbConnected ? usbAdapter : serialAdapter;
+        try {
+            await adapter.print(result, getEscposPrintOptions(true, project));
+        } catch (err) {
+            state.usbConnected = false;
+            state.serialConnected = false;
+            updatePrinterConnectionUi();
+            return { ok: false, reason: "print-failed", error: err, failedPageIndex: 0, totalPages: 1 };
+        }
+        return { ok: true, issues };
     } finally {
         state.printerBusy = false;
     }
