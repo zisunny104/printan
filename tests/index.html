@@ -26,6 +26,7 @@ import { renderElements, floatLineBox, MAX_CANVAS_HEIGHT } from "../js/core/rend
 import { createFloatBlockElement, FLOAT_GAP_DOTS } from "../js/core/document-model.js";
 import { readPtanFile } from "../js/core/ptan-file.js";
 import { runAutosave } from "../js/editor/save-status.js";
+import { rotateCanvas180 } from "../js/core/printer-adapter.js";
 
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
@@ -527,6 +528,31 @@ test("邊界：v1 檔案含 group／float-block 也能載入", () => {
     const res = loadProject({ ...base, format: "ptan", version: 1, template: { elements: [bt("v1"), createGroupElement([bt("g")]), createFloatBlockElement({ runs: [{ text: "fb" }] })] } });
     assert(res.ok, res.error);
     eq(pageEls(res.project).map((e) => e.type), ["text", "group", "float-block"]);
+});
+
+// ---- printer-adapter：印表機倒裝時旋轉 180° 送印 ----
+test("rotateCanvas180：左上角黑點轉到右下角（不是只翻一軸變左下或右上）", () => {
+    const src = document.createElement("canvas");
+    src.width = 10;
+    src.height = 6;
+    const ctx = src.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, 10, 6);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, 2, 2); // 只有左上角是黑的
+    const rotated = rotateCanvas180(src);
+    eq([rotated.width, rotated.height], [10, 6]);
+    const data = rotated.getContext("2d").getImageData(0, 0, 10, 6).data;
+    const isBlack = (x, y) => data[(y * 10 + x) * 4] < 128;
+    assert(isBlack(9, 5) && isBlack(8, 5) && isBlack(9, 4) && isBlack(8, 4), "原本左上角的黑點應該出現在右下角");
+    assert(!isBlack(0, 0) && !isBlack(0, 5) && !isBlack(9, 0), "左下角、右上角、原左上角本身都不該是黑的");
+});
+test("rotateCanvas180：寬或高為 0 不丟例外", () => {
+    const src = document.createElement("canvas");
+    src.width = 0;
+    src.height = 0;
+    const rotated = rotateCanvas180(src);
+    eq([rotated.width, rotated.height], [0, 0]);
 });
 
 test("自動儲存成功：顯示已自動儲存，不用 role=alert", async () => {

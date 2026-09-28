@@ -137,6 +137,25 @@ export function canvasToEscposRaster(canvas) {
 }
 
 /**
+ * 印表機倒裝（壁掛、狹小空間等）時，紙從機器出來的方向跟正常安裝相反，印出來的內容
+ * 對拿到收據的人來說是上下顛倒的；把送印的 canvas 整張先轉 180°，印表機那端還是照
+ * 原本方向出紙，顛倒兩次剛好抵銷，收據到使用者手上就是正的。純畫布轉換，不影響
+ * 排版本身，呼叫端自行決定要不要套用（見 state.printPrefs.rotate180）。
+ */
+export function rotateCanvas180(canvas) {
+    const rotated = document.createElement("canvas");
+    rotated.width = canvas.width;
+    rotated.height = canvas.height;
+    const ctx = rotated.getContext("2d");
+    if (canvas.width > 0 && canvas.height > 0) {
+        ctx.translate(canvas.width, canvas.height);
+        ctx.rotate(Math.PI);
+        ctx.drawImage(canvas, 0, 0);
+    }
+    return rotated;
+}
+
+/**
  * 把來源 canvas 貼到一張指定寬度、白底的新 canvas 正中央（只水平置中，高度不變）。
  * 目的：紙寬設定比印表機列印頭最大寬度窄時，直接送「目前紙寬」大小的 raster，
  * 印表機韌體預設的起印水平位置不一定跟紙張實際擺放位置對齊，可能造成印出來的內容
