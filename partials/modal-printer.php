@@ -87,6 +87,10 @@
                                 <input type="checkbox" id="pref-cut-paper">
                                 <div class="text">列印後自動切紙</div>
                             </label>
+                            <label class="ts-checkbox has-top-spaced">
+                                <input type="checkbox" id="pref-rotate-180">
+                                <div class="text">上下顛倒安裝：旋轉 180° 列印<span class="info-icon" tabindex="0" role="img" aria-label="印表機倒裝（如壁掛、狹小空間）時開啟，讓拿到收據的人看到的文字是正的；跟上面不同，這項對所有列印方式都套用，包含系統列印" data-tooltip="印表機倒裝（如壁掛、狹小空間）時開啟，讓拿到收據的人看到的文字是正的；跟上面不同，這項對所有列印方式都套用，包含系統列印" data-trigger="hover focus"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span></div>
+                            </label>
                             <div class="has-top-spaced"></div>
                             <div class="ts-text is-label">可列印點數（依紙寬）<span class="info-icon" tabindex="0" role="img" aria-label="預設用內建規格；別牌印表機可能不同（58 mm 常見 384 點），依規格書填寫，範圍 64–1024，留空＝預設" data-tooltip="預設用內建規格；別牌印表機可能不同（58 mm 常見 384 點），依規格書填寫，範圍 64–1024，留空＝預設" data-trigger="hover focus"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span></div>
                             <div class="has-top-spaced-small"></div>
