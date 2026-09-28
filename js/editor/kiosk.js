@@ -45,7 +45,7 @@ import { renderProjects } from "../core/compose.js";
 import { getEffectiveProfile } from "./editor.js";
 import { els, state } from "./context.js";
 import { attemptSilentPrinterReconnect, connectPrinter, printComposedSilently, printSilently } from "./printer-settings.js";
-import { showStageNotice } from "./ui-helpers.js";
+import { mountStageElement, showStageNotice } from "./ui-helpers.js";
 
 const KIOSK_CLASS = "is-kiosk";
 const KIOSK_PREVIEW_CLASS = "kiosk-preview";
@@ -86,8 +86,7 @@ function showKioskConnectButton(printFn) {
         button.type = "button";
         button.className = "ts-button is-primary";
         button.textContent = "連線印表機並列印";
-        const stage = els["paper-scroll"].parentElement; // 同 showStageNotice：插在尺規＋紙張那一格正上方
-        stage.parentElement.insertBefore(button, stage);
+        mountStageElement(button); // 同 showStageNotice，掛在工作區外面
         button.addEventListener("click", async () => {
             button.disabled = true;
             await connectPrinter();

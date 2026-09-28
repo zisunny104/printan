@@ -2345,14 +2345,6 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
     visibility: hidden;
 }
 
-/* 錯誤提示列與配對按鈕是插在工作區容器裡面（見 ui-helpers.js showStageNotice、kiosk.js
-   showKioskConnectButton），範本載入失敗時現場人員要靠它們得知原因、完成配對，
-   不能跟著工作區一起藏起來。visibility 可以由子層覆寫回 visible。 */
-.is-kiosk:not(.kiosk-preview) .editor-canvas-pane .ts-notice,
-.is-kiosk:not(.kiosk-preview) .editor-canvas-pane #kiosk-connect-print {
-    visibility: visible;
-}
-
 .is-kiosk .editor-canvas-pane > #paper-viewport {
     flex: 1 1 0;
     min-height: 0;
