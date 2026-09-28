@@ -22,8 +22,11 @@
 // postMessage 協定：
 //   printan → 父視窗（回報，只要判斷得出 parentOrigin 就會送，targetOrigin 一律是 parentOrigin，
 //   不用 "*"，避免工單內容——姓名／留言等——洩漏給不明頁面）：
-//     { source: "printan-kiosk", jobId, status: "ready"|"printed"|"print_failed"|"needs_connect", ...細節欄位 }
+//     { source: "printan-kiosk", jobId, status: "ready"|"printer_connected"|"printed"|"print_failed"|"needs_connect", ...細節欄位 }
 //     ready 代表範本已載入完成，可以送 submit-job 了。
+//     ready 之後 printan 會先靜默重連一次已授權印表機再回報結果，不用等第一筆工單：已連上是
+//     printer_connected；沒有已授權裝置是 needs_connect，並直接顯示配對按鈕（配對成功後回報
+//     printer_connected，不會列印）。這段檢查進行中收到的 submit-job 會等它做完才處理。
 //   父視窗 → printan（送資料，唯一的資料輸入管道）：
 //     { type: "printan:submit-job", jobId, data: { 變數名: 值 } }
 //     data 裡的鍵值比照範本 {{var}} 的規則套進 previewData（文字變數直接代換；照片變數是
@@ -68,6 +71,22 @@ function showKioskNotice(message) {
 // 監聽器要讀的是「當下」這個模組層級變數，不能在建立按鈕當下把 printFn 綁死進 closure 裡。
 let pendingConnectPrint = printSilently;
 
+// 啟動時的印表機檢查；工單流程要等它做完，避免兩邊同時對同一個 USB 裝置重連，
+// 後到的一次 open 失敗被當成「沒連上」。沒有跑檢查時是已完成的 Promise。
+let startupPrinterCheck = Promise.resolve();
+
+// 啟動時主動確認印表機：父視窗不用等第一筆工單才知道要不要配對。
+// 沒有已授權裝置就直接顯示配對按鈕（沒有待印工作，見 showKioskConnectButton 的 null 分支）。
+async function checkPrinterOnStartup() {
+    await attemptSilentPrinterReconnect();
+    if (state.usbConnected || state.serialConnected) {
+        reportJobStatus("printer_connected");
+        return;
+    }
+    reportJobStatus("needs_connect");
+    showKioskConnectButton(null);
+}
+
 /**
  * 沒有已授權裝置時顯示：WebUSB／Serial 規格要求配對一定要使用者手勢，
  * 工具列整組被 .is-kiosk 的 CSS 隱藏，畫面上沒有東西可點，所以另外準備一顆 kiosk 專用按鈕。
@@ -95,6 +114,10 @@ function showKioskConnectButton(printFn) {
                 return;
             }
             button.hidden = true;
+            if (!pendingConnectPrint) { // 啟動時配對：還沒有工單，只回報連上，不能拿空資料的範本去印
+                reportJobStatus("printer_connected");
+                return;
+            }
             const outcome = await pendingConnectPrint();
             reportPrintOutcome(outcome);
             if (outcome.ok && outcome.issues.length) showKioskNotice(outcome.issues.join("；"));
@@ -213,6 +236,7 @@ function applyVariablesFromData(data, project) {
 // 收到 submit-job 就觸發一次（單一範本模式）：已授權裝置就直接印，沒有就顯示候補配對按鈕；
 // 不論哪種結果都回報。
 async function runAutoprintFlow() {
+    await startupPrinterCheck;
     await attemptSilentPrinterReconnect();
     if (state.usbConnected || state.serialConnected) {
         const outcome = await printSilently();
@@ -247,6 +271,7 @@ async function composeAndPrint(projects, data, gapDots) {
 
 async function runMultiAutoprintFlow(projects, data, gapDots) {
     const printFn = () => composeAndPrint(projects, data, gapDots);
+    await startupPrinterCheck;
     await attemptSilentPrinterReconnect();
     if (state.usbConnected || state.serialConnected) {
         const outcome = await printFn();
@@ -338,5 +363,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
         void runAutoprintFlow();
     });
     reportJobStatus("ready");
+    // 不 await：editor.js 等這個函式跑完才收起骨架畫面，印表機重連（可能卡在裝置 open）不該拖住畫面顯示。
+    startupPrinterCheck = checkPrinterOnStartup().catch(() => {});
     return true;
 }
