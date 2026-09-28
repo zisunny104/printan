@@ -42,12 +42,14 @@ export const PTAN_VERSION = 3;
  *
  *   // type==="text"：見 createTextElement
  *   runs?, fontFamily?, fontSize?, lineHeight?, letterSpacing?, bold?, inverse?, inkFill?, bgFill?,
- *   align?, wrap?, writingMode?, maxLines?, widthMode?, widthDots?, heightMode?, heightDots?, overflow?, vAlign?,
+ *   align?, wrap?, writingMode?, maxLines?, widthMode?, widthDots?, heightMode?, heightDots?, overflow?, vAlign?, border?, cornerRadiusDots?,
  *
  *   // type==="image"：見 createImageElement
- *   assetId?, heightDots?, align?, widthPercent?, fit?, rotation?, cropRect?, brightness?, contrast?, invert?, ditherMode?, thresholdLevel?,
+ *   assetId?, heightDots?, align?, widthPercent?, fit?, rotation?, cropRect?, brightness?, contrast?, invert?, ditherMode?, thresholdLevel?, border?, cornerRadiusDots?,
  *
- *   // type==="float-block"：text 與 image 兩組欄位都有（見 createFloatBlockElement），額外多 imageSide
+ *   // type==="float-block"：text 與 image 兩組欄位都有（見 createFloatBlockElement），額外多 imageSide；
+ *   // border／cornerRadiusDots 欄位雖然存在（繼承自 text／image），但渲染時不使用（圖文段落沒有單一
+ *   // 外框可套，見 renderer.js paintFloatBlock）
  *   imageSide?,
  *
  *   // type==="spacer"：見 createSpacerElement
@@ -60,13 +62,19 @@ export const PTAN_VERSION = 3;
  *   ratio?: number[],       // 各欄相對比例，例如 [1,1] 或 [2,1]
  *   columns?: Element[][],  // 每欄是一個子 element 陣列，長度須與 ratio 一致
  *   gap?,                   // 欄距（dots），見 units.js normalizeRowGap；0 或未設＝無欄距，匯出時不寫入
+ *   border?, cornerRadiusDots?, // 外框，框住子元素排版後的實際高度（見 renderer.js paint 的 row 分支）
  *
  *   // type==="barcode"：見 createBarcodeElement
- *   format?, value?, heightDots?, showText?, align?, textSize?,
+ *   format?, value?, heightDots?, showText?, align?, textSize?, border?, cornerRadiusDots?,
  *
  *   // type==="group"：見 createGroupElement（version 2）
  *   children?: Element[],
+ *   border?, cornerRadiusDots?, // 同 row，見上方說明
  * }
+ *
+ * border（共用結構，見 createBorder／resolveBorder）：{ visible?, style?, thicknessDots? }，沒有這個欄位
+ * 或 visible 不是 true 都當作沒有外框；純附加欄位，不影響 PTAN_VERSION（舊檔照樣直接讀，不用 migrate）。
+ * cornerRadiusDots：圓角半徑，0 或未設＝直角；渲染時會依當下框寬高夾住上限，見 renderer.js clampCornerRadius。
  * 專案層級選用欄位 embeddedFonts?: [{ family, weight, unicodeRange, data }]（version 2；匯出時勾選才有）
  *
  * 容錯範圍要注意：migrate()／migrateElements() 只針對 text（normalizeTextElement）與 row（normalizeRow）

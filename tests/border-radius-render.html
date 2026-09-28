@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Printan tests：外框／圓角渲染</title>
+<style>
+body { font: 14px/1.6 system-ui, sans-serif; margin: 16px; }
+li { list-style: none; }
+.pass { color: #1a7f37; }
+.fail { color: #cf222e; }
+pre { margin: 0 0 0 24px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1 id="summary">執行中…</h1>
+<ul id="list"></ul>
+<script type="module">
+// 實際跑一次 renderElements（跟 tests/ptan-roundtrip.html 同一套跑法），對輸出 canvas 取樣像素，
+// 確認圓角真的把內容裁掉（不只是外框轉角看起來圓），以及 row/group 這種「排版完才知道自己多大」
+// 的容器外框不會拋例外、描邊真的畫在預期位置。
+import { renderElements } from "../js/core/renderer.js";
+import { createBarcodeElement, createBorder, createGroupElement, createImageElement, createRowElement, createTextElement } from "../js/core/document-model.js";
+
+const cases = [];
+const test = (name, fn) => cases.push({ name, fn });
+function assert(cond, msg = "assert failed") { if (!cond) throw new Error(msg); }
+
+// 1x1 純紅色 PNG，stretch 縮放成整塊實心色，取樣角落／中心才好判斷有沒有被裁掉。
+const RED_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+function px(ctx, x, y) {
+    return [...ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data];
+}
+
+test("圖片圓角：四個角落取樣是背景白色（真的被裁掉），中心仍是圖片內容", async () => {
+    const img = createImageElement({ id: "i1", assetId: RED_PNG, fit: "stretch", widthPercent: 100, heightDots: 100, cornerRadiusDots: 30 });
+    const { canvas } = await renderElements([img], { widthDots: 100, dpi: 203, assets: new Map(), mode: "screen" });
+    const ctx = canvas.getContext("2d");
+    for (const [x, y] of [[1, 1], [98, 1], [1, 98], [98, 98]]) {
+        const p = px(ctx, x, y);
+        assert(p[0] > 240 && p[1] > 240 && p[2] > 240, `角落 (${x},${y}) 應該是背景白色，實際 ${p}`);
+    }
+    const c = px(ctx, 50, 50);
+    assert(!(c[0] > 240 && c[1] > 240 && c[2] > 240), `中心不該是背景白色（應該還看得到圖片內容），實際 ${c}`);
+});
+
+test("圖片沒有設定圓角（cornerRadiusDots=0）：角落維持圖片內容，不受裁切影響（新欄位不影響舊行為）", async () => {
+    const img = createImageElement({ id: "i1", assetId: RED_PNG, fit: "stretch", widthPercent: 100, heightDots: 100 });
+    const { canvas } = await renderElements([img], { widthDots: 100, dpi: 203, assets: new Map(), mode: "screen" });
+    const ctx = canvas.getContext("2d");
+    const corner = px(ctx, 1, 1);
+    assert(!(corner[0] > 240 && corner[1] > 240 && corner[2] > 240), `角落不該是背景白色（沒有圓角不該被裁），實際 ${corner}`);
+});
+
+test("圖片外框：可見時在框緣留下黑色描邊像素，關閉時不畫（visible=false 是舊行為）", async () => {
+    const withBorder = createImageElement({ id: "i1", assetId: RED_PNG, fit: "stretch", widthPercent: 100, heightDots: 100, border: createBorder({ visible: true, thicknessDots: 4 }) });
+    const withoutBorder = createImageElement({ id: "i2", assetId: RED_PNG, fit: "stretch", widthPercent: 100, heightDots: 100 });
+    const a = await renderElements([withBorder], { widthDots: 100, dpi: 203, assets: new Map(), mode: "screen" });
+    const b = await renderElements([withoutBorder], { widthDots: 100, dpi: 203, assets: new Map(), mode: "screen" });
+    const edgeWith = px(a.canvas.getContext("2d"), 50, 2); // 粗細 4、內縮半個線寬＝距邊 2
+    const edgeWithout = px(b.canvas.getContext("2d"), 50, 2);
+    assert(edgeWith[0] < 60 && edgeWith[1] < 60 && edgeWith[2] < 60, `有外框時邊緣應該是黑色描邊，實際 ${edgeWith}`);
+    assert(!(edgeWithout[0] < 60), `沒開外框時邊緣不該被畫黑，實際 ${edgeWithout}`);
+});
+
+test("row 外框：排版完才知道高度的容器，畫在最上層不拋例外，描邊出現在上緣", async () => {
+    const row = createRowElement([1, 1], {
+        id: "r1",
+        border: createBorder({ visible: true, style: "solid", thicknessDots: 4 }),
+        columns: [
+            [createTextElement({ id: "t1", runs: [{ text: "左欄文字" }], fontSize: 24 })],
+            [createTextElement({ id: "t2", runs: [{ text: "右欄文字比較長一點" }], fontSize: 24 })],
+        ],
+    });
+    const { canvas } = await renderElements([row], { widthDots: 300, dpi: 203, assets: new Map(), mode: "screen" });
+    const ctx = canvas.getContext("2d");
+    const top = px(ctx, 150, 2);
+    assert(top[0] < 60, `row 上緣應該有外框描邊，實際 ${top}`);
+});
+
+test("group 外框：同 row，用子元素排版後的實際高度畫外框，不拋例外", async () => {
+    const group = createGroupElement(
+        [createTextElement({ id: "t1", runs: [{ text: "群組內容" }], fontSize: 24 })],
+        { id: "g1", border: createBorder({ visible: true, thicknessDots: 4 }) },
+    );
+    const { canvas } = await renderElements([group], { widthDots: 200, dpi: 203, assets: new Map(), mode: "screen" });
+    const ctx = canvas.getContext("2d");
+    const top = px(ctx, 100, 2);
+    assert(top[0] < 60, `group 上緣應該有外框描邊，實際 ${top}`);
+});
+
+test("條碼外框＋圓角：不拋例外，角落取樣是背景白色", async () => {
+    const barcode = createBarcodeElement({ id: "b1", format: "qrcode", value: "TEST123", heightDots: 100, cornerRadiusDots: 20, border: createBorder({ visible: true, thicknessDots: 3 }) });
+    const { canvas } = await renderElements([barcode], { widthDots: 100, dpi: 203, assets: new Map(), mode: "screen" });
+    const ctx = canvas.getContext("2d");
+    const corner = px(ctx, 1, 1);
+    assert(corner[0] > 240, `QR 角落圓角裁切後應該是背景白色，實際 ${corner}`);
+});
+
+test("圓角超過框可容許的最大值（clampCornerRadius）：不拋例外、也不會整塊消失", async () => {
+    const img = createImageElement({ id: "i1", assetId: RED_PNG, fit: "stretch", widthPercent: 100, heightDots: 40, cornerRadiusDots: 99999 });
+    const { canvas } = await renderElements([img], { widthDots: 40, dpi: 203, assets: new Map(), mode: "screen" });
+    const ctx = canvas.getContext("2d");
+    const c = px(ctx, 20, 20);
+    assert(!(c[0] > 240 && c[1] > 240 && c[2] > 240), `即使圓角遠超框大小，中心仍應該看得到圖片內容（不是背景白色），實際 ${c}`);
+});
+
+test("文字框外框：heightMode fixed 時外框貼著框高（不是內容高），舊檔沒有 border 欄位不畫", async () => {
+    const el = createTextElement({
+        id: "t1", runs: [{ text: "備註" }], fontSize: 20,
+        heightMode: "fixed", heightDots: 80,
+        border: createBorder({ visible: true, thicknessDots: 4 }),
+    });
+    const { canvas } = await renderElements([el], { widthDots: 150, dpi: 203, assets: new Map(), mode: "screen" });
+    const ctx = canvas.getContext("2d");
+    const bottom = px(ctx, 75, 78); // 框高 80，內縮 2 的描邊應該接近底部
+    assert(bottom[0] < 60, `文字框底部應該有外框描邊，實際 ${bottom}`);
+});
+
+// ---- 執行 ----
+const list = document.getElementById("list");
+let failed = 0;
+for (const c of cases) {
+    const li = document.createElement("li");
+    try {
+        await c.fn();
+        li.className = "pass";
+        li.textContent = "PASS  " + c.name;
+    } catch (err) {
+        failed += 1;
+        li.className = "fail";
+        li.textContent = "FAIL  " + c.name;
+        const pre = document.createElement("pre");
+        pre.textContent = err.message;
+        li.append(pre);
+    }
+    list.append(li);
+}
+const summary = document.getElementById("summary");
+summary.textContent = failed ? `${failed} / ${cases.length} 失敗` : `全部通過（${cases.length}）`;
+summary.className = failed ? "fail" : "pass";
+document.title = (failed ? "FAIL " : "PASS ") + summary.textContent;
+</script>
+</body>
+</html>
