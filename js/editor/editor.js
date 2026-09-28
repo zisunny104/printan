@@ -95,7 +95,7 @@ function cacheDom() {
         "printer-conn-badge", "printer-conn-badge-text", "printer-connect-method",
         "printer-connection-unsupported", "printer-connection-status", "printer-serial-options",
         "btn-printer-connect", "btn-printer-disconnect", "pref-serial-baud-rate",
-        "pref-feed-lines", "pref-feed-lines-hint", "pref-cut-paper", "btn-printer-settings-close",
+        "pref-feed-lines", "pref-feed-lines-hint", "pref-cut-paper", "pref-rotate-180", "btn-printer-settings-close",
         "btn-printer-test-print", "btn-printer-query-status", "printer-status-result",
         "btn-printer-forget", "printer-dots-list", "btn-printer-dots-reset", "printer-margin-list", "btn-printer-margin-reset", "btn-printer-margin-sheet",
         "printer-info-device", "printer-info-firmware", "printer-info-spec", "printer-info-dpi",
