@@ -5,7 +5,7 @@ import {
     getPrinterProfile, matchPrinterProfile, sanitizeMarginCalibration, sanitizePrintableDotsOverrides,
 } from "../core/printer-profiles.js";
 import { PRINT_PREFS_KEY, els, serialAdapter, state, usbAdapter } from "./context.js";
-import { SystemDialogAdapter, describePrinterError, interpretRealtimeStatus, isSelectionCancelled } from "../core/printer-adapter.js";
+import { SystemDialogAdapter, describePrinterError, interpretRealtimeStatus, isSelectionCancelled, rotateCanvas180 } from "../core/printer-adapter.js";
 import { getBaseProfile, getEffectiveProfile, schedulePreview } from "./editor.js";
 import { confirmFontFallbacks, describeFontFallbackIssues } from "./batch-export.js";
 import { safeGetItem, safeSetItem } from "../core/storage.js";
@@ -29,6 +29,15 @@ function getEscposPrintOptions(pageCutAfter = true) {
         padLeftDots: pad.left,
         padRightDots: pad.right,
     };
+}
+
+// 印表機倒裝偏好（state.printPrefs.rotate180）：直接把 renderPages 結果的 canvas 換成轉過的版本，
+// USB/Serial（buildEscposJob→canvasToEscposRaster）與系統列印對話框都是拿 result.canvas 出去用，
+// 在這裡統一處理一次，兩條路徑都不用各自知道有這個偏好存在。
+function applyRotationPref(results) {
+    if (!state.printPrefs.rotate180) return results;
+    for (const result of results) result.canvas = rotateCanvas180(result.canvas);
+    return results;
 }
 
 // 依序印出多頁：任何一頁失敗就整個中止（不跳過繼續印剩下的頁），因為列印順序有意義
@@ -56,7 +65,7 @@ export async function printCurrent() {
     state.printerBusy = true;
     hideStageNotice(PRINT_NOTICE_KEY);
     try {
-        const results = await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
+        const results = applyRotationPref(await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() }));
         if (!confirmFontFallbacks(results)) return;
 
         if (state.usbConnected || state.serialConnected) {
@@ -105,7 +114,7 @@ export async function printSilently() {
     if (!state.usbConnected && !state.serialConnected) return { ok: false, reason: "not-connected" };
     state.printerBusy = true;
     try {
-        const results = await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
+        const results = applyRotationPref(await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() }));
         const issues = describeFontFallbackIssues(results);
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
         const outcome = await printPagesInOrder(adapter, results);
@@ -532,6 +541,8 @@ async function printTestSheet(label, build) {
             firmware: state.printerIdentity?.firmware || "",
         };
         const renderResult = await build(ctx);
+        // 測試列印／校正紙正是使用者要確認倒裝旋轉有沒有裝對的地方，跟正式列印用同一份偏好、同一個轉換函式。
+        if (state.printPrefs.rotate180) renderResult.canvas = rotateCanvas180(renderResult.canvas);
         if (!confirmFontFallbacks(renderResult)) return;
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
         await adapter.print(renderResult, getEscposPrintOptions());
@@ -581,6 +592,7 @@ async function queryPrinterStatus() {
 export function bindPrinterSettings() {
     els["pref-feed-lines"].value = state.printPrefs.feedLines;
     els["pref-cut-paper"].checked = state.printPrefs.cutPaper;
+    els["pref-rotate-180"].checked = state.printPrefs.rotate180;
     els["pref-serial-baud-rate"].value = state.printPrefs.serialBaudRate;
     renderPrintableDotsRows();
     renderMarginRows();
@@ -658,6 +670,11 @@ export function bindPrinterSettings() {
 
     els["pref-cut-paper"].addEventListener("change", () => {
         state.printPrefs.cutPaper = els["pref-cut-paper"].checked;
+        savePrintPrefs();
+    });
+
+    els["pref-rotate-180"].addEventListener("change", () => {
+        state.printPrefs.rotate180 = els["pref-rotate-180"].checked;
         savePrintPrefs();
     });
 
