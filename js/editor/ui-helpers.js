@@ -3,9 +3,24 @@
 import { els } from "./context.js";
 
 /**
+ * 把提示列／按鈕掛進畫面。一般編輯器插在尺規＋紙張那一格（stage）正上方：以 #paper-scroll 找 stage，
+ * 不用 paper-shadow 往上數層——2D 多頁畫布會把 paper-shadow 搬進作用中頁面的欄位裡，它的祖先層數不固定。
+ * kiosk 沒有工作區（範本載入前整個藏起來，載入後只剩列印預覽），提示不屬於工作區，
+ * 改掛在頁面最上層（#operations 前面，kiosk 下它本身是隱藏的），不會跟著工作區一起被藏。
+ */
+export function mountStageElement(element) {
+    if (document.documentElement.classList.contains("is-kiosk")) {
+        const operations = document.getElementById("operations");
+        operations.parentElement.insertBefore(element, operations);
+        return;
+    }
+    const stage = els["paper-scroll"].parentElement;
+    stage.parentElement.insertBefore(element, stage);
+}
+
+/**
  * 工作區上方一行不擋畫面的提示列（ts-notice），同一個 key 只會有一條、重複呼叫只更新文字。
- * 插在尺規＋紙張那一格（stage）正上方：以 #paper-scroll 找 stage，不用 paper-shadow 往上數層——
- * 2D 多頁畫布會把 paper-shadow 搬進作用中頁面的欄位裡，它的祖先層數不固定。
+ * 掛載位置見 mountStageElement。
  * dismissible：加一顆關閉鈕，給「使用者看完就可以收掉」的訊息（例如列印失敗）；
  * 會隨預覽自動消失的狀態提示（字體、圖片）不需要。
  */
@@ -24,8 +39,7 @@ export function showStageNotice(key, message, { title = "", dismissible = false 
             close.addEventListener("click", () => { notice.hidden = true; });
             notice.appendChild(close);
         }
-        const stage = els["paper-scroll"].parentElement;
-        stage.parentElement.insertBefore(notice, stage);
+        mountStageElement(notice);
         els[key] = notice;
     }
     notice.hidden = false;

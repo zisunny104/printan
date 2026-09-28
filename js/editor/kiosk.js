@@ -45,9 +45,10 @@ import { renderProjects } from "../core/compose.js";
 import { getEffectiveProfile } from "./editor.js";
 import { els, state } from "./context.js";
 import { attemptSilentPrinterReconnect, connectPrinter, printComposedSilently, printSilently } from "./printer-settings.js";
-import { showStageNotice } from "./ui-helpers.js";
+import { mountStageElement, showStageNotice } from "./ui-helpers.js";
 
 const KIOSK_CLASS = "is-kiosk";
+const KIOSK_PREVIEW_CLASS = "kiosk-preview";
 const RESERVED_PARAMS = new Set(["tpl", "kiosk", "jobId", "parentOrigin", "gapDots"]);
 
 // 這次工單的識別碼與回報／接收用的信任 origin；只有 bootKioskFromQuery 在跑，模組層級變數夠用，
@@ -85,8 +86,7 @@ function showKioskConnectButton(printFn) {
         button.type = "button";
         button.className = "ts-button is-primary";
         button.textContent = "連線印表機並列印";
-        const stage = els["paper-scroll"].parentElement; // 同 showStageNotice：插在尺規＋紙張那一格正上方
-        stage.parentElement.insertBefore(button, stage);
+        mountStageElement(button); // 同 showStageNotice，掛在工作區外面
         button.addEventListener("click", async () => {
             button.disabled = true;
             await connectPrinter();
@@ -304,6 +304,11 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     if (!isMulti) {
         loadProjectIntoEditor(projects[0]);
         schedulePreview();
+        // 範本載入完成才顯示畫布：kiosk 剛開啟、範本還沒到之前，畫面上不該先出現一張空白的紙，
+        // 看起來像沒填內容的編輯區。多範本模式本來就不進編輯器、不預覽，這個 class 也就不會加。
+        if (document.documentElement.classList.contains(KIOSK_CLASS)) {
+            document.documentElement.classList.add(KIOSK_PREVIEW_CLASS);
+        }
     }
 
     if (!reportTargetOrigin) {
