@@ -3,7 +3,7 @@
 import { BARCODE_FORMATS, BARCODE_FORMAT_INFO, validateBarcodeValue } from "../core/barcode.js";
 import {
     DEFAULT_ROW_GAP, MIXED, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow, resolveTextVAlign,
-    resolveDividerDrawMode, resolveFill,
+    resolveDividerDrawMode, resolveFill, resolveBorder,
     applyStyleToRange, applyTextStylePreset, getRangeStyle, getTextContent, replaceFullText, TEXT_STYLE_PRESETS,
 } from "../core/document-model.js";
 import { MAX_ROW_GAP, normalizeRowGap, dotsToPt as dotsToPtRaw, ptToDots as ptToDotsRaw, dotsToMm, mmToDots } from "../core/units.js";
@@ -59,6 +59,73 @@ function dividerThicknessSelect(el, presets) {
     mmBox.min = "0.1";
     wrap.appendChild(field("自訂 (mm)", mmInput));
     return wrap;
+}
+
+// 容器外框粗細預設沿用分隔線線條模式同一組（見 DIVIDER_LINE_THICKNESS_PRESETS_MM），框線視覺上
+// 就是同一種東西，選單沒理由分兩套數字。
+function borderThicknessSelect(el) {
+    const dpiX = getEffectiveProfile().dpi.x;
+    const border = resolveBorder(el.border);
+    const options = DIVIDER_LINE_THICKNESS_PRESETS_MM.map(([name, mm]) => [String(mmToDots(mm, dpiX)), `${name}（${mm} mm）`]);
+    const current = String(border.thicknessDots);
+    if (!options.some(([v]) => v === current)) {
+        options.unshift([current, `目前（${dotsToMm(border.thicknessDots, dpiX).toFixed(1)} mm）`]);
+    }
+    const wrap = document.createElement("div");
+    wrap.appendChild(selectInput(options, current, (v) => {
+        el.border = { ...resolveBorder(el.border), thicknessDots: Number(v) };
+        onModelChange({ skipInspector: true });
+    }));
+    return wrap;
+}
+
+// 外框＋圓角：圖片／多欄／群組／條碼／文字框共用同一組控制項（見 document-model.js createBorder）。
+// 圓角比起純數字輸入更需要看得到效果（跟 fill 選色一樣的「先看見再調整」設計原則），所以放一塊
+// 小預覽方塊即時反映目前外框樣式／粗細／圓角，不用切換螢幕跑一次渲染才知道長怎樣。
+function borderRadiusPreview(el) {
+    const box = document.createElement("div");
+    box.className = "border-radius-preview";
+    const sync = () => {
+        const border = resolveBorder(el.border);
+        box.style.borderStyle = border.visible ? border.style : "solid";
+        box.style.borderWidth = `${Math.max(1, Math.min(6, border.thicknessDots))}px`;
+        box.style.borderColor = border.visible ? "#1a1a1a" : "#d0d0d0";
+        box.style.borderRadius = `${Math.max(0, Math.min(24, (el.cornerRadiusDots || 0) / 2))}px`;
+    };
+    sync();
+    return { box, sync };
+}
+
+function buildBorderRadiusSection(panel, el) {
+    panel.appendChild(foldSection(`border.${el.id}`, "外框與圓角", (body) => {
+        const border = resolveBorder(el.border);
+        const preview = borderRadiusPreview(el);
+        body.appendChild(preview.box);
+
+        body.appendChild(field(null, checkboxInput(border.visible, (v) => {
+            el.border = { ...resolveBorder(el.border), visible: v };
+            onModelChange(); // 顯示外框才有樣式／粗細欄位，需要整個面板重畫
+        }, "顯示外框")));
+
+        if (border.visible) {
+            body.appendChild(fieldRow([
+                ["樣式", selectInput([["solid", "實線"], ["dashed", "虛線"], ["dotted", "點線"]], border.style, (v) => {
+                    el.border = { ...resolveBorder(el.border), style: v };
+                    onModelChange({ skipInspector: true });
+                    preview.sync();
+                })],
+                ["粗細", borderThicknessSelect(el)],
+            ]));
+        }
+
+        const radiusInput = textInput(el.cornerRadiusDots || 0, (v) => {
+            el.cornerRadiusDots = Math.max(0, v);
+            onModelChange({ skipInspector: true });
+            preview.sync();
+        }, "number");
+        radiusInput.querySelector("input").min = "0";
+        body.appendChild(field("圓角 (dot)", radiusInput, "0＝直角；實際圓角會依框目前的寬高自動夾住上限，避免四角重疊"));
+    }));
 }
 
 // 選取對象改變時通知訂閱者（小螢幕抽屜據此打開元素設定面板）；同一個元素重繪不會重發
@@ -598,6 +665,9 @@ function buildTextInspector(panel, el) {
                 }, "超出處理", TEXT_OVERFLOW_OPTIONS)));
             }
         }));
+        // 圖文段落（float-block）沒有單一容器框（圖片跟文字繞排各自一塊區域），外框／圓角只對
+        // 純文字元素有明確意義，見 document-model.js schema.js 對 border 欄位的說明。
+        buildBorderRadiusSection(panel, el);
     }
 }
 
@@ -829,6 +899,8 @@ function buildImageInspector(panel, el) {
             body.appendChild(sliderField("門檻", el.thresholdLevel ?? 128, 0, 255, (v) => { el.thresholdLevel = v; onModelChange({ skipInspector: true }); }));
         }
     }, true));
+
+    buildBorderRadiusSection(panel, el);
 }
 
 function buildSpacerInspector(panel, el) {
@@ -904,6 +976,7 @@ function buildGroupInspector(panel, el) {
     wrap.className = "ts-wrap is-compact has-top-spaced-small";
     wrap.appendChild(mkButton("解散群組", "object-ungroup", () => ungroupElements([el.id]), { outlined: true }));
     panel.appendChild(wrap);
+    buildBorderRadiusSection(panel, el);
 }
 
 function buildRowInspector(panel, el) {
@@ -942,6 +1015,7 @@ function buildRowInspector(panel, el) {
         }, { outlined: true }));
     }
     panel.appendChild(wrap);
+    buildBorderRadiusSection(panel, el);
 }
 
 const VARIABLE_INFO = "可用 {{變數}} 代入資料";
@@ -999,4 +1073,5 @@ function buildBarcodeInspector(panel, el) {
             }, "number"), "留空＝自動。熱感應列印字小容易糊，建議 7pt 以上"));
         }));
     }
+    buildBorderRadiusSection(panel, el);
 }

@@ -552,6 +552,17 @@ body {
     border-color: rgba(255, 255, 255, .8);
 }
 
+/* 外框／圓角即時預覽方塊（見 inspector.js buildBorderRadiusSection）：跟 fill-swatch 同樣的
+   「先看見再調整」設計，數字（粗細 mm／圓角 dot）不夠直覺，一塊會跟著設定變化的方框才看得出效果。 */
+.border-radius-preview {
+    width: 100%;
+    height: 3rem;
+    margin-bottom: .5rem;
+    background: var(--ts-gray-100, #f5f5f5);
+    box-sizing: border-box;
+    transition: border-radius .1s ease;
+}
+
 /* 「開啟」下拉選單裡的「最近編輯」清單：每一列要塞名稱＋時間＋刪除鈕，
    Tocas 預設 .item 是純文字排版，這裡另外排成一行 flex，刪除鈕固定在最右邊。 */
 #open-project-dropdown {
