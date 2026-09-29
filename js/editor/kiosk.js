@@ -48,8 +48,7 @@ import { renderProjects } from "../core/compose.js";
 import { getEffectiveProfile } from "./editor.js";
 import { els, state } from "./context.js";
 import { attemptSilentPrinterReconnect, connectPrinter, printComposedSilently, printSilently } from "./printer-settings.js";
-import { mountStageElement } from "./ui-helpers.js";
-import { initKioskStatusBar, markPrinterChecked, setKioskTemplateNames, updateKioskStatus } from "./kiosk-status-bar.js";
+import { initKioskStatusBar, markPrinterChecked, mountPrinterCardAction, setKioskTemplateNames, updateKioskStatus } from "./kiosk-status-bar.js";
 
 const KIOSK_CLASS = "is-kiosk";
 const KIOSK_PREVIEW_CLASS = "kiosk-preview";
@@ -107,7 +106,7 @@ function showKioskConnectButton(printFn) {
         button.id = "kiosk-connect-print";
         button.type = "button";
         button.className = "ts-button is-primary";
-        mountStageElement(button); // 掛在工作區外面（見 mountStageElement）
+        mountPrinterCardAction(button); // 放進狀態區的印表機卡，在工作區外面
         button.addEventListener("click", async () => {
             button.disabled = true;
             await connectPrinter();
