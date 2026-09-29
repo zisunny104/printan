@@ -23,7 +23,7 @@ import { renderEditOverlay } from "./canvas-overlay.js";
 import { renderOutline } from "./outline.js";
 import { bindBatchPanel } from "./batch-export.js";
 import { bindEditorShortcuts, recordHistory } from "./history.js";
-import { bootKioskFromQuery } from "./kiosk.js";
+import { applyKioskClassFromQuery, bootKioskFromQuery } from "./kiosk.js";
 import { bindPageList, renderPageList } from "./pages.js";
 import { bindPagePager, invalidatePageThumbs, renderPageThumbs, revealActivePage, syncPageBoard } from "./page-board.js";
 import { bindImageFileInput, bindToolbar, wireToolbarOverflow } from "./toolbar.js";
@@ -31,6 +31,7 @@ import { bindOperations, bindProjectName, bindPtanFileInput, populatePaperWidthT
 import { loadProjectIntoEditor, populateRecentDrafts, restoreOrCreateProject, scheduleSave } from "./drafts.js";
 
 async function init() {
+    applyKioskClassFromQuery();
     cacheDom();
     state.project = await restoreOrCreateProject();
     loadPrintPrefs();
@@ -65,7 +66,9 @@ async function init() {
         schedulePreview();
     });
     restoreLocalFontsIfGranted().then((restored) => { if (restored) renderInspector(); });
-    await attemptSilentPrinterReconnect();
+    // 不 await：USB 裝置 open 卡住時，後面的 kiosk 啟動（載入範本、回報 ready）不能被擋住。
+    // 連線狀態由函式內部自己更新畫面；kiosk 啟動檢查與工單流程會接同一個進行中的重連（見該函式）。
+    void attemptSilentPrinterReconnect().catch(() => {});
     // kiosk.js：網址帶 tpl= 才會動作，一般開啟編輯器（沒有這個參數）完全不受影響
     await bootKioskFromQuery(loadProjectIntoEditor, schedulePreview);
 }

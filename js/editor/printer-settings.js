@@ -74,7 +74,7 @@ export async function printCurrent() {
             const adapter = state.usbConnected ? usbAdapter : serialAdapter;
             const outcome = await printPagesInOrder(adapter, results);
             if (outcome.ok) return;
-            if (state.usbConnected) state.usbConnected = false; else state.serialConnected = false;
+            releaseFailedConnection();
             updatePrinterConnectionUi();
             const failed = outcome.failedPageIndex;
             const pageLabel = results.length > 1 ? `第 ${failed + 1}/${results.length} 頁「${results[failed].page?.name || ""}」` : "";
@@ -121,8 +121,7 @@ export async function printSilently() {
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
         const outcome = await printPagesInOrder(adapter, results);
         if (!outcome.ok) {
-            state.usbConnected = false;
-            state.serialConnected = false;
+            releaseFailedConnection();
             updatePrinterConnectionUi();
             return {
                 ok: false,
@@ -135,8 +134,7 @@ export async function printSilently() {
         }
         return { ok: true, issues };
     } catch (err) {
-        state.usbConnected = false;
-        state.serialConnected = false;
+        releaseFailedConnection();
         updatePrinterConnectionUi();
         return { ok: false, reason: "print-failed", error: err };
     } finally {
@@ -164,8 +162,7 @@ export async function printComposedSilently(composed, project) {
         try {
             await adapter.print(result, getEscposPrintOptions(true, project));
         } catch (err) {
-            state.usbConnected = false;
-            state.serialConnected = false;
+            releaseFailedConnection();
             updatePrinterConnectionUi();
             return { ok: false, reason: "print-failed", error: err, failedPageIndex: 0, totalPages: 1 };
         }
@@ -216,6 +213,7 @@ function currentWebUsbVendorId() {
  * 更新連線狀態與畫面。設定 modal 裡的「連線印表機」按鈕、kiosk 沒有已授權裝置時的候補配對按鈕共用同一套邏輯。
  */
 export async function connectPrinter() {
+    await releasing;
     const method = currentConnectMethod();
     try {
         if (method === "serial") {
@@ -232,7 +230,32 @@ export async function connectPrinter() {
     await identifyConnectedPrinter();
 }
 
-export async function attemptSilentPrinterReconnect() {
+// 列印失敗（缺紙逾時、線被拔、裝置回錯）後，只把 state 旗標設成 false 不夠：adapter 還握著開啟中的
+// port／裝置。下次按「連線印表機」會對已開啟的 port 再 open()，丟 InvalidStateError；斷線鈕又因為
+// 顯示未連線而藏起來，只能重新整理頁面。所以一併釋放，讓下一次連線是乾淨的。
+// releasing 讓後續的連線／重連先等釋放做完，避免對還沒關好的 port 又 open。
+let releasing = Promise.resolve();
+function releaseFailedConnection() {
+    const wasUsb = state.usbConnected;
+    const wasSerial = state.serialConnected;
+    state.usbConnected = false;
+    state.serialConnected = false;
+    releasing = Promise.all([
+        wasUsb ? usbAdapter.disconnect().catch(() => {}) : null,
+        wasSerial ? serialAdapter.disconnect().catch(() => {}) : null,
+    ]);
+}
+
+// 同一時間只跑一次重連，後來的呼叫直接接同一個 Promise：編輯器初始化、kiosk 啟動檢查、
+// 每筆工單都會呼叫，同時對同一個 USB 裝置 open 兩次，後到的丟例外會被當成「沒連上」。
+let reconnectInFlight = null;
+export function attemptSilentPrinterReconnect() {
+    if (!reconnectInFlight) reconnectInFlight = reconnectAuthorizedPrinter().finally(() => { reconnectInFlight = null; });
+    return reconnectInFlight;
+}
+
+async function reconnectAuthorizedPrinter() {
+    await releasing;
     if (usbAdapter.isSupported()) {
         try {
             state.usbConnected = await usbAdapter.reconnectIfAuthorized(currentWebUsbVendorId());
@@ -743,6 +766,7 @@ export function bindPrinterSettings() {
     if (serialAdapter.isSupported()) {
         navigator.serial.addEventListener("disconnect", (e) => {
             if (e.target === serialAdapter.port) {
+                serialAdapter.disconnect().catch(() => {}); // 已拔除的埠 close() 可能丟錯，狀態照樣清掉
                 state.serialConnected = false;
                 updatePrinterConnectionUi();
             }
