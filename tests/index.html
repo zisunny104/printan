@@ -634,6 +634,14 @@ test("自動儲存失敗：顯示儲存失敗、role=alert、錯誤樣式，之�
     assert(el.textContent.startsWith("已自動儲存") && !el.hasAttribute("role") && !el.classList.contains("is-negative"));
 });
 
+test("缺漏或非數字的版面欄位用預設值排版，不會讓 canvas 高度變 NaN", async () => {
+    const spacer = createSpacerElement(); delete spacer.heightDots;
+    const divider = createDividerElement(); divider.thicknessDots = NaN; divider.marginTopDots = "abc"; delete divider.marginBottomDots;
+    const text = createTextElement({ runs: [{ text: "x" }] }); text.fontSize = NaN; text.lineHeight = "x";
+    const r = await renderElements([spacer, divider, text], { widthDots: 384, mode: "thermal" });
+    assert(Number.isFinite(r.heightDots) && r.heightDots > 16 + 12, "height=" + r.heightDots);
+});
+
 const list = document.getElementById("list");
 let failed = 0;
 for (const c of cases) {

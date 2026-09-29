@@ -171,10 +171,30 @@ function measureImageContent(el, img) {
 
 // ---- 排版（measure pass）----
 
+// 版面計算會直接加總的數值欄位；缺漏或無法轉成有限數字時（手改檔、舊檔）改用這裡的預設值，避免 canvas 高度變 NaN。
+const LAYOUT_NUMBER_DEFAULTS = {
+    spacer: { heightDots: 16 },
+    divider: { thicknessDots: 2, marginTopDots: 8, marginBottomDots: 8 },
+    text: { fontSize: 32, lineHeight: 1.3 },
+};
+
+function withFiniteLayoutNumbers(el) {
+    const defaults = LAYOUT_NUMBER_DEFAULTS[el.type];
+    if (!defaults) return el;
+    let fixed = null;
+    for (const [field, fallback] of Object.entries(defaults)) {
+        if (Number.isFinite(Number(el[field])) && el[field] !== null && el[field] !== "") continue;
+        fixed ||= { ...el };
+        fixed[field] = fallback;
+    }
+    return fixed || el;
+}
+
 async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, showBarcodeErrors) {
     const items = [];
     let y = 0;
-    for (const el of elements) {
+    for (const rawEl of elements) {
+        const el = withFiniteLayoutNumbers(rawEl);
         if (el.type === "text") {
             // widthMode "fixed"：文字框寬度可小於欄寬（比照圖片 widthPercent／widthDots 覆寫繪製寬度），
             // 換行、置中/靠右錨點都改用這個框寬；align 同時兼作「框在欄內的水平位置」（同圖片 align 的雙重用途）。
