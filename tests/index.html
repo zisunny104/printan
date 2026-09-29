@@ -24,6 +24,7 @@ import * as tree from "../js/core/element-tree.js";
 import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
 import { renderElements, floatLineBox, MAX_CANVAS_HEIGHT } from "../js/core/renderer.js";
 import { createFloatBlockElement, FLOAT_GAP_DOTS } from "../js/core/document-model.js";
+import { renderProjects } from "../js/core/compose.js";
 import { readPtanFile } from "../js/core/ptan-file.js";
 import { runAutosave } from "../js/editor/save-status.js";
 import { rotateCanvas180 } from "../js/core/printer-adapter.js";
@@ -555,6 +556,19 @@ test("rotateCanvas180：寬或高為 0 不丟例外", () => {
     eq([rotated.width, rotated.height], [0, 0]);
 });
 
+test("renderProjects：多頁專案每一頁都合進輸出，不只第一頁", async () => {
+    const p = createEmptyProject({ name: "多頁", printerProfileId: "epson-tm-t82ii", paperWidthId: "80mm" });
+    p.template.pages[0].elements = [createSpacerElement({ heightDots: 40 })];
+    p.template.pages.push({ id: "p2", name: "第二頁", cutAfter: true, elements: [createSpacerElement({ heightDots: 60 })] });
+    const out = await renderProjects([{ project: p }], { options: { mode: "screen" } });
+    eq(out.heightDots, 100);
+});
+test("renderProjects：沒有 pages 的舊格式專案退回單頁渲染", async () => {
+    const base = createEmptyProject({ name: "舊", printerProfileId: "epson-tm-t82ii", paperWidthId: "80mm" });
+    const legacy = { printerProfile: base.printerProfile, paper: base.paper, assets: [], template: { elements: [createSpacerElement({ heightDots: 30 })] } };
+    const out = await renderProjects([{ project: legacy }], { options: { mode: "screen" } });
+    eq(out.heightDots, 30);
+});
 test("自動儲存成功：顯示已自動儲存，不用 role=alert", async () => {
     const el = document.createElement("span");
     el.setAttribute("role", "alert");

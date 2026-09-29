@@ -71,6 +71,13 @@ function showKioskNotice(message) {
 // 監聽器要讀的是「當下」這個模組層級變數，不能在建立按鈕當下把 printFn 綁死進 closure 裡。
 let pendingConnectPrint = printSilently;
 
+let jobQueue = Promise.resolve();
+function enqueueJob(task) {
+    jobQueue = jobQueue.then(task).catch((err) => {
+        reportJobStatus("print_failed", { message: describePrinterError(err) });
+    });
+}
+
 // 啟動時的印表機檢查；工單流程要等它做完，避免兩邊同時對同一個 USB 裝置重連，
 // 後到的一次 open 失敗被當成「沒連上」。沒有跑檢查時是已完成的 Promise。
 let startupPrinterCheck = Promise.resolve();
@@ -117,7 +124,7 @@ function showKioskConnectButton(printFn) {
                 reportJobStatus("printer_connected");
                 return;
             }
-            const outcome = await pendingConnectPrint();
+            const outcome = await printRetryingBusy(pendingConnectPrint);
             reportPrintOutcome(outcome);
             if (outcome.ok && outcome.issues.length) showKioskNotice(outcome.issues.join("；"));
             else if (!outcome.ok && outcome.reason === "print-failed") showKioskNotice(describePrintFailure(outcome));
@@ -184,7 +191,25 @@ function reportPrintOutcome(outcome) {
         });
         return;
     }
+    if (outcome.reason === "busy") {
+        reportJobStatus("print_failed", { message: "印表機忙碌中（正在處理上一個操作），請稍後再試" });
+        return;
+    }
     reportJobStatus("print_failed", { message: describePrinterError(outcome.error) });
+}
+
+// 印表機被其他操作佔用（例如剛連線後的型號查詢最多約 4.5 秒）時 printSilently 會立刻回 busy，
+// 直接當成列印失敗太可惜，短暫等一下再試；等太久才放棄，由 reportPrintOutcome 回報 busy。
+const BUSY_RETRIES = 20;
+const BUSY_RETRY_MS = 500;
+async function printRetryingBusy(printFn) {
+    let outcome;
+    for (let i = 0; i < BUSY_RETRIES; i++) {
+        outcome = await printFn();
+        if (outcome.ok || outcome.reason !== "busy") return outcome;
+        await new Promise((resolve) => setTimeout(resolve, BUSY_RETRY_MS));
+    }
+    return outcome;
 }
 
 // tpl= 只接受同源網址：印表機是實體輸出，風險不算高，但沒必要開放任意第三方網址當範本來源。
@@ -241,7 +266,7 @@ async function runAutoprintFlow() {
     await startupPrinterCheck;
     await attemptSilentPrinterReconnect();
     if (state.usbConnected || state.serialConnected) {
-        const outcome = await printSilently();
+        const outcome = await printRetryingBusy(printSilently);
         reportPrintOutcome(outcome);
         if (outcome.ok && outcome.issues.length) showKioskNotice(outcome.issues.join("；"));
         else if (!outcome.ok && outcome.reason === "print-failed") showKioskNotice(describePrintFailure(outcome));
@@ -276,7 +301,7 @@ async function runMultiAutoprintFlow(projects, data, gapDots) {
     await startupPrinterCheck;
     await attemptSilentPrinterReconnect();
     if (state.usbConnected || state.serialConnected) {
-        const outcome = await printFn();
+        const outcome = await printRetryingBusy(printFn);
         reportPrintOutcome(outcome);
         if (outcome.ok && outcome.issues.length) showKioskNotice(outcome.issues.join("；"));
         else if (!outcome.ok && outcome.reason === "print-failed") showKioskNotice(describePrintFailure(outcome));
@@ -295,12 +320,20 @@ async function runMultiAutoprintFlow(projects, data, gapDots) {
  * tpl= 可以是單一網址（沿用原本行為：載入編輯器、有畫面預覽），也可以是逗號分隔的多個網址
  * （多範本模式，見 runMultiAutoprintFlow：不進編輯器、不預覽，收到資料直接合成＋送印）。
  */
+/**
+ * kiosk=1 要獨立於 tpl= 判斷式之外套用：外部網站嵌入 iframe 時 tpl= 若漏帶或載入失敗，
+ * 沒有這個 class 畫面會整個回退成可編輯的完整編輯器（工具列、大綱、印表機連線都在），嵌入方等於
+ * 意外把整個 app 暴露出去，不是預期中乾淨的列印預覽。
+ * 編輯器初始化最前面就要呼叫（editor.js init）：初始化途中的第一次自動儲存會看這個 class
+ * 決定要不要存草稿，等到 bootKioskFromQuery 才套用就晚了。
+ */
+export function applyKioskClassFromQuery() {
+    if (new URLSearchParams(location.search).get("kiosk") === "1") document.documentElement.classList.add(KIOSK_CLASS);
+}
+
 export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview) {
     const params = new URLSearchParams(location.search);
-    // kiosk=1 要獨立於 tpl= 判斷式之外先套用：外部網站嵌入 iframe 時 tpl= 若漏帶或載入失敗，
-    // 沒有這行畫面會整個回退成可編輯的完整編輯器（工具列、大綱、印表機連線都在），嵌入方等於
-    // 意外把整個 app 暴露出去，不是預期中乾淨的列印預覽。
-    if (params.get("kiosk") === "1") document.documentElement.classList.add(KIOSK_CLASS);
+    applyKioskClassFromQuery();
 
     const tplParam = params.get("tpl");
     if (!tplParam) return false;
@@ -350,19 +383,27 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
         if (event.origin !== reportTargetOrigin || event.source !== window.parent) return;
         const msg = event.data;
         if (!msg || msg.type !== "printan:submit-job") return;
-        if (msg.jobId) currentJobId = msg.jobId;
+        const jobId = msg.jobId || null;
         const data = msg.data && typeof msg.data === "object" ? msg.data : {};
-        if (isMulti) {
-            void runMultiAutoprintFlow(projects, data, gapDots);
-            return;
-        }
-        // 每筆 submit-job 都是獨立工單，先清空再套用新資料：同一個 iframe 連續處理第二筆工單時，
-        // 如果這筆沒帶到跟上一筆一樣的變數名稱（例如少了 photoB），不能讓上一位客人的舊值殘留、
-        // 印到這一份收據上。
-        state.previewData = {};
-        applyVariablesFromData(data, projects[0]);
-        schedulePreview();
-        void runAutoprintFlow();
+        // 工單排隊一筆一筆處理：前一筆還在等重連或印表機時第二筆就到，如果馬上套用資料，
+        // 前一筆會印出第二筆的內容、回報也會帶錯 jobId。jobId 與資料到輪到這筆才生效。
+        enqueueJob(async () => {
+            // 先等啟動檢查回報完：它的 printer_connected／needs_connect 是「啟動階段」的回報，
+            // 不該掛上這筆工單的 jobId。
+            await startupPrinterCheck;
+            if (jobId) currentJobId = jobId;
+            if (isMulti) {
+                await runMultiAutoprintFlow(projects, data, gapDots);
+                return;
+            }
+            // 每筆 submit-job 都是獨立工單，先清空再套用新資料：同一個 iframe 連續處理第二筆工單時，
+            // 如果這筆沒帶到跟上一筆一樣的變數名稱（例如少了 photoB），不能讓上一位客人的舊值殘留、
+            // 印到這一份收據上。
+            state.previewData = {};
+            applyVariablesFromData(data, projects[0]);
+            schedulePreview();
+            await runAutoprintFlow();
+        });
     });
     reportJobStatus("ready");
     // 不 await：editor.js 等這個函式跑完才收起骨架畫面，印表機重連（可能卡在裝置 open）不該拖住畫面顯示。
