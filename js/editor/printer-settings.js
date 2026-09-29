@@ -66,6 +66,10 @@ export async function printCurrent() {
         return;
     }
     state.printerBusy = true;
+    // 送出資料要一段時間，按鈕轉圈圈（Tocas is-loading）並鎖住，避免以為沒反應又重按
+    const printButton = els["btn-print"];
+    printButton.disabled = true;
+    printButton.classList.add("is-loading");
     hideStageNotice(PRINT_NOTICE_KEY);
     try {
         const results = applyRotationPref(await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() }));
@@ -74,7 +78,10 @@ export async function printCurrent() {
         if (state.usbConnected || state.serialConnected) {
             const adapter = state.usbConnected ? usbAdapter : serialAdapter;
             const outcome = await printPagesInOrder(adapter, results);
-            if (outcome.ok) return;
+            if (outcome.ok) {
+                showSnackbar(results.length > 1 ? `列印資料已送出（${results.length} 頁）` : "列印資料已送出");
+                return;
+            }
             releaseFailedConnection();
             updatePrinterConnectionUi();
             const failed = outcome.failedPageIndex;
@@ -100,6 +107,8 @@ export async function printCurrent() {
         showStageNotice(PRINT_NOTICE_KEY, `列印失敗：${describePrinterError(err)}`, { dismissible: true });
     } finally {
         state.printerBusy = false;
+        printButton.classList.remove("is-loading");
+        printButton.disabled = false;
     }
 }
 
