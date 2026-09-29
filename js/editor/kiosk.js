@@ -104,7 +104,6 @@ function showKioskConnectButton(printFn) {
         button.id = "kiosk-connect-print";
         button.type = "button";
         button.className = "ts-button is-primary";
-        button.textContent = "連線印表機並列印";
         mountStageElement(button); // 同 showStageNotice，掛在工作區外面
         button.addEventListener("click", async () => {
             button.disabled = true;
@@ -125,6 +124,9 @@ function showKioskConnectButton(printFn) {
         });
         els["kiosk-connect-print"] = button;
     }
+    // 文字每次都依「有沒有待印工作」更新：啟動時沒有工單，按下去只會配對不會印，
+    // 寫「並列印」會誤導；工單先到、按鈕被換成要印那張單時才寫「並列印」。
+    button.textContent = printFn ? "連線印表機並列印" : "連線印表機";
     button.hidden = false;
     button.disabled = false;
 }
