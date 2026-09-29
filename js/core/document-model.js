@@ -74,7 +74,7 @@ function nextId(prefix) {
 }
 
 /**
- * 一個文字元素的內容由多個 run 組成（比照 Figma：同一段文字裡不同片段可以各自
+ * 一個文字元素的內容由多個 run 組成（同一段文字裡不同片段可以各自
  * 覆寫字體／字級／粗體／斜體／底線／刪除線／反白）。run 沒指定的樣式欄位會繼承所屬
  * 文字元素的預設值（fontFamily/fontSize/bold），斜體／底線／刪除線／反白沒有元素層級
  * 預設值（元素的 inverse 是整行反白，另一回事），未指定一律視為 false。align／wrap／maxLines／lineHeight／letterSpacing
@@ -175,7 +175,7 @@ export function normalizeTextElement(el) {
     return { ...rest, runs: [createTextRun({ text: text || "" })] };
 }
 
-// ---- Run 編輯（比照 Figma：單一文字框 + 選取範圍套用樣式） ----
+// ---- Run 編輯（單一文字框 + 選取範圍套用樣式） ----
 // 以下函式把「字元偏移範圍」對應到 runs 陣列的切分/合併，供 editor.js 的富文字編輯器使用。
 
 // inverse＝局部反白（黑底白字）；元素本身也是整行反白時，兩者疊加＝維持黑底白字（見 renderer.js paintText）。

@@ -20,7 +20,7 @@ export const PTAN_VERSION = 3;
  *   assets: [{ id, type, dataUrl }]  // 圖片等二進位資源，內嵌為 data URL，跨頁共用
  * }
  *
- * Page（多頁／frame，比照 Figma；見需求單「多頁支援」）:
+ * Page（多頁／frame）:
  * {
  *   id, name: string,
  *   elements: Element[],

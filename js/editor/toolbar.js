@@ -16,7 +16,6 @@ import { getEffectiveProfile, schedulePreview } from "./editor.js";
 // 或按 Esc 都會關閉。{portal:true} 時選單會被搬到 document.body、改用 position:fixed
 // 算座標，用來跳脫 .canvas-floating-toolbar 的 overflow-x:auto（同一條規則會把
 // overflow-y 一併提升成 auto，選單留在原地會被工具列自己的框裁掉）。
-// 同 koilisu/apps/pitrace js/ui/toolbar.js 的 wireDropdownToggle()。
 function wireDropdownToggle(trigger, menu, onToggle, opts = {}) {
     const portal = opts.portal;
     function position() {
@@ -68,8 +67,7 @@ function wireDropdownToggle(trigger, menu, onToggle, opts = {}) {
 
 // 容器變窄放不下整排按鈕時（例如欄寬被拉桿拖窄），依 data-collapse-priority 由小到大
 // 把整顆按鈕完整地收進「更多工具」選單，而不是壓縮/裁切它們，可見按鈕永遠維持原始
-// 大小，也不需要橫向捲動工具列才找得到——比照 Figma 窄寬度工具列的做法，同
-// koilisu/apps/pitrace 的 wireToolbarOverflow()。用 ResizeObserver 量工具列父層的
+// 大小，也不需要橫向捲動工具列才找得到。用 ResizeObserver 量工具列父層的
 // 實際寬度（不是 window 寬度），因為可用寬度還受使用者可拖曳的欄寬拉桿影響。
 export function wireToolbarOverflow() {
     const bar = document.querySelector(".canvas-floating-toolbar");

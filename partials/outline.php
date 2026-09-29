@@ -4,7 +4,7 @@
                 <dialog class="ts-app-drawer is-bottom editor-list" id="outlineSidebar" aria-label="版面結構">
                     <button type="button" class="sheet-handle" aria-label="面板把手（拖曳調整高度）"><span aria-hidden="true"></span></button>
                     <div class="content">
-                    <!-- 版面結構樹：比照 Figma 圖層面板，最上層是頁面（frame），底下是該頁元素，各層可收合（js/editor/outline.js）。
+                    <!-- 版面結構樹：最上層是頁面（frame），底下是該頁元素，各層可收合（js/editor/outline.js）。
                          頁面的新增／刪除／改名／排序／合併／切紙開關都在頁面列上；分割是「從選取的元素處切開」，放標題列。 -->
                     <div class="ts-box is-rounded">
                         <div class="pane-card-header">
