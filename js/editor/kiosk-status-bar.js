@@ -1,4 +1,4 @@
-// kiosk 畫面最上方的狀態區，用兩張卡片各管一件事：
+// kiosk 畫面最上方的狀態區，標題列加三張卡片各管一件事：
 //   標題列：只放 Printan 標題與版本；
 //   「印表機」卡：連線指示燈（沒連上時配對按鈕也放在這張卡裡）；
 //   「列印工作」卡：這筆列印工作的狀態指示燈與文字（失敗原因、被略過的問題都寫在這裡）、編號；
@@ -112,7 +112,11 @@ export function mountPrinterCardAction(element) {
 export function setKioskTemplateNames(names, empty = "未命名範本") {
     if (!fields) return;
     const list = names.filter(Boolean);
-    fields.templateList.replaceChildren(...(list.length ? list : [empty]).map((name) => el("div", "ts-text", name)));
+    fields.templateList.replaceChildren(...(list.length ? list : [empty]).map((name) => {
+        const row = el("div", "ts-text", name);
+        row.title = name; // 過長被截斷時滑過可看完整名稱
+        return row;
+    }));
 }
 
 /**
