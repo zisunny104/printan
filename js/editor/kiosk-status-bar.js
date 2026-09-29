@@ -1,7 +1,8 @@
 // kiosk 畫面最上方的狀態區，用兩張卡片各管一件事：
-//   標題列：範本名稱與 Printan 版本；
+//   標題列：只放 Printan 標題與版本；
 //   「印表機」卡：連線指示燈（沒連上時配對按鈕也放在這張卡裡）；
-//   「列印工作」卡：這筆列印工作的狀態指示燈與文字（失敗原因、被略過的問題都寫在這裡）、編號。
+//   「列印工作」卡：這筆列印工作的狀態指示燈與文字（失敗原因、被略過的問題都寫在這裡）、編號；
+//   「範本」卡：載入的範本名稱（多範本一行一個）。
 // 內嵌在別人網頁裡的 iframe 沒有其他地方看得出運作情形，現場人員靠這區確認「有沒有連上、印了沒」。
 // 這裡只顯示狀態；唯一可操作的配對按鈕由 kiosk.js 建立，掛進印表機卡（mountPrinterCardAction）。
 
@@ -50,14 +51,13 @@ export function initKioskStatusBar() {
     bar.setAttribute("role", "status");
     bar.setAttribute("aria-live", "polite");
 
-    // 標題列：範本名稱（過長截斷）與版本
-    const template = el("span", "kiosk-status-template ts-header is-heavy", "範本載入中…");
+    // 標題列：只有標題與版本
     const version = document.querySelector(".app-version")?.textContent.trim() || "";
     const titleRow = el("div", "ts-grid is-middle-aligned is-relaxed");
     const titleCol = el("div", "column is-fluid");
-    titleCol.append(template);
+    titleCol.append(el("span", "ts-header is-heavy", "Printan 單仔"));
     const versionCol = el("div", "column");
-    versionCol.append(el("span", "ts-text is-description is-small", `Printan ${version}`.trim()));
+    versionCol.append(el("span", "ts-text is-description is-small", version));
     titleRow.append(titleCol, versionCol);
 
     // 卡片沿用編輯器其他面板的結構：ts-box＋標題列（.pane-card-header）＋ts-content 內文
@@ -82,8 +82,15 @@ export function initKioskStatusBar() {
     const jobId = el("span", "ts-text is-description is-small");
     job.header.append(jobId);
 
+    // 範本卡：內文是名稱清單（setKioskTemplateNames 填入），不放指示燈
+    const templates = card("範本", "list");
+    templates.body.replaceChildren();
+    const templateList = el("div", "kiosk-status-templates");
+    templates.body.append(templateList);
+    templateList.append(el("div", "ts-text", "範本載入中…"));
+
     const cards = el("div", "ts-grid is-relaxed has-top-spaced-small");
-    for (const [c, size] of [[printer, "is-6-wide"], [job, "is-fluid"]]) {
+    for (const [c, size] of [[printer, "is-6-wide"], [job, "is-fluid"], [templates, "is-16-wide"]]) {
         const col = el("div", `column ${size} mobile:is-16-wide`);
         col.append(c.box);
         cards.append(col);
@@ -91,7 +98,7 @@ export function initKioskStatusBar() {
 
     bar.append(titleRow, cards);
     mountStageElement(bar);
-    fields = { template, printerBody: printer.body, printerDot: printer.dot, printerText: printer.text, jobDot: job.dot, jobText: job.text, jobDetail: job.detail, jobId };
+    fields = { templateList, printerBody: printer.body, printerDot: printer.dot, printerText: printer.text, jobDot: job.dot, jobText: job.text, jobDetail: job.detail, jobId };
     updateKioskStatus({ job: "idle" });
 }
 
@@ -101,12 +108,11 @@ export function mountPrinterCardAction(element) {
     else mountStageElement(element);
 }
 
-/** 範本名稱（多範本顯示個數與名稱）；載入完成或失敗後由 kiosk.js 呼叫，empty 是沒有名稱時顯示的字。 */
+/** 範本卡的名稱清單（一行一個）；載入完成或失敗後由 kiosk.js 呼叫，empty 是沒有名稱時顯示的字。 */
 export function setKioskTemplateNames(names, empty = "未命名範本") {
     if (!fields) return;
     const list = names.filter(Boolean);
-    fields.template.textContent = list.length > 1 ? `${list.length} 個範本：${list.join("、")}` : (list[0] || empty);
-    fields.template.title = list.join("\n");
+    fields.templateList.replaceChildren(...(list.length ? list : [empty]).map((name) => el("div", "ts-text", name)));
 }
 
 /**
