@@ -4,7 +4,7 @@
 
 import { getPaperWidth } from "../core/printer-profiles.js";
 import { createImageElement } from "../core/document-model.js";
-import { fileToDataUrl } from "../core/ptan-file.js";
+import { fileToDataUrl, downscaleImageFile } from "../core/ptan-file.js";
 import { convertHeicIfNeeded } from "../core/heic.js";
 import { els, rt, state } from "./context.js";
 import { addElement, insertElement, wireAddMenu } from "./element-actions.js";
@@ -208,9 +208,9 @@ async function handleImageFileSelected(file) {
         alert("只支援 PNG、JPEG、GIF、WebP 圖片");
         return null;
     }
-    const dataUrl = await fileToDataUrl(converted);
+    const dataUrl = await fileToDataUrl(await downscaleImageFile(converted));
     const assetId = `asset_${Date.now().toString(36)}`;
-    state.project.assets.push({ id: assetId, type: converted.type, dataUrl });
+    state.project.assets.push({ id: assetId, type: dataUrl.slice(5, dataUrl.indexOf(";")), dataUrl });
     return assetId;
 }
 
