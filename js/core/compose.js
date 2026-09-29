@@ -1,7 +1,7 @@
 // 多份輸出合併：把多個專案（或同一專案的多筆資料）的渲染結果由上而下接成一張長單。
 // 給嵌入的呼叫端用，編輯器本身不走這裡；輸出仍是單一 canvas，可直接餵給 buildEscposJob／PDF。
 
-import { renderTemplate, MAX_CANVAS_HEIGHT } from "./renderer.js";
+import { renderPages, renderTemplate, MAX_CANVAS_HEIGHT } from "./renderer.js";
 import { dotsToMm } from "./units.js";
 
 /**
@@ -49,7 +49,15 @@ export function composeResults(results, { gapDots = 0 } = {}) {
 export async function renderProjects(jobs, { gapDots = 0, options = {} } = {}) {
     const results = [];
     for (const job of jobs) {
-        results.push(await renderTemplate(job.project, job.data || {}, { ...options, ...job.options }));
+        const jobOptions = { ...options, ...job.options };
+        // 每個專案的所有頁面都要接進來：renderTemplate 只讀第一頁，多頁專案會少印第 2 頁以後。
+        // 合成後是單一 canvas、只有結尾一次切紙，各頁自己的 cutAfter 在這裡沒有作用。
+        // 沒有 pages 的舊格式專案（外部呼叫端直接傳進來）退回單頁的 renderTemplate。
+        if (Array.isArray(job.project?.template?.pages)) {
+            results.push(...await renderPages(job.project, job.data || {}, jobOptions));
+        } else {
+            results.push(await renderTemplate(job.project, job.data || {}, jobOptions));
+        }
     }
     return composeResults(results, { gapDots });
 }

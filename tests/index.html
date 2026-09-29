@@ -24,9 +24,10 @@ import * as tree from "../js/core/element-tree.js";
 import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
 import { renderElements, floatLineBox, MAX_CANVAS_HEIGHT } from "../js/core/renderer.js";
 import { createFloatBlockElement, FLOAT_GAP_DOTS } from "../js/core/document-model.js";
+import { renderProjects } from "../js/core/compose.js";
 import { readPtanFile } from "../js/core/ptan-file.js";
 import { runAutosave } from "../js/editor/save-status.js";
-import { rotateCanvas180 } from "../js/core/printer-adapter.js";
+import { rotateCanvas180, WebSerialEscposAdapter } from "../js/core/printer-adapter.js";
 
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
@@ -555,6 +556,56 @@ test("rotateCanvas180：寬或高為 0 不丟例外", () => {
     eq([rotated.width, rotated.height], [0, 0]);
 });
 
+test("renderProjects：多頁專案每一頁都合進輸出，不只第一頁", async () => {
+    const p = createEmptyProject({ name: "多頁", printerProfileId: "epson-tm-t82ii", paperWidthId: "80mm" });
+    p.template.pages[0].elements = [createSpacerElement({ heightDots: 40 })];
+    p.template.pages.push({ id: "p2", name: "第二頁", cutAfter: true, elements: [createSpacerElement({ heightDots: 60 })] });
+    const out = await renderProjects([{ project: p }], { options: { mode: "screen" } });
+    eq(out.heightDots, 100);
+});
+test("renderProjects：沒有 pages 的舊格式專案退回單頁渲染", async () => {
+    const base = createEmptyProject({ name: "舊", printerProfileId: "epson-tm-t82ii", paperWidthId: "80mm" });
+    const legacy = { printerProfile: base.printerProfile, paper: base.paper, assets: [], template: { elements: [createSpacerElement({ heightDots: 30 })] } };
+    const out = await renderProjects([{ project: legacy }], { options: { mode: "screen" } });
+    eq(out.heightDots, 30);
+});
+// 序列埠替身：行為照 Web Serial 規格——已開啟的 port 再 open() 會丟 InvalidStateError、
+// writer 還鎖著時 port.close() 會失敗；stuck 模擬缺紙（寫入與 writer.close() 都不返回，abort() 才解開）。
+function fakeSerialPort() {
+    const port = {
+        opened: false, locked: false, stuck: false, log: [],
+        getInfo: () => ({ usbVendorId: 0x1234 }),
+        async open() { if (port.opened) throw new DOMException("already open", "InvalidStateError"); port.opened = true; port.log.push("open"); },
+        async close() { if (port.locked) throw new TypeError("writer 還鎖著"); port.opened = false; port.log.push("port.close"); },
+    };
+    port.writable = { getWriter() { port.locked = true; return {
+        write: () => (port.stuck ? new Promise(() => {}) : Promise.resolve()),
+        close: () => (port.stuck ? new Promise(() => {}) : Promise.resolve()),
+        abort() { port.stuck = false; port.log.push("abort"); return Promise.resolve(); },
+        releaseLock() { port.locked = false; },
+    }; } };
+    return port;
+}
+test("WebSerialEscposAdapter.reconnectIfAuthorized：已連線時不再 open（對已開啟的 port 再 open 會丟例外，被當成斷線）", async () => {
+    const port = fakeSerialPort();
+    const adapter = new WebSerialEscposAdapter();
+    adapter.listAuthorizedPorts = async () => [port];
+    eq(await adapter.reconnectIfAuthorized(0x1234), true);
+    eq(await adapter.reconnectIfAuthorized(0x1234), true);
+    eq(port.log.filter((x) => x === "open").length, 1);
+});
+test("WebSerialEscposAdapter.disconnect：寫入卡住時 writer.close() 不返回，逾時後 abort 並釋放，port 能關閉、能重連", async () => {
+    const port = fakeSerialPort();
+    const adapter = new WebSerialEscposAdapter();
+    adapter.listAuthorizedPorts = async () => [port];
+    await adapter.reconnectIfAuthorized(0x1234);
+    port.stuck = true;
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("disconnect 沒有返回（被卡住的寫入拖住）")), 5000));
+    await Promise.race([adapter.disconnect(), timeout]);
+    eq(port.opened, false);
+    eq(adapter.port, null);
+    eq(await adapter.reconnectIfAuthorized(0x1234), true); // 之後能重新連線，不用重新整理頁面
+});
 test("自動儲存成功：顯示已自動儲存，不用 role=alert", async () => {
     const el = document.createElement("span");
     el.setAttribute("role", "alert");

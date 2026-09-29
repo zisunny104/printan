@@ -39,7 +39,6 @@ tmp/
 
 # 部署相關
 deploy.php
-deploy.sh
 
 # 測試檔案
 phpunit.xml

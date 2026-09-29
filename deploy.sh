@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
+
+# 有顏色的終端機才上色，避免 log 檔案裡混進一堆 ANSI 逃脫碼
+if [ -t 1 ]; then
+  BOLD=$'\033[1m'; DIM=$'\033[2m'
+  RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; CYAN=$'\033[36m'
+  RESET=$'\033[0m'
+else
+  BOLD=''; DIM=''; RED=''; GREEN=''; YELLOW=''; CYAN=''; RESET=''
+fi
+
+step() { echo "${BOLD}${CYAN}==>${RESET} ${BOLD}$1${RESET}"; }
+ok()   { echo "  ${GREEN}✓${RESET} $1"; }
+warn() { echo "  ${YELLOW}!${RESET} $1"; }
+fail() { echo "  ${RED}✗${RESET} $1"; }
+
+BRANCH="${DEPLOY_BRANCH:-main}"
+
+# printan 是純 PHP 頁面殼＋瀏覽器端 JS：沒有資料庫、沒有必要的 PHP 擴充套件、
+# 也沒有需要 PHP 寫入的目錄，所以不需要檢查擴充套件或修正目錄權限。
+
+step "檢查工作目錄"
+# 伺服器上的檔案被手動改過時，git 快轉合併會中途失敗；先擋下來，講清楚是哪些檔案。
+DIRTY="$(git status --porcelain --untracked-files=no)"
+if [ -n "$DIRTY" ]; then
+  fail "有尚未提交的本機修改，部署已中止（怕蓋掉伺服器上的手動修改）："
+  sed 's/^/    /' <<< "$DIRTY"
+  echo "  ${DIM}確認不需要之後，用 git checkout -- <檔案> 還原，再重新執行 ./deploy.sh${RESET}"
+  exit 1
+fi
+ok "沒有未提交的修改"
+
+HAS_PHP=0
+if command -v php >/dev/null 2>&1; then
+  HAS_PHP=1
+  ok "PHP CLI：$(php -r 'echo PHP_VERSION;')"
+else
+  warn "找不到 php 指令，會略過語法檢查：有語法錯誤的 PHP 檔不會被擋在部署之前（網頁的 PHP-FPM 不受影響）"
+fi
+
+echo
+step "取得最新程式碼"
+BEFORE=$(git rev-parse --short HEAD)
+git fetch --quiet origin "$BRANCH"
+AFTER=$(git rev-parse --short FETCH_HEAD)
+ok "遠端 ${BRANCH}：${AFTER}"
+
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ] && ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
+  # 本機有遠端沒有的提交（或兩邊分岔）：快轉合併做不到，硬合併會在伺服器上產生合併提交，都不是預期的部署結果
+  fail "本機（${BEFORE}）不是遠端（${AFTER}）的祖先，無法快轉更新，部署已中止"
+  echo "  ${DIM}伺服器上不該有遠端沒有的提交；請確認後再處理（例如 git log ${AFTER}..HEAD 看多出什麼）${RESET}"
+  exit 1
+fi
+
+if [ "$BEFORE" = "$AFTER" ]; then
+  echo
+  warn "已經是最新版本（${AFTER}），沒有新的變更"
+else
+  echo
+  step "部署前先檢查新增／修改的 PHP 語法"
+  # 在合併「之前」就檢查：直接用 git show 把遠端版本餵給 php -l，有錯就中止，
+  # 線上的檔案完全沒動。合併之後才發現，網站已經是壞的了。
+  if [ "$HAS_PHP" -eq 1 ]; then
+    BAD=()
+    COUNT=0
+    while IFS= read -r file; do
+      [ -n "$file" ] || continue
+      COUNT=$((COUNT + 1))
+      if ! git show "FETCH_HEAD:${file}" | php -l >/dev/null 2>&1; then
+        BAD+=("$file")
+      fi
+    done < <(git diff --name-only --diff-filter=AM HEAD FETCH_HEAD -- '*.php')
+    if [ ${#BAD[@]} -gt 0 ]; then
+      for file in "${BAD[@]}"; do
+        fail "$file（語法錯誤）"
+        git show "FETCH_HEAD:${file}" | php -l 2>&1 | sed -n '1p' | sed 's/^/      /' || true
+      done
+      echo
+      fail "${#BAD[@]} 個 PHP 檔有語法錯誤，部署已中止，線上檔案沒有變動"
+      exit 1
+    fi
+    ok "檢查了 ${COUNT} 個 PHP 檔，語法都正確"
+  else
+    warn "略過（沒有 php 指令）"
+  fi
+
+  echo
+  step "更新程式碼"
+  git merge --ff-only --quiet FETCH_HEAD
+  ok "已更新：${DIM}${BEFORE}${RESET} → ${GREEN}${BOLD}${AFTER}${RESET}"
+  echo "  ${DIM}此次更新的變更：${RESET}"
+  git log --oneline "${BEFORE}..${AFTER}" | sed 's/^/    /'
+fi
+
+# 選用：PHP 開了 opcache 且不檢查檔案時間戳（validate_timestamps=0）的伺服器，
+# 換了檔案要重載 PHP-FPM 才會生效；用環境變數帶進來，例如
+#   DEPLOY_RELOAD_CMD="systemctl reload php8.3-fpm" ./deploy.sh
+if [ -n "${DEPLOY_RELOAD_CMD:-}" ] && [ "$BEFORE" != "$AFTER" ]; then
+  echo
+  step "重載 PHP"
+  if bash -c "$DEPLOY_RELOAD_CMD"; then
+    ok "${DEPLOY_RELOAD_CMD}"
+  else
+    fail "重載失敗：${DEPLOY_RELOAD_CMD}（程式碼已更新，請手動重載 PHP-FPM）"
+    exit 1
+  fi
+fi
+
+echo
+step "部署完成"
+if [ "$HAS_PHP" -eq 1 ]; then
+  VERSION="$(php -r '$c = require "config.php"; echo $c["version"] ?? "?";' 2>/dev/null || echo '?')"
+  echo "  應用版本：${BOLD}v${VERSION}${RESET}"
+fi
+echo "  目前提交：${BOLD}$(git rev-parse --short HEAD)${RESET}"
+echo "  完成時間：${DIM}$(date '+%Y-%m-%d %H:%M:%S')${RESET}"
