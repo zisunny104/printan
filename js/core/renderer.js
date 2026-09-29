@@ -383,7 +383,7 @@ function layoutText(el, widthDots, ctx, fallbackFontFamily) {
             width += ctx.measureText(seg.text).width;
         }
         const lineHeightDots = Math.round(maxFontSize * (el.lineHeight || 1.3));
-        return { segments, width, lineHeightDots };
+        return { segments, width, lineHeightDots, maxFontSize };
     });
 
     const totalHeight = lines.reduce((sum, line) => sum + line.lineHeightDots, 0);
@@ -431,7 +431,7 @@ async function layoutFloatBlock(el, columnWidth, ctx, fontFamily, assetCtx) {
             width += ctx.measureText(seg.text).width;
         }
         const lineHeightDots = Math.round(maxFontSize * (el.lineHeight || 1.3));
-        lines.push({ segments, width, lineHeightDots, offsetX: box.x, availWidth: box.width, skipBefore: box.skip, glyphs });
+        lines.push({ segments, width, lineHeightDots, maxFontSize, offsetX: box.x, availWidth: box.width, skipBefore: box.skip, glyphs });
         y += box.skip + lineHeightDots;
     };
     for (const para of paragraphs) {
@@ -686,6 +686,9 @@ function paintText(ctx, item, x, y) {
         const lineX = x + boxX + (line.offsetX || 0);
         const lineW = line.availWidth ?? effWidth;
         if (el.inverse) paintFillRect(ctx, lineX, lineY, lineW, line.lineHeightDots, bgFill);
+        // 字貼在行框頂端畫（textBaseline "top"），行距多出的空間分一半給上方，字在行框內才垂直置中：
+        // 反白黑條上下黑邊才會接近，CJK 字形上緣也不會超出行框
+        const textY = lineY + Math.max(0, Math.round((line.lineHeightDots - (line.maxFontSize ?? el.fontSize)) / 2));
         let cursorX = lineX;
         if (el.align === "center" || el.align === "right") {
             cursorX = el.align === "center" ? lineX + (lineW - line.width) / 2 : lineX + (lineW - line.width);
@@ -704,10 +707,10 @@ function paintText(ctx, item, x, y) {
             // 文字顏色花紋（網點／漸層）現在反白區塊也會套用，只是黑白對調（invert）跟反白背景疊在一起
             // 才看得出對比，而不是像以前一樣反白就整個退回純色——這樣容器底色跟文字顏色才能真的疊加。
             if (inkFill.mode !== "solid" && seg.text) {
-                paintPatternText(ctx, seg.text, cursorX, lineY, segWidth, seg.style.fontSize, inkFill, segInverse);
+                paintPatternText(ctx, seg.text, cursorX, textY, segWidth, seg.style.fontSize, inkFill, segInverse);
             } else {
                 ctx.fillStyle = inkColor;
-                ctx.fillText(seg.text, cursorX, lineY);
+                ctx.fillText(seg.text, cursorX, textY);
             }
             if (seg.style.underline || seg.style.strikethrough) {
                 ctx.save();
@@ -715,12 +718,12 @@ function paintText(ctx, item, x, y) {
                 ctx.lineWidth = Math.max(1, Math.round(seg.style.fontSize / 16));
                 ctx.beginPath();
                 if (seg.style.underline) {
-                    const underlineY = lineY + seg.style.fontSize * 0.92;
+                    const underlineY = textY + seg.style.fontSize * 0.92;
                     ctx.moveTo(cursorX, underlineY);
                     ctx.lineTo(cursorX + segWidth, underlineY);
                 }
                 if (seg.style.strikethrough) {
-                    const strikeY = lineY + seg.style.fontSize * 0.55;
+                    const strikeY = textY + seg.style.fontSize * 0.55;
                     ctx.moveTo(cursorX, strikeY);
                     ctx.lineTo(cursorX + segWidth, strikeY);
                 }
