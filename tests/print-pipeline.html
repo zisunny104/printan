@@ -42,6 +42,7 @@ function eq(actual, expected, msg = "") {
     const a = JSON.stringify(actual), b = JSON.stringify(expected);
     if (a !== b) throw new Error(`${msg}\n預期 ${b}\n實際 ${a}`);
 }
+const concatBytes = (list) => { const o = new Uint8Array(list.reduce((n, b) => n + b.length, 0)); let p = 0; for (const b of list) { o.set(b, p); p += b.length; } return o; };
 const hex = (u8) => [...u8].map((b) => b.toString(16).padStart(2, "0")).join(" ");
 
 // 每個字串一列，"#" 黑、"." 白
@@ -126,6 +127,30 @@ test("批次多張：每張都是獨立完整工作（各自 ESC @ 開頭、各�
         eq(hex(j.subarray(-3)), "1d 56 01");
     }
     eq(jobs.map((j) => j[15]), [1, 2, 1]); // yL：各張自己的高度，沒有互相污染
+});
+test("太高的圖切成多個 GS v 0 帶狀：每帶 ≤512 列，raster 內容連續且完整", () => {
+    const rows = Array.from({ length: 1200 }, (_, i) => (i % 2 ? "#" : ".").repeat(576));
+    const canvas = canvasFrom(rows);
+    const out = buildEscposJob({ canvas }, { feedLines: 4, cutPaper: true });
+    const { raster } = canvasToEscposRaster(canvas);
+    const bands = [];
+    let pos = 9; // 跳過 ESC @／GS L／ESC a 0
+    while (out[pos] === 0x1d && out[pos + 1] === 0x76 && out[pos + 2] === 0x30) {
+        const bpl = out[pos + 4] | (out[pos + 5] << 8);
+        const h = out[pos + 6] | (out[pos + 7] << 8);
+        bands.push({ bpl, h, data: out.subarray(pos + 8, pos + 8 + bpl * h) });
+        pos += 8 + bpl * h;
+    }
+    eq(bands.map((b) => b.h), [512, 512, 176]);
+    assert(bands.every((b) => b.bpl === 72), "每帶寬度不變");
+    eq(hex(concatBytes(bands.map((b) => b.data)).subarray(0, 144)), hex(raster.subarray(0, 144)));
+    eq(concatBytes(bands.map((b) => b.data)).length, raster.length);
+    eq(hex(out.subarray(pos)), "1b 64 04 1d 56 01"); // 帶狀之後仍是走紙、切紙
+});
+test("帶狀邊界：剛好 512 列 1 帶、513 列 2 帶（每多一帶多 8 bytes 指令表頭）", () => {
+    const len = (n) => buildEscposJob({ canvas: canvasFrom(Array.from({ length: n }, () => ".".repeat(8))) }).length;
+    eq(len(512), 9 + 8 + 512);
+    eq(len(513), 9 + 8 + 8 + 513);
 });
 test("尺寸超出 0xffff 丟錯", () => {
     const c = document.createElement("canvas");
