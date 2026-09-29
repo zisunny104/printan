@@ -5,7 +5,7 @@ import {
     getPrinterProfile, matchPrinterProfile, sanitizeMarginCalibration, sanitizePrintableDotsOverrides,
 } from "../core/printer-profiles.js";
 import { PRINT_PREFS_KEY, els, serialAdapter, state, usbAdapter } from "./context.js";
-import { SystemDialogAdapter, describePrinterError, interpretRealtimeStatus, isSelectionCancelled, rotateCanvas180 } from "../core/printer-adapter.js";
+import { SystemDialogAdapter, checkPrinterReady, describePrinterError, interpretRealtimeStatus, isSelectionCancelled, rotateCanvas180 } from "../core/printer-adapter.js";
 import { getBaseProfile, getEffectiveProfile, schedulePreview } from "./editor.js";
 import { confirmFontFallbacks, describeFontFallbackIssues } from "./batch-export.js";
 import { safeGetItem, safeSetItem } from "../core/storage.js";
@@ -57,6 +57,17 @@ async function printPagesInOrder(adapter, results) {
     return { ok: true };
 }
 
+const NOT_READY_MESSAGES = {
+    "paper-out": "印表機缺紙，請換上新的紙捲後再列印一次",
+    offline: "印表機目前離線，請檢查上蓋有沒有蓋好、有沒有缺紙或錯誤燈號，排除後再列印一次",
+};
+
+// 列印前確認印表機可以列印（見 printer-adapter.js checkPrinterReady）；回傳給使用者看的說明，可以列印就回傳 null。
+async function describeNotReady(adapter) {
+    const check = await checkPrinterReady(adapter);
+    return check.ready ? null : NOT_READY_MESSAGES[check.reason];
+}
+
 const PRINTER_BUSY_MESSAGE = "印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次";
 const PRINT_NOTICE_KEY = "print-failure-notice";
 
@@ -77,6 +88,11 @@ export async function printCurrent() {
 
         if (state.usbConnected || state.serialConnected) {
             const adapter = state.usbConnected ? usbAdapter : serialAdapter;
+            const notReady = await describeNotReady(adapter);
+            if (notReady) {
+                showSnackbar(notReady, { error: true });
+                return;
+            }
             const outcome = await printPagesInOrder(adapter, results);
             if (outcome.ok) {
                 showSnackbar(results.length > 1 ? `列印資料已送出（${results.length} 頁）` : "列印資料已送出");
@@ -129,6 +145,8 @@ export async function printSilently() {
         const results = applyRotationPref(await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() }));
         const issues = describeFontFallbackIssues(results);
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
+        const notReady = await describeNotReady(adapter);
+        if (notReady) return { ok: false, reason: "printer-not-ready", error: new Error(notReady) };
         const outcome = await printPagesInOrder(adapter, results);
         if (!outcome.ok) {
             releaseFailedConnection();
@@ -169,6 +187,8 @@ export async function printComposedSilently(composed, project) {
         const result = state.printPrefs.rotate180 ? { ...composed, canvas: rotateCanvas180(composed.canvas) } : composed;
         const issues = describeFontFallbackIssues([result]);
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
+        const notReady = await describeNotReady(adapter);
+        if (notReady) return { ok: false, reason: "printer-not-ready", error: new Error(notReady) };
         try {
             await adapter.print(result, getEscposPrintOptions(true, project));
         } catch (err) {
@@ -617,6 +637,11 @@ async function printTestSheet(label, build, button) {
         if (state.printPrefs.rotate180) renderResult.canvas = rotateCanvas180(renderResult.canvas);
         if (!confirmFontFallbacks(renderResult)) return;
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
+        const notReady = await describeNotReady(adapter);
+        if (notReady) {
+            showSnackbar(notReady, { error: true });
+            return;
+        }
         await adapter.print(renderResult, getEscposPrintOptions());
         showSnackbar(`${label}：資料已送出`);
     } catch (err) {

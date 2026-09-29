@@ -250,6 +250,38 @@ export function interpretRealtimeStatus(n, byte) {
     return {};
 }
 
+const READY_CHECK_TIMEOUT_MS = 2500;
+
+/**
+ * 列印前先問印表機一次狀態（DLE EOT 1／4，見 interpretRealtimeStatus）：離線或缺紙時資料送出去也印不出來，
+ * 卻會被印表機收進緩衝區、看起來像送出成功，所以先擋下來讓使用者處理。
+ * 「查不到」一律當作可以列印，不擋：印表機不支援即時狀態、沒有讀取端點、沒回應、逾時、讀取例外都算。
+ * 第一次查不到就記在 adapter.statusCheckUnavailable（斷線時清掉），之後這條連線不再查，
+ * 不會每次列印都多等一輪逾時。
+ * 只讀取、不動印表機狀態；呼叫端要自己持有 printerBusy，避免跟其他操作交錯讀寫。
+ * @returns {Promise<{ ready: true } | { ready: false, reason: "offline" | "paper-out" }>}
+ */
+export async function checkPrinterReady(adapter, timeoutMs = READY_CHECK_TIMEOUT_MS) {
+    if (adapter.statusCheckUnavailable) return { ready: true };
+    let timer;
+    const timedOut = new Promise((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); });
+    const query = (async () => {
+        const online = await adapter.queryStatus(1);
+        if (online.length === 0) return null;
+        const paper = await adapter.queryStatus(4);
+        return { online: interpretRealtimeStatus(1, online[0]).online, paper: paper.length ? interpretRealtimeStatus(4, paper[0]).paper : "ok" };
+    })().catch(() => null);
+    const status = await Promise.race([query, timedOut]);
+    clearTimeout(timer);
+    if (!status) {
+        adapter.statusCheckUnavailable = true;
+        return { ready: true };
+    }
+    if (status.paper === "out") return { ready: false, reason: "paper-out" };
+    if (!status.online) return { ready: false, reason: "offline" };
+    return { ready: true };
+}
+
 /**
  * 解析 GS I n（傳送印表機 ID，1D 49 n）的字串型回應：n=65 韌體版本、66 廠牌、67 型號。
  * 回應格式是標頭 0x5F、內容、結尾 NUL（0x00）；印表機沒有這項資料時只回 5F 00。
@@ -447,6 +479,7 @@ export class WebUsbEscposAdapter {
     }
 
     async disconnect() {
+        this.statusCheckUnavailable = false;
         if (!this.device) return;
         try {
             await this.device.close();
@@ -619,6 +652,7 @@ export class WebSerialEscposAdapter {
     }
 
     async disconnect() {
+        this.statusCheckUnavailable = false;
         if (!this.port) return;
         const { port, writer } = this;
         // 先讓 adapter 回到「未連線」：後面不論哪一步失敗，都不會留下半殘的 port／writer 狀態。
