@@ -11,6 +11,7 @@ import { addElement, insertElement, wireAddMenu } from "./element-actions.js";
 import { wireOutlineKeyboard } from "./outline.js";
 import { renderEditOverlay } from "./canvas-overlay.js";
 import { getEffectiveProfile, schedulePreview } from "./editor.js";
+import { showSnackbar } from "./ui-helpers.js";
 
 // 通用下拉選單開關：開／關／切換，碰撞感知（下方空間不夠時翻到上面顯示），點擊選單外
 // 或按 Esc 都會關閉。{portal:true} 時選單會被搬到 document.body、改用 position:fixed
@@ -199,11 +200,11 @@ async function handleImageFileSelected(file) {
     try {
         converted = await convertHeicIfNeeded(file);
     } catch (err) {
-        alert(`HEIC 轉換失敗：${err.message}`);
+        showSnackbar(`HEIC 轉換失敗：${err.message}`, { error: true });
         return null;
     }
     if (!SAFE_IMAGE_TYPES.has(converted.type)) {
-        alert("只支援 PNG、JPEG、GIF、WebP 圖片");
+        showSnackbar("只支援 PNG、JPEG、GIF、WebP 圖片", { error: true });
         return null;
     }
     const dataUrl = await fileToDataUrl(await downscaleImageFile(converted));

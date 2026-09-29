@@ -9,7 +9,7 @@ import { SystemDialogAdapter, describePrinterError, interpretRealtimeStatus, isS
 import { getBaseProfile, getEffectiveProfile, schedulePreview } from "./editor.js";
 import { confirmFontFallbacks, describeFontFallbackIssues } from "./batch-export.js";
 import { safeGetItem, safeSetItem } from "../core/storage.js";
-import { createInfoIcon, hideStageNotice, showStageNotice } from "./ui-helpers.js";
+import { createInfoIcon, hideStageNotice, showSnackbar, showStageNotice } from "./ui-helpers.js";
 import { renderCalibrationSheet, renderTestPrint } from "./test-print-project.js";
 import { renderPages } from "../core/renderer.js";
 
@@ -57,11 +57,12 @@ async function printPagesInOrder(adapter, results) {
     return { ok: true };
 }
 
+const PRINTER_BUSY_MESSAGE = "印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次";
 const PRINT_NOTICE_KEY = "print-failure-notice";
 
 export async function printCurrent() {
     if (state.printerBusy) {
-        alert("印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次");
+        showSnackbar(PRINTER_BUSY_MESSAGE);
         return;
     }
     state.printerBusy = true;
@@ -224,7 +225,7 @@ export async function connectPrinter() {
             state.usbConnected = true;
         }
     } catch (err) {
-        if (!isSelectionCancelled(err)) alert(`連線失敗：${describePrinterError(err)}`);
+        if (!isSelectionCancelled(err)) showSnackbar(`連線失敗：${describePrinterError(err)}`, { error: true });
     }
     updatePrinterConnectionUi();
     await identifyConnectedPrinter();
@@ -575,11 +576,11 @@ async function identifyConnectedPrinter({ query = true } = {}) {
 // 測試列印／校正紙：canvas 由 test-print-project.js 產生，跟一般列印共用 adapter.print() 與 printerBusy 序列化
 async function printTestSheet(label, build) {
     if (!state.usbConnected && !state.serialConnected) {
-        alert(`請先連線 USB 或序列埠印表機才能${label}`);
+        showSnackbar(`請先連線 USB 或序列埠印表機才能${label}`);
         return;
     }
     if (state.printerBusy) {
-        alert("印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次");
+        showSnackbar(PRINTER_BUSY_MESSAGE);
         return;
     }
     state.printerBusy = true;
@@ -614,7 +615,7 @@ async function printTestSheet(label, build) {
         outcome = `${label}：資料已送出`;
     } catch (err) {
         outcome = `${label}失敗：${describePrinterError(err)}`;
-        alert(outcome);
+        showSnackbar(outcome, { error: true });
     } finally {
         state.printerBusy = false;
         for (const button of sending) button.disabled = !(state.usbConnected || state.serialConnected);
@@ -627,11 +628,11 @@ async function printTestSheet(label, build) {
 async function queryPrinterStatus() {
     const adapter = state.usbConnected ? usbAdapter : state.serialConnected ? serialAdapter : null;
     if (!adapter) {
-        alert("請先連線 USB 或序列埠印表機才能查詢狀態");
+        showSnackbar("請先連線 USB 或序列埠印表機才能查詢狀態");
         return;
     }
     if (state.printerBusy) {
-        alert("印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次");
+        showSnackbar(PRINTER_BUSY_MESSAGE);
         return;
     }
     state.printerBusy = true;
@@ -699,7 +700,7 @@ export function bindPrinterSettings() {
 
     els["btn-printer-forget"].addEventListener("click", async () => {
         if (state.printerBusy) {
-            alert("印表機正在處理上一個操作（列印／測試列印／查詢狀態），請稍候再試一次");
+            showSnackbar(PRINTER_BUSY_MESSAGE);
             return;
         }
         if (!confirm("忘記後，瀏覽器不再記得已授權的印表機，目前的連線也會中斷；下次要按「連線印表機」重新選擇裝置。確定要忘記嗎？")) return;

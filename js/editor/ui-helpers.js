@@ -47,6 +47,45 @@ export function showStageNotice(key, message, { title = "", dismissible = false 
     notice.title = title;
 }
 
+/**
+ * 短暫通知（Tocas ts-snackbar）：操作結果、錯誤這類「看過就好」的即時訊息，取代會擋住畫面的 alert()。
+ * 同時只顯示少數幾則、由下往上堆疊，時間到自動消失；錯誤訊息停留較久並可手動關閉。
+ * 需要一直留在畫面上的狀態（字體沒載入、圖片載入失敗）仍用 showStageNotice。
+ * 容器用 popover="manual" 放進 top layer：列印設定等 <dialog> 開著時通知才不會被蓋在下面。
+ * @param {string} message 純文字（用 textContent 放入，不解析 HTML）
+ * @param {{ error?: boolean, duration?: number }} options duration 毫秒，0＝不自動消失
+ */
+const SNACKBAR_MAX = 3;
+export function showSnackbar(message, { error = false, duration = error ? 8000 : 4000 } = {}) {
+    let region = document.getElementById("snackbar-region");
+    if (!region) {
+        region = document.createElement("div");
+        region.id = "snackbar-region";
+        region.setAttribute("popover", "manual");
+        document.body.appendChild(region);
+    }
+    if (region.showPopover && !region.matches(":popover-open")) region.showPopover();
+
+    const snackbar = document.createElement("div");
+    snackbar.className = "ts-snackbar";
+    snackbar.setAttribute("role", error ? "alert" : "status");
+    snackbar.appendChild(Object.assign(document.createElement("div"), { className: "content", textContent: message }));
+    const remove = () => {
+        snackbar.remove();
+        if (!region.children.length && region.hidePopover && region.matches(":popover-open")) region.hidePopover();
+    };
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "close";
+    close.setAttribute("aria-label", "關閉通知");
+    close.addEventListener("click", remove);
+    snackbar.appendChild(close);
+    region.appendChild(snackbar);
+    while (region.children.length > SNACKBAR_MAX) region.firstElementChild.remove();
+    if (duration > 0) setTimeout(remove, duration);
+    return remove;
+}
+
 export function hideStageNotice(key) {
     if (els[key]) els[key].hidden = true;
 }

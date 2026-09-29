@@ -684,6 +684,24 @@ test("文字在行框內垂直置中：CJK 字形不超出行框頂端，反白�
     }
 });
 
+test("showSnackbar：Tocas ts-snackbar 結構、錯誤用 alert 角色、最多同時 3 則、時間到自動移除", async () => {
+    const { showSnackbar } = await import("../js/editor/ui-helpers.js");
+    const region = () => document.getElementById("snackbar-region");
+    showSnackbar("<b>純文字</b>", { duration: 30 });
+    const first = region().querySelector(".ts-snackbar");
+    assert(first.classList.contains("ts-snackbar") && first.querySelector(".content").textContent === "<b>純文字</b>" && !first.querySelector("b"), "訊息要以純文字放入");
+    assert(first.getAttribute("role") === "status" && first.querySelector("button.close"));
+    showSnackbar("錯誤", { error: true });
+    assert(region().lastElementChild.getAttribute("role") === "alert");
+    for (let i = 0; i < 5; i++) showSnackbar(`n${i}`, { duration: 0 });
+    eq(region().children.length, 3);
+    await new Promise((r) => setTimeout(r, 60));
+    assert(!first.isConnected, "到時間應自動移除");
+    region().querySelector("button.close").click();
+    eq(region().children.length, 2);
+    region().replaceChildren();
+});
+
 const list = document.getElementById("list");
 let failed = 0;
 for (const c of cases) {

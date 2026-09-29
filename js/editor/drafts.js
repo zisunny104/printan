@@ -10,6 +10,7 @@ import { renderMarginRows, renderPrintableDotsRows, updateFeedLinesHint } from "
 import { renderPageList } from "./pages.js";
 import { runAutosave } from "./save-status.js";
 import { onModelChange } from "./editor.js";
+import { showSnackbar } from "./ui-helpers.js";
 import { populatePaperWidthTabs, renderProjectName } from "./operations.js";
 
 export async function restoreOrCreateProject() {
@@ -105,7 +106,7 @@ export function populateRecentDrafts() {
             }
             const result = loadProject(draft);
             if (!result.ok) {
-                alert(`開啟失敗：${result.error}`);
+                showSnackbar(`開啟失敗：${result.error}`, { error: true });
                 return;
             }
             safeSetItem(LAST_DRAFT_KEY, r.id);
