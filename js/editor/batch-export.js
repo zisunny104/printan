@@ -4,6 +4,7 @@ import { exportToPdf } from "../core/pdf-export.js";
 import { safeGetItem, safeSetItem } from "../core/storage.js";
 import { BATCH_PANEL_EXPANDED_KEY, els, state } from "./context.js";
 import { getEffectiveProfile, schedulePreview } from "./editor.js";
+import { showSnackbar } from "./ui-helpers.js";
 
 // ---- 匯出 / 列印 ----
 
@@ -44,7 +45,7 @@ function parseBatchData() {
         if (!Array.isArray(dataArray) || dataArray.length === 0) throw new Error("請提供至少一筆資料（JSON 陣列或 CSV）");
         return dataArray;
     } catch (err) {
-        alert(`批次資料格式錯誤：${err.message}`);
+        showSnackbar(`批次資料格式錯誤：${err.message}`, { error: true });
         return null;
     }
 }

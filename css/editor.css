@@ -2406,3 +2406,32 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
 .kiosk-status-detail:empty {
     display: none;
 }
+
+/* 短暫通知容器（js/editor/ui-helpers.js showSnackbar）：畫面下緣置中、由下往上堆疊。popover 預設的
+   置中／邊框／背景要全部清掉；通知本身的外觀完全交給 Tocas 的 ts-snackbar。 */
+#snackbar-region {
+    position: fixed;
+    inset: auto 0 1rem;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0 1rem;
+    border: 0;
+    background: none;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .5rem;
+    pointer-events: none;
+}
+
+#snackbar-region:not(:popover-open):empty {
+    display: none;
+}
+
+#snackbar-region .ts-snackbar {
+    pointer-events: auto;
+    max-width: min(100%, 32rem);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .25);
+}

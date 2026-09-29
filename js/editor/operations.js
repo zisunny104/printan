@@ -8,6 +8,7 @@ import { els, state } from "./context.js";
 import { exportBatchPdf, exportSinglePdf } from "./batch-export.js";
 import { printCurrent } from "./printer-settings.js";
 import { onModelChange } from "./editor.js";
+import { showSnackbar } from "./ui-helpers.js";
 import { loadProjectIntoEditor, startNewProject } from "./drafts.js";
 
 export function populatePaperWidthTabs() {
@@ -41,7 +42,7 @@ export function bindOperations() {
     els["export-embed-fonts-row"].addEventListener("click", (e) => e.stopPropagation()); // 勾選時不收起匯出選單
     els["btn-save-ptan"].addEventListener("click", async () => {
         const failed = await downloadPtan(state.project, state.project.meta.name || "printan", { embedFonts: els["export-embed-fonts"].checked });
-        if (failed.length) alert(`已匯出，但這些字體沒能內嵌（可能離線）：${failed.join("、")}`);
+        if (failed.length) showSnackbar(`已匯出，但這些字體沒能內嵌（可能離線）：${failed.join("、")}`, { error: true });
     });
 
     els["btn-export-pdf"].addEventListener("click", exportSinglePdf);
@@ -56,7 +57,7 @@ export function bindPtanFileInput() {
         if (!file) return;
         const result = await readPtanFile(file);
         if (!result.ok) {
-            alert(`開啟失敗：${result.error}`);
+            showSnackbar(`開啟失敗：${result.error}`, { error: true });
             return;
         }
         loadProjectIntoEditor(result.project);
