@@ -574,7 +574,7 @@ async function identifyConnectedPrinter({ query = true } = {}) {
 }
 
 // 測試列印／校正紙：canvas 由 test-print-project.js 產生，跟一般列印共用 adapter.print() 與 printerBusy 序列化
-async function printTestSheet(label, build) {
+async function printTestSheet(label, build, button) {
     if (!state.usbConnected && !state.serialConnected) {
         showSnackbar(`請先連線 USB 或序列埠印表機才能${label}`);
         return;
@@ -585,10 +585,10 @@ async function printTestSheet(label, build) {
     }
     state.printerBusy = true;
     // 資料送給印表機要花時間（印表機缺紙、上蓋打開時會一直等到逾時），按下去沒有任何變化會讓人以為沒反應、
-    // 又按一次就撞到「忙碌中」：傳送期間按鈕鎖起來，狀態列寫明在做什麼
+    // 又按一次就撞到「忙碌中」：傳送期間按下的那顆按鈕轉圈圈（Tocas is-loading）、兩顆都鎖住
     const sending = [els["btn-printer-test-print"], els["btn-printer-margin-sheet"]];
-    for (const button of sending) button.disabled = true;
-    els["printer-status-result"].textContent = `${label}：傳送資料中…（印表機沒有回應時最多等 ${Math.round(usbAdapter.transferTimeoutMs / 1000)} 秒）`;
+    for (const b of sending) b.disabled = true;
+    button.classList.add("is-loading");
     let outcome = "";
     try {
         const widthId = state.project.paper.widthId;
@@ -606,20 +606,16 @@ async function printTestSheet(label, build) {
         const renderResult = await build(ctx);
         // 測試列印／校正紙正是使用者要確認倒裝旋轉有沒有裝對的地方，跟正式列印用同一份偏好、同一個轉換函式。
         if (state.printPrefs.rotate180) renderResult.canvas = rotateCanvas180(renderResult.canvas);
-        if (!confirmFontFallbacks(renderResult)) {
-            outcome = `${label}：已取消`;
-            return;
-        }
+        if (!confirmFontFallbacks(renderResult)) return;
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
         await adapter.print(renderResult, getEscposPrintOptions());
-        outcome = `${label}：資料已送出`;
+        showSnackbar(`${label}：資料已送出`);
     } catch (err) {
-        outcome = `${label}失敗：${describePrinterError(err)}`;
-        showSnackbar(outcome, { error: true });
+        showSnackbar(`${label}失敗：${describePrinterError(err)}`, { error: true });
     } finally {
         state.printerBusy = false;
-        for (const button of sending) button.disabled = !(state.usbConnected || state.serialConnected);
-        els["printer-status-result"].textContent = outcome;
+        button.classList.remove("is-loading");
+        for (const b of sending) b.disabled = !(state.usbConnected || state.serialConnected);
     }
 }
 
@@ -636,7 +632,9 @@ async function queryPrinterStatus() {
         return;
     }
     state.printerBusy = true;
-    els["printer-status-result"].textContent = "查詢中…";
+    els["printer-status-result"].textContent = "";
+    els["btn-printer-query-status"].disabled = true;
+    els["btn-printer-query-status"].classList.add("is-loading");
     try {
         const statusByte = await adapter.queryStatus(1);
         const paperByte = await adapter.queryStatus(4);
@@ -656,6 +654,8 @@ async function queryPrinterStatus() {
         els["printer-status-result"].textContent = `查詢失敗：${describePrinterError(err)}`;
     } finally {
         state.printerBusy = false;
+        els["btn-printer-query-status"].classList.remove("is-loading");
+        els["btn-printer-query-status"].disabled = !(state.usbConnected || state.serialConnected);
     }
 }
 
@@ -749,11 +749,11 @@ export function bindPrinterSettings() {
     });
 
     els["btn-printer-test-print"].addEventListener("click", () => {
-        printTestSheet("測試列印", renderTestPrint);
+        printTestSheet("測試列印", renderTestPrint, els["btn-printer-test-print"]);
     });
 
     els["btn-printer-margin-sheet"].addEventListener("click", () => {
-        printTestSheet("列印校正紙", renderCalibrationSheet);
+        printTestSheet("列印校正紙", renderCalibrationSheet, els["btn-printer-margin-sheet"]);
     });
 
     els["btn-printer-query-status"].addEventListener("click", () => {
