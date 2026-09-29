@@ -49,6 +49,7 @@ import { getEffectiveProfile } from "./editor.js";
 import { els, state } from "./context.js";
 import { attemptSilentPrinterReconnect, connectPrinter, printComposedSilently, printSilently } from "./printer-settings.js";
 import { mountStageElement, showStageNotice } from "./ui-helpers.js";
+import { initKioskStatusBar, markPrinterChecked, setKioskTemplateNames, updateKioskStatus } from "./kiosk-status-bar.js";
 
 const KIOSK_CLASS = "is-kiosk";
 const KIOSK_PREVIEW_CLASS = "kiosk-preview";
@@ -86,6 +87,7 @@ let startupPrinterCheck = Promise.resolve();
 // 沒有已授權裝置就直接顯示配對按鈕（沒有待印工作，見 showKioskConnectButton 的 null 分支）。
 async function checkPrinterOnStartup() {
     await attemptSilentPrinterReconnect();
+    markPrinterChecked();
     if (state.usbConnected || state.serialConnected) {
         reportJobStatus("printer_connected");
         return;
@@ -124,6 +126,7 @@ function showKioskConnectButton(printFn) {
                 reportJobStatus("printer_connected");
                 return;
             }
+            updateKioskStatus({ job: "printing", jobId: currentJobId });
             const outcome = await printRetryingBusy(pendingConnectPrint);
             reportPrintOutcome(outcome);
             if (outcome.ok && outcome.issues.length) showKioskNotice(outcome.issues.join("；"));
@@ -171,8 +174,16 @@ function resolveParentOrigin(params) {
 // 回報工單狀態給父視窗；沒有 reportTargetOrigin（沒帶 parentOrigin 也讀不到 referrer）或根本沒被
 // iframe 嵌入就整個跳過，不會用 "*" 亂猜目標，避免姓名／留言等工單內容送到不明頁面。
 function reportJobStatus(status, extra = {}) {
+    showStatusOnBar(status, extra);
     if (window.parent === window || !reportTargetOrigin) return;
     window.parent.postMessage({ source: "printan-kiosk", jobId: currentJobId, status, ...extra }, reportTargetOrigin);
+}
+
+// 每一次回報也同步顯示在畫面上方的狀態列（不論有沒有父視窗）；printer_connected／needs_connect 只影響
+// 印表機欄位，由狀態列直接讀連線旗標，這裡不用另外傳。
+const BAR_JOB_BY_STATUS = { ready: "idle", printed: "printed", print_failed: "failed", load_failed: "load_failed" };
+function showStatusOnBar(status, extra) {
+    updateKioskStatus({ job: BAR_JOB_BY_STATUS[status], message: extra.message || "", jobId: currentJobId });
 }
 
 // printSilently() 的回傳結果轉成對外回報用的狀態；describePrintFailure 沿用既有的中文訊息組法，
@@ -334,6 +345,7 @@ export function applyKioskClassFromQuery() {
 export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview) {
     const params = new URLSearchParams(location.search);
     applyKioskClassFromQuery();
+    if (document.documentElement.classList.contains(KIOSK_CLASS)) initKioskStatusBar();
 
     const tplParam = params.get("tpl");
     if (!tplParam) return false;
@@ -349,6 +361,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     const isMulti = tplUrls.length > 1;
     const gapDots = Math.max(0, Number(params.get("gapDots")) || 0);
 
+    updateKioskStatus({ job: "loading", jobId: currentJobId });
     const projects = [];
     for (const url of tplUrls) {
         const project = await loadTemplateFromUrl(url);
@@ -360,6 +373,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
         }
         projects.push(project);
     }
+    setKioskTemplateNames(projects.map((project) => project.meta?.name));
 
     if (!isMulti) {
         loadProjectIntoEditor(projects[0]);
@@ -374,6 +388,8 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     if (!reportTargetOrigin) {
         // 判斷不出安全的父視窗 origin：既沒有 parentOrigin 也讀不到 referrer，沒有可信任的對象
         // 可以送資料進來，這個 kiosk session 就只顯示範本本身，不會有任何 postMessage 動作。
+        // 狀態列仍要如實顯示印表機（重連是同一次單一進行中的呼叫，不會重複開裝置）。
+        attemptSilentPrinterReconnect().catch(() => {}).finally(markPrinterChecked);
         return true;
     }
 
@@ -392,6 +408,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
             // 不該掛上這筆工單的 jobId。
             await startupPrinterCheck;
             if (jobId) currentJobId = jobId;
+            updateKioskStatus({ job: "printing", jobId: currentJobId });
             if (isMulti) {
                 await runMultiAutoprintFlow(projects, data, gapDots);
                 return;
