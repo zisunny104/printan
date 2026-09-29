@@ -64,3 +64,26 @@ export function fileToDataUrl(file) {
         reader.readAsDataURL(file);
     });
 }
+
+/** 內嵌素材寬度上限：遠超過印表機可列印點數（最寬約 832 dots）的照片沒有意義，縮小才不會讓 .ptan 與草稿膨脹。 */
+export const MAX_ASSET_WIDTH_PX = 1600;
+
+/** 圖片寬度超過 MAX_ASSET_WIDTH_PX 時等比縮小並重新編碼（PNG/GIF→PNG、JPEG→JPEG、WebP→WebP），否則原樣傳回。 */
+export async function downscaleImageFile(file) {
+    let bitmap;
+    try { bitmap = await createImageBitmap(file); } catch { return file; }
+    try {
+        if (bitmap.width <= MAX_ASSET_WIDTH_PX) return file;
+        const canvas = document.createElement("canvas");
+        canvas.width = MAX_ASSET_WIDTH_PX;
+        canvas.height = Math.max(1, Math.round((bitmap.height * MAX_ASSET_WIDTH_PX) / bitmap.width));
+        const ctx = canvas.getContext("2d");
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        const type = file.type === "image/jpeg" || file.type === "image/webp" ? file.type : "image/png";
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, type, 0.92));
+        return blob && blob.size < file.size ? new File([blob], file.name, { type }) : file;
+    } finally {
+        bitmap.close();
+    }
+}

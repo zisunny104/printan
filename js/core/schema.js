@@ -282,6 +282,22 @@ function normalizeRow(el) {
     return normalized;
 }
 
+/** 存檔時丟掉沒有任何圖片元素引用的素材（換圖、刪元素後留下的）；
+ *  只要有圖片的 assetId 是 {{變數}} 佔位（實際素材由資料決定），就無法判斷誰沒用到，全部保留。 */
+function pruneUnusedAssets(assets, pages) {
+    if (!Array.isArray(assets) || assets.length === 0) return assets;
+    const used = new Set();
+    let dynamic = false;
+    for (const page of pages) {
+        walkElements(page.elements || [], (el) => {
+            if ((el.type !== "image" && el.type !== "float-block") || typeof el.assetId !== "string") return;
+            if (el.assetId.includes("{{")) dynamic = true;
+            used.add(el.assetId);
+        });
+    }
+    return dynamic ? assets : assets.filter((a) => used.has(a.id));
+}
+
 export function serializeProject(project) {
     const pages = (project.template && Array.isArray(project.template.pages)) ? project.template.pages : [];
     // 沒用到群組、圖文段落、直書就仍寫 v1，舊版 Printan 也能開；有群組才寫 v2（內嵌字體同理）
@@ -302,8 +318,8 @@ export function serializeProject(project) {
             template.pageId = pages[0].id; // 舊版 Printan 不認得這兩個欄位、會直接忽略，見 migrateTemplate
             template.pageName = pages[0].name;
         }
-        const legacy = { ...project, template, version: usesGroup ? 2 : 1, format: PTAN_FORMAT };
+        const legacy = { ...project, assets: pruneUnusedAssets(project.assets, pages), template, version: usesGroup ? 2 : 1, format: PTAN_FORMAT };
         return JSON.stringify(legacy, dropZeroGap, 2);
     }
-    return JSON.stringify({ ...project, version: PTAN_VERSION, format: PTAN_FORMAT }, dropZeroGap, 2);
+    return JSON.stringify({ ...project, assets: pruneUnusedAssets(project.assets, pages), version: PTAN_VERSION, format: PTAN_FORMAT }, dropZeroGap, 2);
 }

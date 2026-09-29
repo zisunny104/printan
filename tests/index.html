@@ -651,6 +651,31 @@ test("缺漏或非數字的版面欄位用預設值排版，不會讓 canvas 高
     assert(Number.isFinite(r.heightDots) && r.heightDots > 16 + 12, "height=" + r.heightDots);
 });
 
+test("存檔丟掉沒被引用的素材，有 {{變數}} 佔位的圖片則全部保留", async () => {
+    const { serializeProject, createEmptyProject } = await import("../js/core/schema.js");
+    const { createImageElement } = await import("../js/core/document-model.js");
+    const png = "data:image/png;base64,AAAA";
+    const mk = (assetId) => {
+        const p = createEmptyProject({ name: "t", printerProfileId: "epson-tm-t82ii", paperWidthId: "80mm" });
+        p.assets = [{ id: "used", type: "image/png", dataUrl: png }, { id: "orphan", type: "image/png", dataUrl: png }];
+        p.template.pages[0].elements = [createImageElement({ assetId })];
+        return JSON.parse(serializeProject(p)).assets.map((a) => a.id);
+    };
+    eq(mk("used"), ["used"]);
+    eq(mk("{{logo}}"), ["used", "orphan"]);
+});
+
+test("downscaleImageFile：超過寬度上限等比縮小，小圖原樣傳回", async () => {
+    const { downscaleImageFile, MAX_ASSET_WIDTH_PX } = await import("../js/core/ptan-file.js");
+    const blobOf = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").fillRect(0, 0, w, h); return new Promise((r) => c.toBlob((b) => r(new File([b], "a.png", { type: "image/png" })), "image/png")); };
+    const small = await blobOf(200, 100);
+    assert((await downscaleImageFile(small)) === small, "小圖應原樣傳回");
+    const big = await blobOf(MAX_ASSET_WIDTH_PX * 2, 100);
+    const out = await downscaleImageFile(big);
+    const bmp = await createImageBitmap(out);
+    eq([bmp.width, bmp.height], [MAX_ASSET_WIDTH_PX, 50]);
+});
+
 const list = document.getElementById("list");
 let failed = 0;
 for (const c of cases) {
