@@ -583,6 +583,12 @@ async function printTestSheet(label, build) {
         return;
     }
     state.printerBusy = true;
+    // 資料送給印表機要花時間（印表機缺紙、上蓋打開時會一直等到逾時），按下去沒有任何變化會讓人以為沒反應、
+    // 又按一次就撞到「忙碌中」：傳送期間按鈕鎖起來，狀態列寫明在做什麼
+    const sending = [els["btn-printer-test-print"], els["btn-printer-margin-sheet"]];
+    for (const button of sending) button.disabled = true;
+    els["printer-status-result"].textContent = `${label}：傳送資料中…（印表機沒有回應時最多等 ${Math.round(usbAdapter.transferTimeoutMs / 1000)} 秒）`;
+    let outcome = "";
     try {
         const widthId = state.project.paper.widthId;
         const profile = getEffectiveProfile();
@@ -599,13 +605,20 @@ async function printTestSheet(label, build) {
         const renderResult = await build(ctx);
         // 測試列印／校正紙正是使用者要確認倒裝旋轉有沒有裝對的地方，跟正式列印用同一份偏好、同一個轉換函式。
         if (state.printPrefs.rotate180) renderResult.canvas = rotateCanvas180(renderResult.canvas);
-        if (!confirmFontFallbacks(renderResult)) return;
+        if (!confirmFontFallbacks(renderResult)) {
+            outcome = `${label}：已取消`;
+            return;
+        }
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
         await adapter.print(renderResult, getEscposPrintOptions());
+        outcome = `${label}：資料已送出`;
     } catch (err) {
-        alert(`${label}失敗：${describePrinterError(err)}`);
+        outcome = `${label}失敗：${describePrinterError(err)}`;
+        alert(outcome);
     } finally {
         state.printerBusy = false;
+        for (const button of sending) button.disabled = !(state.usbConnected || state.serialConnected);
+        els["printer-status-result"].textContent = outcome;
     }
 }
 
