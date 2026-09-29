@@ -101,7 +101,7 @@ cd printan
 - `ptan-malformed.html`：壞檔容錯（標 KNOWN 的是已知 core 問題）
 - `element-tree.html`：多欄分割／合併與元素樹操作
 - `markdown.html`：說明書 Markdown 轉換與安全
-- `print-pipeline.html`：ESC/POS 位元組、置中補白、邊距校正、列印錯誤路徑
+- `print-pipeline.html`：ESC/POS 位元組、置中補白、邊距校正、列印錯誤路徑（條碼、QR 來自 CDN，需要能連網）
 - `border-radius-render.html`：容器外框／圓角實際渲染結果（取樣像素確認圖片／條碼真的被裁圓角，row／group 外框畫在正確位置）
 
 ## 使用的開源函式庫
