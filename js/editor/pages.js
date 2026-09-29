@@ -1,5 +1,5 @@
-// 多頁（frame）管理：新增／刪除／改名／排序／合併／分割。頁面本身顯示在「版面結構」樹的最上層
-// （比照 Figma 圖層面板的 frame），列的畫法在 outline.js，這裡只管資料操作。
+// 多頁（frame）管理：新增／刪除／改名／排序／合併／分割。頁面本身顯示在「版面結構」樹的最上層，
+// 列的畫法在 outline.js，這裡只管資料操作。
 // 「目前編輯中的頁面」是唯一的間接層（見 context.js currentPage／currentElements）：
 // 這個檔案只負責改動 state.project.template.pages 這個陣列本身跟 state.currentPageIndex，
 // 版面元素的 CRUD 邏輯完全不需要知道專案有幾頁。
@@ -42,7 +42,7 @@ export function addPage() {
     state.insertionTarget = null;
     renderPageList();
     onModelChange();
-    // 比照 Figma 新增頁面：名稱直接進入可打字狀態，不用使用者自己再點一次去改名
+    // 新增頁面後：名稱直接進入可打字狀態，不用使用者自己再點一次去改名
     // （預設名稱「頁 N」多半就是要馬上蓋掉的暫定值）。
     startPageRename(page.id);
 }

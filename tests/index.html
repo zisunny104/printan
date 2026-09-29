@@ -270,10 +270,10 @@ test("groupElementsIn：跨層或找不到時不動作", () => {
     row.columns[0].push(inner);
     const outer = createSpacerElement();
     const root = [row, outer];
-    const snap = tree.snapshotElements(root);
+    const snap = JSON.stringify(root);
     eq(tree.groupElementsIn(root, [inner.id, outer.id]), null);
     eq(tree.groupElementsIn(root, ["nope"]), null);
-    eq(tree.snapshotElements(root), snap);
+    eq(JSON.stringify(root), snap);
 });
 test("ungroupElementsIn 只處理群組，其他元素略過", () => {
     const t = createTextElement();
@@ -359,17 +359,6 @@ test("群組可以巢狀，複製後各層 id 皆為新值", () => {
     const c = cloneElementWithNewIds(outer);
     assert(c.children[0].type === "group" && c.children[0].id !== inner.id);
     assert(c.children[0].children[0].id !== inner.children[0].id);
-});
-test("undo snapshot：還原後不與現況共用參考，內容一致", () => {
-    const els = plainElements();
-    const snap = tree.snapshotElements(els);
-    const restored = tree.restoreElements(snap);
-    eq(restored, els);
-    restored[0].runs[0].text = "被改";
-    restored[2].columns[0].push(createSpacerElement());
-    eq(tree.snapshotElements(els), snap);
-    assert(restored[0] !== els[0] && restored[2].columns !== els[2].columns);
-    assert(tree.restoreElements(snap)[0] !== restored[0], "每次還原都是新物件");
 });
 test("多選批次編輯 applyFieldToElements：只改被選元素，runField 會清掉片段覆寫", () => {
     const list = [createTextElement({ fontSize: 24, runs: [{ text: "a", fontSize: 10 }] }), createTextElement({ fontSize: 24 }), createTextElement({ fontSize: 24, runs: [{ text: "c", fontSize: 12 }] })];

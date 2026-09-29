@@ -135,7 +135,7 @@ export function textInput(value, onInput, type = "text", placeholder = "") {
     return wrap;
 }
 
-/** Figma 式數字調整框（行高倍數／字距這類「不容易一眼判斷該打多少」的數字都適用）：
+/** 拖曳式數字調整框（行高倍數／字距這類「不容易一眼判斷該打多少」的數字都適用）：
  * 左邊圖示可左右拖曳直接「刷」出數值，不用對著瀏覽器內建那兩顆極小的 spinner 箭頭點；
  * 也能直接點輸入框打數字，或用上下方向鍵微調（按住 Shift＝大步進）。純點擊圖示（沒拖曳）
  * 等同點輸入框，方便還是可以直接打字。 */
@@ -447,7 +447,7 @@ export const IMAGE_SIDE_OPTIONS = [
 export function alignGroup(current, onChange, label = "對齊", options = ALIGN_OPTIONS) {
     const group = document.createElement("div");
     // 用 Tocas 的 .ts-buttons（合併邊框成一個膠囊、中間夾分隔線）取代原本各自獨立外框的 .ts-wrap，
-    // 讓這組選項看起來是「一組」而不是幾顆分開的按鈕（比照 Figma 的 segmented control），
+    // 讓這組選項看起來是「一組」而不是幾顆分開的按鈕（segmented control），
     // 選中狀態則交給 editor.css 的 .ts-buttons .ts-button.is-icon.is-active 填色。
     group.className = "ts-buttons has-top-spaced-small";
     group.setAttribute("role", "radiogroup");

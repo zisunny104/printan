@@ -1,4 +1,4 @@
-// 版面元素樹的純資料操作：尋找、群組、搬移、複製、選取整理、復原快照。
+// 版面元素樹的純資料操作：尋找、群組、搬移、複製、選取整理。
 // 不依賴 DOM／editor 狀態；editor.js 呼叫這裡再自己負責重繪與存檔。
 
 import { createGroupElement, cloneElementWithNewIds } from "./document-model.js";
@@ -238,14 +238,4 @@ export function applyFieldToElements(elements, key, value, { runField = false } 
         el[key] = value;
         if (runField) for (const run of el.runs || []) delete run[key];
     }
-}
-
-// ---- 復原快照 ----
-
-export function snapshotElements(elements) {
-    return JSON.stringify(elements);
-}
-
-export function restoreElements(snapshot) {
-    return JSON.parse(snapshot);
 }

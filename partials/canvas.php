@@ -75,12 +75,10 @@
                         </div>
                     </div>
 
-                    <!-- 浮動工具列：快速新增元素，比照 koilisu/apps/pitrace 的
-                         .canvas-floating-toolbar。元素設定仍在右側「元素設定」面板，
+                    <!-- 浮動工具列：快速新增元素（.canvas-floating-toolbar）。元素設定仍在右側「元素設定」面板，
                          這裡只放「新增」這類畫布層級的快速操作。
                          data-collapse-priority：容器窄到放不下整排按鈕時，依數字由小到大
-                         把整顆按鈕收進最後的「更多工具」選單（不是壓縮/裁切），同 pitrace
-                         wireToolbarOverflow()。數字愈小愈先被收，「新增文字」最常用留到最後。 -->
+                         把整顆按鈕收進最後的「更多工具」選單（不是壓縮/裁切）。數字愈小愈先被收，「新增文字」最常用留到最後。 -->
                     <div class="canvas-floating-toolbar pane-toolbar" role="toolbar" aria-label="新增元素">
                         <button type="button" class="ts-button is-icon" id="btn-toolbar-add"
                             aria-haspopup="menu" aria-expanded="false" aria-label="新增元素" data-tooltip="新增元素">
@@ -115,8 +113,7 @@
 
                         <!-- 容器寬度不夠同時放下所有按鈕時，依上面標的 data-collapse-priority
                              由小到大依序把整顆按鈕收進這個選單，可見按鈕永遠維持原始大小，
-                             不需要橫向捲動工具列才找得到——比照 Figma 窄寬度工具列的做法，
-                             同 koilisu/apps/pitrace。JS 邏輯見 toolbar.js wireToolbarOverflow()。 -->
+                             不需要橫向捲動工具列才找得到。JS 邏輯見 toolbar.js wireToolbarOverflow()。 -->
                         <div class="pane-menu-wrap" id="toolbarOverflowWrap" hidden>
                             <button type="button" id="btnToolbarOverflow" class="ts-button is-icon is-ghost"
                                 aria-label="更多工具" aria-haspopup="menu" aria-expanded="false"
@@ -165,7 +162,7 @@
                         </div>
                     </div>
 
-                    <!-- 多欄比例選單（放在懸浮工具列外，避免干擾方向鍵巡覽，同 pitrace 慣例） -->
+                    <!-- 多欄比例選單（放在懸浮工具列外，避免干擾方向鍵巡覽） -->
                     <div class="ts-dropdown" id="row-ratio-dropdown">
                         <a class="item" data-ratio="1,1" id="row-ratio-1-1">1 / 1</a>
                         <a class="item" data-ratio="2,1" id="row-ratio-2-1">2 / 1</a>

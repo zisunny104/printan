@@ -108,7 +108,7 @@ export function createWorkspaceView({ getPaperWidthMm, getUnprintableMm, onZoom 
         syncUi();
     }
 
-    // 平移（Figma 慣例）：滑鼠中鍵按住拖曳、或空白鍵按住＋左鍵拖曳。用 capture 先接手，
+    // 平移：滑鼠中鍵按住拖曳、或空白鍵按住＋左鍵拖曳。用 capture 先接手，
     // 這樣不會同時選取元素或拖到把手；一般滾輪與 Shift＋滾輪維持瀏覽器原本的垂直／水平捲動。
     function wirePan() {
         const { scroll } = dom;

@@ -8,7 +8,7 @@ import { deleteElement, duplicateElement, getSelectedIds, moveElement, moveEleme
 import { deletePage, mergePageInto, movePage, renamePage, setCurrentPage, setPageCutAfter } from "./pages.js";
 
 // ---- 版面結構大綱 ----
-// 比照 Figma 圖層面板：最上層是頁面（frame），底下是該頁的元素，多欄／群組再往下一層，每一層都可以收合。
+// 最上層是頁面（frame），底下是該頁的元素，多欄／群組再往下一層，每一層都可以收合。
 // 收合狀態只是檢視偏好，不進 .ptan、不進復原歷史。頁面預設只展開作用中那一頁（切頁時跟著換），
 // 使用者手動展開／收合過的頁面就照他的意思，不再自動變動。
 // 選取範圍仍限定在作用中頁面：點其他頁的元素會先切到那一頁再選取，拖曳排序與列上的操作鈕也只給作用中頁面。
@@ -185,7 +185,7 @@ function buildEmptyPageRow() {
     return row;
 }
 
-/** 頁名改成輸入框（雙擊名稱，同 Figma；剛新增頁面時也直接進入）；Enter／失焦確認，Esc 取消。 */
+/** 頁名改成輸入框（雙擊名稱；剛新增頁面時也直接進入）；Enter／失焦確認，Esc 取消。 */
 export function startPageRename(pageId) {
     const label = els["outline-list"].querySelector(`.outline-page-row[data-page-id="${CSS.escape(pageId)}"] .outline-page-name`);
     const page = state.project.template.pages.find((p) => p.id === pageId);

@@ -80,7 +80,7 @@ function buildFrame(page, index, posInGroup, groupSize) {
     frame.dataset.pageId = page.id;
     frame.dataset.pageIndex = String(index);
 
-    // 頁碼＋頁名：同段第一頁放在紙張上方（同 Figma frame 名稱）；接續頁放在紙張左側外面，
+    // 頁碼＋頁名：同段第一頁放在紙張上方；接續頁放在紙張左側外面，
     // 不在兩頁之間插一行把「連續紙」撐開。作用中頁面靠外框顏色辨識（見 editor.css .page-frame.is-active）。
     const label = document.createElement("div");
     label.className = posInGroup === 0 ? "page-frame-label" : "page-frame-label is-side";

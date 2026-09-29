@@ -31,8 +31,7 @@ function dotsToPt(dots) {
 function ptToDots(pt) {
     return ptToDotsRaw(pt, getEffectiveProfile().dpi.x);
 }
-// 分隔線粗細：dot 數字本身沒有實體大小概念，改比照 Word／Excel 框線粗細那種「細／普通／粗／特粗」
-// 預設選單，標示 mm 讓使用者看得出「這條多粗」。色塊（fill）模式是拿來當裝飾色塊，預設值比線條粗上
+// 分隔線粗細：dot 數字本身沒有實體大小概念，用「細／普通／粗／特粗」預設選單，標示 mm 讓使用者看得出「這條多粗」。色塊（fill）模式是拿來當裝飾色塊，預設值比線條粗上
 // 一截。內部資料仍存 dot（渲染公式、.ptan 都是 dot），選單只是換算成 dot 存回去，兩者互相對得起來。
 const DIVIDER_LINE_THICKNESS_PRESETS_MM = [
     ["細", 0.3], ["普通", 0.5], ["粗", 1], ["特粗", 2],
@@ -224,7 +223,7 @@ function buildMultiInspector(panel, ids) {
     panel.appendChild(actions);
 }
 
-// 可選字體（比照 Figma 對齊等段落屬性維持在元素層級，這裡列的字體/字級/粗體/
+// 可選字體（對齊等段落屬性在元素層級，這裡列的字體/字級/粗體/
 // 斜體/底線/刪除線則是「片段（run）」層級，同一個文字元素裡的每個片段可以各自
 // 覆寫；片段沒指定時繼承這份清單第一項以外的元素預設值（見 renderer.js resolveRunStyle）。
 const FONT_CHOICES = [
@@ -390,7 +389,7 @@ const FILL_PATTERN_OPTIONS = [
 ];
 
 // 每個選項左邊放縮小後的實際樣子（字級比例／粗細）、右邊放階層標籤（H1-H5／P），
-// 觸發鈕與選單裡的每一列共用同一份內容，比照 Word／Docs 那種段落樣式下拉選單。
+// 觸發鈕與選單裡的每一列共用同一份內容。
 function styleOptionRow(key) {
     const row = document.createDocumentFragment();
     const preset = TEXT_STYLE_PRESETS[key];
@@ -569,9 +568,9 @@ function buildTextInspector(panel, el) {
         ["預設字體", fontFamilySelect(el.fontFamily, (v) => { el.fontFamily = v; onModelChange({ skipInspector: true }); }, "跟隨全域預設")],
         ["預設字級 (pt)", textInput(dotsToPt(el.fontSize), (v) => applyParagraphField(el, presetGroup, () => { el.fontSize = ptToDots(v); }), "number")],
     ]));
-    // 水平對齊跟垂直對齊是同一組「對齊」概念，擺在一起比照 Figma 的做法；
+    // 水平對齊跟垂直對齊是同一組「對齊」概念，擺在一起；
     // 垂直對齊只有固定高度的容器才有意義（沒有多的高度可以分配），所以高度為自動時不顯示，
-    // 但位置緊接在水平對齊旁邊，不會像之前那樣被拆到後面「寬高」區塊裡讓人找不到。
+    // 位置緊接在水平對齊旁邊。
     const heightFixedForAlign = el.type === "text" && resolveTextHeightMode(el) === "fixed";
     if (heightFixedForAlign) {
         panel.appendChild(fieldRow([

@@ -1,6 +1,5 @@
 // 三欄可拖曳調整寬度（VS Code 風格）：拖曳兩條分隔線改變 --printan-list-width /
 // --printan-dock-width，寬度存進 localStorage 跨重整記住（純 UI 偏好，不寫進 .ptan 專案檔）。
-// 移植自 koilisu/apps/pitrace 的 js/ui/resizable-columns.js，同一套邏輯。
 // 只在桌面版三欄並排（≥1024px）時看得到；手機/平板堆疊版面分隔線本身是 display:none，
 // 拖曳/鍵盤事件掛著也不會被觸發。
 

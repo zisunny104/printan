@@ -425,7 +425,7 @@ function applyTextWidthGrow(realEl, colWidth, startWidth, growDelta) {
 }
 
 /** 文字自由寬度拖曳：直接存成 widthDots（絕對點數，可小於欄寬），拖曳即切到 widthMode="fixed"。
- * 視覺上沿用圖片把手同一顆小方塊（is-img class），比照 e8 轉達的「沿用圖片縮放把手樣式」。
+ * 視覺上沿用圖片把手同一顆小方塊（is-img class）。
  * 鍵盤替代：左右鍵調整寬度（Shift 加大步幅）；等同檢視器裡「寬度 (dot)」欄位能做到的事，這裡補在把手上
  * 讓鍵盤使用者不用切去檢視器就能微調。 */
 function buildTextWidthResizeHandle(box, item, { side, x, y }, scale) {

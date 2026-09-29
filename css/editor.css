@@ -11,10 +11,9 @@
     display: none !important;
 }
 
-/* KoiLiSu 共用 sticky footer 慣例（見 templates/app-template、pitrace/hapbun/kobeu/
-   gradcheck 等其他 app 的 view.php）：body 是 flex column + min-height:100vh，主內容包一層
+/* KoiLiSu 共用 sticky footer 慣例：body 是 flex column + min-height:100vh，主內容包一層
    .main-content 拿 flex:1 撐開，開利手底部才會固定貼齊視窗下緣，內容不夠長時不會在底部
-   多出一截空白背景。printan 先前漏掉這層，是唯一沒套用這個慣例的 app，補上跟其他 app 一致。 */
+   多出一截空白背景。 */
 body {
     display: flex;
     flex-direction: column;
@@ -41,7 +40,7 @@ body {
 
 /* ==== 版面（三欄） ==== */
 
-/* 三欄可拖曳調整寬度（比照 koilisu/apps/pitrace 的 resizable-columns 作法）。
+/* 三欄可拖曳調整寬度。
    Tocas 的 ts-grid 固定 4/8/4 在 tablet 寬度（768-1023px）會擠壓大綱標籤／卡片標題／
    textarea，改用 flex + CSS 變數，desktop+（≥1024px）才拆三欄，以下維持堆疊。 */
 
@@ -196,7 +195,7 @@ body {
 }
 
 @media (min-width: 1024px) {
-    /* 桌面版三欄鎖在一個視窗高度內（比照 koilisu/apps/pitrace）：標題、工具列、三欄一起
+    /* 桌面版三欄鎖在一個視窗高度內：標題、工具列、三欄一起
        剛好一個 100vh，各欄自己在內部捲動，工作區永遠佔滿剩餘高度；頁尾在 100vh 之外，
        捲動整頁才看得到。min-height 是視窗太矮時的下限（矮於此高度改成整頁捲動），避免三欄被壓成一條縫。 */
     .main-content {
@@ -343,7 +342,7 @@ body {
 }
 
 /* 文字樣式預設下拉選單（js/editor/inspector.js textStylePresetPicker）：觸發鈕與選單裡的每一列
-   都是左邊縮小後的實際樣子、右邊階層標籤（H1-H5／P），比照 Word／Docs 的段落樣式選單，
+   都是左邊縮小後的實際樣子、右邊階層標籤（H1-H5／P），
    一眼就看得出各階層的相對大小，不用先套用才知道「H2」長怎樣。 */
 .style-preset-trigger-content,
 .style-preset-item {
@@ -408,7 +407,7 @@ body {
     white-space: nowrap;
 }
 
-/* 卡片標題列內嵌的小型圖示按鈕（沿用 pitrace 慣例），避免跟標題文字擠成兩種高度 */
+/* 卡片標題列內嵌的小型圖示按鈕，避免跟標題文字擠成兩種高度 */
 .pane-card-header .ts-button.is-icon {
     --height: 1.5rem;
     --icon-size: .875rem;
@@ -423,7 +422,7 @@ body {
     gap: .5rem;
 }
 
-/* Figma 式數字調整框（inspector-widgets.js numberStepperInput，目前用在行高倍數／字距）：
+/* 拖曳式數字調整框（inspector-widgets.js numberStepperInput，目前用在行高倍數／字距）：
    左邊圖示可左右拖曳刷數值，比瀏覽器內建 <input type=number> 那兩顆小到很難點的 spinner 好用，
    所以把原生 spinner 藏掉，改用這顆圖示當拖曳把手；圖示本身也提示這格是做什麼用的。 */
 .number-stepper-handle {
@@ -743,7 +742,7 @@ body {
     box-shadow: inset 0 -2px 0 var(--ts-positive-500, #2e7d32);
 }
 
-/* 版面結構樹的頁面列（最上層，比照 Figma 圖層面板的 frame；js/editor/outline.js buildPageRow）：
+/* 版面結構樹的頁面列（最上層；js/editor/outline.js buildPageRow）：
    不套元素的型別底色，用粗一點的字與頁碼區分層級；作用中頁面整列加底色，跟畫布上的主色外框對應。 */
 .outline-page-row {
     font-weight: 600;
@@ -1276,8 +1275,7 @@ body {
     right: .35rem;
 }
 
-/* ---- 工作區下緣置中的浮動工具列（快速新增元素），比照 koilisu/apps/pitrace 的
-   .canvas-floating-toolbar pill 樣式：position:absolute 錨定在 .editor-canvas-pane，
+/* ---- 工作區下緣置中的浮動工具列（快速新增元素），pill 樣式：position:absolute 錨定在 .editor-canvas-pane，
    浮在工作區裡、不是整個視窗。left/right:0＋auto margin＋max-content 置中——不用
    left:50%＋translate，因為 absolute 元素的 shrink-to-fit 寬度上限是「剩下的空間」，
    left:50% 會把工具列壓成半個欄寬。max-width 相對這一欄，欄寬被拖窄時
@@ -1307,8 +1305,7 @@ body {
     flex-shrink: 0;
 }
 
-/* 「更多工具」收合選單，比照 koilisu/apps/pitrace 的 .pane-menu-wrap / .pane-dropdown-menu
-   （JS 見 editor.js wireToolbarOverflow／wireDropdownToggle）。選單用 {portal:true} 搬到
+/* 「更多工具」收合選單（.pane-menu-wrap / .pane-dropdown-menu；JS 見 editor.js wireToolbarOverflow／wireDropdownToggle）。選單用 {portal:true} 搬到
    document.body 定位，跳脫 .canvas-floating-toolbar 的 overflow-x:auto（單獨設 overflow-x
    時瀏覽器會把 overflow-y 一併提升成 auto，選單留在原地會被工具列自己的框裁掉）。
    本檔開頭已把 [hidden] 提升成 !important，這裡不用再另外補 [hidden] 規則。 */

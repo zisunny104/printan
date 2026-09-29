@@ -266,8 +266,8 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, show
 }
 
 // ---- Rich text：一個文字元素的內容是多個 run，各自可覆寫字體／字級／粗體／
-// 斜體／底線／刪除線（比照 Figma）。排版時把 runs 展開成「字元＋樣式」的
-// glyph 串流，用跟舊版相同的逐字貪婪換行邏輯決定斷行，斷行後再依樣式相同與否
+// 斜體／底線／刪除線。排版時把 runs 展開成「字元＋樣式」的
+// glyph 串流，用逐字貪婪換行邏輯決定斷行，斷行後再依樣式相同與否
 // 合併成 segment 供繪製，同一行內若有不同字級，行高取該行最大字級換算。
 
 function resolveRunStyle(el, run, fallbackFontFamily) {
