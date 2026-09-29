@@ -105,7 +105,7 @@ function showKioskConnectButton(printFn) {
         button = document.createElement("button");
         button.id = "kiosk-connect-print";
         button.type = "button";
-        button.className = "ts-button is-primary";
+        button.className = "ts-button is-primary is-large is-fluid has-top-spaced";
         mountPrinterCardAction(button); // 放進狀態區的印表機卡，在工作區外面
         button.addEventListener("click", async () => {
             button.disabled = true;

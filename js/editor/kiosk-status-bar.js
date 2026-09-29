@@ -1,7 +1,7 @@
 // kiosk 畫面最上方的狀態區，用兩張卡片各管一件事：
 //   標題列：範本名稱與 Printan 版本；
 //   「印表機」卡：連線指示燈（沒連上時配對按鈕也放在這張卡裡）；
-//   「工單」卡：這筆工單的狀態指示燈與文字（失敗原因、被略過的問題都寫在這裡）、工單編號。
+//   「列印工作」卡：這筆列印工作的狀態指示燈與文字（失敗原因、被略過的問題都寫在這裡）、編號。
 // 內嵌在別人網頁裡的 iframe 沒有其他地方看得出運作情形，現場人員靠這區確認「有沒有連上、印了沒」。
 // 這裡只顯示狀態；唯一可操作的配對按鈕由 kiosk.js 建立，掛進印表機卡（mountPrinterCardAction）。
 
@@ -10,9 +10,9 @@ import { mountStageElement } from "./ui-helpers.js";
 
 const STATUS_BAR_ID = "kiosk-status";
 
-// 工單狀態 → 顯示文字與指示燈顏色（tone 對應 css/editor.css .kiosk-status-dot 的 data-tone）
+// 列印工作狀態 → 顯示文字與指示燈顏色（tone 對應 css/editor.css .kiosk-status-dot 的 data-tone）
 const JOB_LABELS = {
-    idle: { text: "待命，等待工單", tone: "muted" },
+    idle: { text: "待命，等待列印工作", tone: "muted" },
     loading: { text: "載入範本中", tone: "warn" },
     printing: { text: "列印中", tone: "warn" },
     printed: { text: "已列印", tone: "ok" },
@@ -45,46 +45,59 @@ function formatClock(date) {
 /** 建立狀態區並掛進畫面；重複呼叫只會有一份。 */
 export function initKioskStatusBar() {
     if (bar) return;
-    bar = el("div", "");
+    bar = el("div", "ts-content is-dense");
     bar.id = STATUS_BAR_ID;
     bar.setAttribute("role", "status");
     bar.setAttribute("aria-live", "polite");
 
-    const template = el("span", "kiosk-status-template", "範本載入中…");
+    // 標題列：範本名稱（過長截斷）與版本
+    const template = el("span", "kiosk-status-template ts-header is-heavy", "範本載入中…");
     const version = document.querySelector(".app-version")?.textContent.trim() || "";
-    const app = el("span", "kiosk-status-app", `Printan ${version}`.trim());
-    const title = el("div", "kiosk-status-title");
-    title.append(template, app);
+    const titleRow = el("div", "ts-grid is-middle-aligned is-relaxed");
+    const titleCol = el("div", "column is-fluid");
+    titleCol.append(template);
+    const versionCol = el("div", "column");
+    versionCol.append(el("span", "ts-text is-description is-small", `Printan ${version}`.trim()));
+    titleRow.append(titleCol, versionCol);
 
-    const card = (name) => {
-        const box = el("div", "kiosk-status-card ts-box is-rounded");
-        const label = el("div", "kiosk-status-card-label");
-        label.append(el("span", "", name));
+    // 卡片沿用編輯器其他面板的結構：ts-box＋標題列（.pane-card-header）＋ts-content 內文
+    const card = (name, icon) => {
+        const box = el("div", "ts-box is-rounded");
+        const header = el("div", "pane-card-header");
+        const title = el("span", "pane-card-header-title");
+        title.append(el("span", `ts-icon is-${icon}-icon`), el("span", "", name));
+        header.append(title);
+        const body = el("div", "ts-content is-padded");
         const value = el("div", "kiosk-status-value");
-        const dot = el("span", "kiosk-status-dot");
-        const text = el("span", "kiosk-status-text");
+        const dot = el("span", "kiosk-status-dot ts-icon is-circle-icon");
+        const text = el("span", "ts-text is-bold");
         value.append(dot, text);
-        const detail = el("div", "kiosk-status-detail");
-        box.append(label, value, detail);
-        return { box, label, dot, text, detail };
+        const detail = el("div", "kiosk-status-detail ts-text is-description");
+        body.append(value, detail);
+        box.append(header, body);
+        return { box, header, body, dot, text, detail };
     };
-    const printer = card("印表機");
-    printer.box.classList.add("is-printer");
-    const job = card("工單");
-    const jobId = el("span", "kiosk-status-jobid");
-    job.label.append(jobId);
-    const cards = el("div", "kiosk-status-cards");
-    cards.append(printer.box, job.box);
+    const printer = card("印表機", "print");
+    const job = card("列印工作", "receipt");
+    const jobId = el("span", "ts-text is-description is-small");
+    job.header.append(jobId);
 
-    bar.append(title, cards);
+    const cards = el("div", "ts-grid is-relaxed has-top-spaced-small");
+    for (const [c, size] of [[printer, "is-6-wide"], [job, "is-fluid"]]) {
+        const col = el("div", `column ${size} mobile:is-16-wide`);
+        col.append(c.box);
+        cards.append(col);
+    }
+
+    bar.append(titleRow, cards);
     mountStageElement(bar);
-    fields = { template, printerCard: printer.box, printerDot: printer.dot, printerText: printer.text, jobDot: job.dot, jobText: job.text, jobDetail: job.detail, jobId };
+    fields = { template, printerBody: printer.body, printerDot: printer.dot, printerText: printer.text, jobDot: job.dot, jobText: job.text, jobDetail: job.detail, jobId };
     updateKioskStatus({ job: "idle" });
 }
 
 /** 把配對按鈕放進印表機卡；狀態區還沒建立（不是 kiosk）時退回一般的舞台上方位置。 */
 export function mountPrinterCardAction(element) {
-    if (fields) fields.printerCard.appendChild(element);
+    if (fields) fields.printerBody.appendChild(element);
     else mountStageElement(element);
 }
 
@@ -100,7 +113,7 @@ export function setKioskTemplateNames(names, empty = "未命名範本") {
  * 更新狀態列。印表機欄位每次都直接讀 state 的連線旗標（不是靠事件推算），
  * 所以失敗後連線被釋放、之後重連成功，下一次更新就會自己修正。
  * job：JOB_LABELS 的 key（省略＝只刷新印表機指示燈）；message：狀態文字下方的補充說明（例如失敗原因）；
- * jobId：目前工單識別碼。
+ * jobId：目前列印工作的識別碼。
  */
 export function updateKioskStatus({ job, message = "", jobId } = {}) {
     if (!fields) return;
