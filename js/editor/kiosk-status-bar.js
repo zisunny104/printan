@@ -12,9 +12,9 @@ const STATUS_BAR_ID = "kiosk-status";
 
 // 列印工作狀態 → 顯示文字與指示燈顏色（tone 對應 css/editor.css .kiosk-status-dot 的 data-tone）
 const JOB_LABELS = {
-    idle: { text: "待命，等待列印工作", tone: "muted" },
+    idle: { text: "就緒，等待列印工作", tone: "muted" },
     loading: { text: "載入範本中", tone: "warn" },
-    printing: { text: "列印中", tone: "warn" },
+    printing: { text: "正在列印", tone: "warn" },
     printed: { text: "已列印", tone: "ok" },
     printed_issues: { text: "已列印，部分內容被略過", tone: "warn" },
     failed: { text: "列印失敗", tone: "error" },

@@ -77,7 +77,7 @@ function enqueueJob(task) {
 let startupPrinterCheck = Promise.resolve();
 
 // 啟動時主動確認印表機：父視窗不用等第一筆列印工作才知道要不要配對。
-// 沒有已授權裝置就直接顯示配對按鈕（沒有待印工作，見 showKioskConnectButton 的 null 分支）。
+// 沒有已授權裝置就直接顯示配對按鈕（列印佇列裡沒有等待列印的工作，見 showKioskConnectButton 的 null 分支）。
 async function checkPrinterOnStartup() {
     await attemptSilentPrinterReconnect();
     markPrinterChecked();
@@ -125,7 +125,7 @@ function showKioskConnectButton(printFn) {
         });
         els["kiosk-connect-print"] = button;
     }
-    // 文字每次都依「有沒有待印工作」更新：啟動時沒有列印工作，按下去只會配對不會印，
+    // 文字每次都依「列印佇列裡有沒有等待列印的工作」更新：啟動時沒有列印工作，按下去只會配對不會印，
     // 寫「並列印」會誤導；列印工作先到、按鈕被換成要印那張單時才寫「並列印」。
     button.textContent = printFn ? "連線印表機並列印" : "連線印表機";
     button.hidden = false;

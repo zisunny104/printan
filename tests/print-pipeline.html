@@ -94,7 +94,7 @@ test("raster：0 尺寸 canvas 不崩潰、回空 raster", () => {
     c.width = 8; c.height = 0;
     eq(canvasToEscposRaster(c).raster.length, 0);
 });
-test("整份工作：ESC @、左邊界 0、靠左、GS v 0 寬高、raster（無走紙／切紙）", () => {
+test("整份列印工作：ESC @、左邊界 0、靠左、GS v 0 寬高、raster（無走紙／切紙）", () => {
     const out = buildEscposJob({ canvas: canvasFrom(["#.......", "........"]) });
     eq(hex(out), `${HEADER} 1d 76 30 00 01 00 02 00 80 00`);
 });
@@ -119,7 +119,7 @@ test("feedLines 超過 255 夾到 255、小數四捨五入", () => {
 test("只切紙不走紙", () => {
     eq(hex(buildEscposJob(one(), { cutPaper: true }).subarray(-4)), "80 1d 56 01");
 });
-test("批次多張：每張都是獨立完整工作（各自 ESC @ 開頭、各自切紙）", () => {
+test("批次多張：每張都是獨立完整的列印工作（各自 ESC @ 開頭、各自切紙）", () => {
     const opts = { feedLines: 4, cutPaper: true };
     const jobs = [["#......."], ["........", "#......#"], ["########"]].map((rows) => buildEscposJob({ canvas: canvasFrom(rows) }, opts));
     for (const j of jobs) {
