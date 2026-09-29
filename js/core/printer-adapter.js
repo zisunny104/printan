@@ -407,7 +407,7 @@ export class WebUsbEscposAdapter {
 
     /**
      * 即時狀態查詢（DLE EOT n）：印表機規格上叫「即時」是因為韌體會馬上回應，
-     * 不用等前面排隊的列印工作跑完，所以就算沒有真的接印表機的當下也能拿來確認連線。
+     * 不用等列印佇列裡前面的列印工作跑完，所以就算沒有真的接印表機的當下也能拿來確認連線。
      * 不是每個裝置都有 Bulk IN 端點、也不是每次都會回應，讀不到就當作「這個環境查不到」，
      * 回傳空陣列讓呼叫端自己決定要顯示什麼，不當成致命錯誤。
      * @param {1 | 2 | 3 | 4} n
@@ -490,7 +490,7 @@ export class WebSerialEscposAdapter {
      */
     async reconnectIfAuthorized(vendorId, baudRate = DEFAULT_SERIAL_BAUD_RATE) {
         // 已經連著就直接回 true：規格上對已開啟的 port 再 open() 會丟 InvalidStateError，
-        // 呼叫端（每筆 kiosk 工單、編輯器初始化都會重連一次）會把這個例外當成「沒連上」。
+        // 呼叫端（每筆 kiosk 列印工作、編輯器初始化都會重連一次）會把這個例外當成「沒連上」。
         if (this.port && this.writer) return true;
         const ports = await this.listAuthorizedPorts();
         const port = (vendorId && ports.find((p) => p.getInfo().usbVendorId === vendorId)) || ports[0];

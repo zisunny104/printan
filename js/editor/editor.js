@@ -67,7 +67,7 @@ async function init() {
     });
     restoreLocalFontsIfGranted().then((restored) => { if (restored) renderInspector(); });
     // 不 await：USB 裝置 open 卡住時，後面的 kiosk 啟動（載入範本、回報 ready）不能被擋住。
-    // 連線狀態由函式內部自己更新畫面；kiosk 啟動檢查與工單流程會接同一個進行中的重連（見該函式）。
+    // 連線狀態由函式內部自己更新畫面；kiosk 啟動檢查與列印工作流程會接同一個進行中的重連（見該函式）。
     void attemptSilentPrinterReconnect().catch(() => {});
     // kiosk.js：網址帶 tpl= 才會動作，一般開啟編輯器（沒有這個參數）完全不受影響
     await bootKioskFromQuery(loadProjectIntoEditor, schedulePreview);

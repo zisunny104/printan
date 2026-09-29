@@ -247,7 +247,7 @@ function releaseFailedConnection() {
 }
 
 // 同一時間只跑一次重連，後來的呼叫直接接同一個 Promise：編輯器初始化、kiosk 啟動檢查、
-// 每筆工單都會呼叫，同時對同一個 USB 裝置 open 兩次，後到的丟例外會被當成「沒連上」。
+// 每筆列印工作都會呼叫，同時對同一個 USB 裝置 open 兩次，後到的丟例外會被當成「沒連上」。
 let reconnectInFlight = null;
 export function attemptSilentPrinterReconnect() {
     if (!reconnectInFlight) reconnectInFlight = reconnectAuthorizedPrinter().finally(() => { reconnectInFlight = null; });
