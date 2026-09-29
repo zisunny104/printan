@@ -71,6 +71,12 @@ export class SystemDialogAdapter {
 }
 
 const ESCPOS_CHUNK_SIZE = 4096; // 分段傳輸，避免單次 transferOut 過大
+// 單一 GS v 0 指令帶的最大列數。整張圖用一個指令、一次帶完整高度送出時，太高的圖（多區塊合成的
+// 長收據很容易上千甚至幾千列）可能超過印表機對單一 raster 指令的高度上限，印表機會拒絕這個
+// 指令、把後面的點陣資料當文字印成亂碼，結尾的切紙指令也跟著沒生效。所以切成多個帶狀，
+// 每個帶狀各自一個 GS v 0，依序連續送出，印出來仍是同一張連續的圖。
+// 上限的確切數值沒有查到可信來源，這裡取一個保守值（遠低於常見上限），不是規格書給的數字。
+const ESCPOS_RASTER_BAND_ROWS = 512;
 
 const TRANSFER_TIMEOUT_MS = 15000; // 單段傳輸上限：缺紙、上蓋打開時印表機不再收資料，transferOut／write 會一直不 resolve
 
@@ -179,7 +185,7 @@ export function centerCanvasOnWidth(canvas, targetWidthDots, padLeftDots = 0, pa
 }
 
 /**
- * 組出完整一次列印工作的 ESC/POS 指令位元組：初始化 → raster 點陣圖 → 走紙 → 切紙。
+ * 組出完整一次列印工作的 ESC/POS 指令位元組：初始化 → raster 點陣圖（太高會切成多個帶狀）→ 走紙 → 切紙。
  * @param {{canvas: HTMLCanvasElement}} renderResult
  * @param {{feedLines?: number, cutPaper?: boolean, targetWidthDots?: number|null, padLeftDots?: number, padRightDots?: number}} options
  *   targetWidthDots：印表機列印頭最大寬度（見 printer-profiles.js getPrintHeadWidthDots），
@@ -199,13 +205,20 @@ export function buildEscposJob(renderResult, { feedLines = 0, cutPaper = false, 
         new Uint8Array([0x1b, 0x40]), // ESC @：初始化印表機
         new Uint8Array([0x1d, 0x4c, 0x00, 0x00]), // GS L nL nH：左邊界 = 0
         new Uint8Array([0x1b, 0x61, 0x00]), // ESC a 0：靠左對齊
-        new Uint8Array([
+    ];
+    // 每個帶狀一個 GS v 0（見 ESCPOS_RASTER_BAND_ROWS）；高度為 0 的空圖仍然送一個 0 列的指令，
+    // 跟切帶之前的輸出一致。
+    let y0 = 0;
+    do {
+        const rows = Math.min(ESCPOS_RASTER_BAND_ROWS, height - y0);
+        parts.push(new Uint8Array([
             0x1d, 0x76, 0x30, 0x00, // GS v 0 m：raster bit image，m=0 一般模式
             bytesPerLine & 0xff, (bytesPerLine >> 8) & 0xff,
-            height & 0xff, (height >> 8) & 0xff,
-        ]),
-        raster,
-    ];
+            rows & 0xff, (rows >> 8) & 0xff,
+        ]));
+        parts.push(raster.subarray(y0 * bytesPerLine, (y0 + rows) * bytesPerLine));
+        y0 += rows;
+    } while (y0 < height);
     if (feedLines > 0) {
         parts.push(new Uint8Array([0x1b, 0x64, Math.min(Math.round(feedLines), 255)])); // ESC d n：走紙 n 行
     }
