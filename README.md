@@ -24,7 +24,7 @@
 - **列印**：可透過瀏覽器原生列印對話框（`window.print()`）走系統已安裝的印表機驅動，也可用 WebUSB 直接連線印表機送出 ESC/POS 點陣指令（Chrome/Edge），依環境自動偵測可用連線方式；印表機倒裝時可勾選「旋轉 180° 列印」（PDF 匯出不旋轉）
 - **條碼／QR Code 元素**：可插入 QR Code、Code128、EAN-13，內容支援 `{{變數}}`，一維條碼可切換是否顯示明碼
 - **Renderer Core 可獨立嵌入**：[js/core/renderer.js](js/core/renderer.js) 是不依賴編輯器狀態、不依賴 UI 框架的 ES module，其他網頁專案可以直接 `import` 使用同一套版面／熱感模擬邏輯；[js/core/compose.js](js/core/compose.js) 的 `renderProjects([{ project, data }], { gapDots })` 可把多個專案或多筆資料接成一張長單（寬度不同時置中）
-- **Kiosk 模式（iframe 嵌入＋postMessage）**：其他網站可以把 printan 整頁嵌進 iframe，指定範本後用 postMessage 送資料觸發自動列印，並收到 ready／printer_connected／needs_connect／printed／print_failed／load_failed 回報，畫面上方有狀態區（範本與版本標題，加「印表機」「列印工作」兩張卡片顯示連線與處理狀態）；支援一次帶多個範本合成一張單；串接方式見 [docs/kiosk-integration.md](docs/kiosk-integration.md)
+- **Kiosk 模式（iframe 嵌入＋postMessage）**：其他網站可以把 printan 整頁嵌進 iframe，指定範本後用 postMessage 送資料觸發自動列印，並收到 ready／printer_connected／needs_connect／printed／print_failed／load_failed 回報，畫面上方有狀態區（Printan 與版本標題，加「印表機」「列印工作」「範本」三張卡片顯示連線、處理狀態與載入的範本）；支援一次帶多個範本合成一張單；串接方式見 [docs/kiosk-integration.md](docs/kiosk-integration.md)
 
 ## 使用方式
 
