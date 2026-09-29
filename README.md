@@ -112,8 +112,11 @@ cd printan
 ## 使用的開源函式庫
 
 - [Tocas UI](https://tocas-ui.com/) - MIT License
-- [MaterialDesign-Webfont](https://materialdesignicons.com/) - Apache-2.0 License（圖示）
 - [jsPDF](https://github.com/parallax/jsPDF) - MIT License
+- [JsBarcode](https://github.com/lindell/JsBarcode) - MIT License
+- [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) - MIT License
+- [libheif-js](https://github.com/catdad-experiments/libheif-js) - LGPL-3.0（自行託管於 `vendor/libheif/`，HEIC 解碼）
+- [Sarasa Mono TC](https://github.com/be5invis/Sarasa-Gothic)、[JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) - SIL OFL 1.1（字體）
 
 版面渲染、熱感模擬（灰階／抖動）、`.ptan` 讀寫等核心邏輯皆為原生實作。
 
