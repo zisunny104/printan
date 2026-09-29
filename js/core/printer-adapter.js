@@ -490,7 +490,7 @@ export class WebSerialEscposAdapter {
      */
     async reconnectIfAuthorized(vendorId, baudRate = DEFAULT_SERIAL_BAUD_RATE) {
         // 已經連著就直接回 true：規格上對已開啟的 port 再 open() 會丟 InvalidStateError，
-        // 呼叫端（每筆 kiosk 工單、編輯器初始化都會重連一次）會把這個例外當成「沒連上」。
+        // 呼叫端（每筆 kiosk 列印工作、編輯器初始化都會重連一次）會把這個例外當成「沒連上」。
         if (this.port && this.writer) return true;
         const ports = await this.listAuthorizedPorts();
         const port = (vendorId && ports.find((p) => p.getInfo().usbVendorId === vendorId)) || ports[0];

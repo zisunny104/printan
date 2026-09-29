@@ -117,7 +117,7 @@ export function populateRecentDrafts() {
 
 let saveTimer = null;
 export function scheduleSave() {
-    // kiosk 是套範本＋工單資料的一次性顯示，不是使用者編輯：每次載入都存一筆草稿會讓 IndexedDB
+    // kiosk 是套範本＋列印工作資料的一次性顯示，不是使用者編輯：每次載入都存一筆草稿會讓 IndexedDB
     // 無限成長（草稿含圖片、清單只列 10 筆無法從畫面刪），範本若帶 id 還會覆寫使用者同 id 的草稿。
     if (document.documentElement.classList.contains("is-kiosk")) return;
     clearTimeout(saveTimer);
