@@ -583,6 +583,15 @@ test("自動儲存失敗：顯示儲存失敗、role=alert、錯誤樣式，之�
     assert(el.textContent.startsWith("已自動儲存") && !el.hasAttribute("role") && !el.classList.contains("is-negative"));
 });
 
+test("填色畫布快取：重複渲染結果一致，改設定後不會拿到舊花紋", async () => {
+    const mk = (level) => { const d = createDividerElement(); d.drawMode = "fill"; d.thicknessDots = 40; d.fill = { mode: "halftone", level, pattern: "dot" }; return d; };
+    const a1 = await renderElements([mk(60)], { widthDots: 200 });
+    const a2 = await renderElements([mk(60)], { widthDots: 200 });
+    const b = await renderElements([mk(200)], { widthDots: 200 });
+    assert(a1.canvas.toDataURL() === a2.canvas.toDataURL(), "同設定像素不同");
+    assert(a1.canvas.toDataURL() !== b.canvas.toDataURL(), "改濃淡後仍是舊花紋");
+});
+
 const list = document.getElementById("list");
 let failed = 0;
 for (const c of cases) {
