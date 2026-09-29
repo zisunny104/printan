@@ -73,14 +73,7 @@ cd printan
 1. 將此 repo 放置在 `koilisu/apps/printan/` 目錄
 2. 透過 `https://toka.dev/koilisu/printan` 造訪
 
-## 已知限制與後續規劃
-
-此版本為第一階段可完整操作的雛型，以下項目列為後續階段：
-
-- WebBluetooth 印表機連線（目前已支援 WebUSB、Web Serial 直連）
-- 外部 API 作為批次資料來源（目前支援貼上 JSON／CSV）
-- Shape／Table／Icon 元素
-- 新增其他印表機規格檔（Printer Profile 架構已預留擴充空間）
+## 已知限制
 
 **待實機驗證：** ESC/POS 直連列印內容偏左的修正（統一送列印頭最大寬度的 raster 並置中補白，以及 ESC @ 之後明確送 GS L 0 0 左邊界歸零、ESC a 0 靠左對齊）都是依規格與工程假設做的防禦性處理，開發環境沒有實體印表機，尚未在實機上確認能消除偏移；若實機仍偏左，需要再確認印表機的列印區域寬度（GS W）與紙寬記憶開關設定。
 
