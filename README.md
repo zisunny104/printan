@@ -53,7 +53,7 @@ git clone https://github.com/zisunny104/printan.git
 cd printan
 ```
 
-2. 配置網頁伺服器（需支援 PHP）
+2. 設定網頁伺服器（需支援 PHP）
 
 3. 直接訪問 `index.php`
 
