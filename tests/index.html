@@ -702,6 +702,27 @@ test("showSnackbar：Tocas ts-snackbar 結構、錯誤用 alert 角色、最多�
     region().replaceChildren();
 });
 
+test("checkPrinterReady：離線／缺紙擋下，查不到一律放行且只查一次，逾時與例外不卡住", async () => {
+    const { checkPrinterReady } = await import("../js/core/printer-adapter.js");
+    const fake = (responses) => ({ calls: [], statusCheckUnavailable: false, async queryStatus(n) { this.calls.push(n); const r = responses[n]; if (r instanceof Error) throw r; if (r === "hang") return new Promise(() => {}); return r ?? new Uint8Array(); } });
+    eq(await checkPrinterReady(fake({ 1: new Uint8Array([0x12]), 4: new Uint8Array([0x12]) })), { ready: true });
+    eq(await checkPrinterReady(fake({ 1: new Uint8Array([0x1a]), 4: new Uint8Array([0x12]) })), { ready: false, reason: "offline" });
+    eq(await checkPrinterReady(fake({ 1: new Uint8Array([0x12]), 4: new Uint8Array([0x72]) })), { ready: false, reason: "paper-out" });
+    eq(await checkPrinterReady(fake({ 1: new Uint8Array([0x12]), 4: new Uint8Array([0x1e]) })), { ready: true }, "紙快用完不擋");
+    const silent = fake({});
+    eq(await checkPrinterReady(silent), { ready: true });
+    assert(silent.statusCheckUnavailable && silent.calls.length === 1, "沒回應要記下來");
+    await checkPrinterReady(silent);
+    eq(silent.calls.length, 1, "之後這條連線不再查詢");
+    const broken = fake({ 1: new Error("boom") });
+    eq(await checkPrinterReady(broken), { ready: true });
+    assert(broken.statusCheckUnavailable);
+    const hung = fake({ 1: "hang" });
+    const t0 = performance.now();
+    eq(await checkPrinterReady(hung, 80), { ready: true });
+    assert(performance.now() - t0 < 1000 && hung.statusCheckUnavailable, "逾時要放行");
+});
+
 const list = document.getElementById("list");
 let failed = 0;
 for (const c of cases) {
