@@ -665,6 +665,25 @@ test("downscaleImageFile：超過寬度上限等比縮小，小圖原樣傳回",
     eq([bmp.width, bmp.height], [MAX_ASSET_WIDTH_PX, 50]);
 });
 
+test("文字在行框內垂直置中：CJK 字形不超出行框頂端，反白黑條上下黑邊接近", async () => {
+    const inkRows = (canvas, pick) => {
+        const { width, height } = canvas;
+        const { data } = canvas.getContext("2d").getImageData(0, 0, width, height);
+        const rows = [];
+        for (let y = 0; y < height; y++) for (let x = 0; x < Math.min(width, 200); x++) if (pick(data[(y * width + x) * 4])) { rows.push(y); break; }
+        return { first: rows[0], last: rows[rows.length - 1], height };
+    };
+    const one = (text, inverse) => renderElements([createTextElement({ runs: [{ text }], fontSize: 24, inverse })], { widthDots: 576, mode: "thermal" });
+    const cjk = inkRows((await renderElements([createSpacerElement(), createTextElement({ runs: [{ text: "下方文字" }], fontSize: 24 })], { widthDots: 576, mode: "thermal" })).canvas, (v) => v < 128);
+    assert(cjk.first >= 16, `CJK 字形上緣超出行框：第一列墨跡在 ${cjk.first}，行框從 16 開始`);
+    for (const text of ["小計 Total", "謝謝惠顧", "Hello"]) {
+        const r = await one(text, true);
+        const { first, last, height } = inkRows(r.canvas, (v) => v > 128);
+        const top = first, bottom = height - 1 - last;
+        assert(top >= 1 && Math.abs(top - bottom) <= 4, `${text}：反白黑條上方黑邊 ${top}、下方 ${bottom}`);
+    }
+});
+
 const list = document.getElementById("list");
 let failed = 0;
 for (const c of cases) {
