@@ -78,6 +78,7 @@ const ESCPOS_CHUNK_SIZE = 4096; // 分段傳輸，避免單次 transferOut 過�
 // 上限的確切數值沒有查到可信來源，這裡取一個保守值（遠低於常見上限），不是規格書給的數字。
 const ESCPOS_RASTER_BAND_ROWS = 512;
 
+const SERIAL_CLOSE_TIMEOUT_MS = 1000; // 關閉序列埠時等待寫入端收尾的上限，超過就 abort()
 const TRANSFER_TIMEOUT_MS = 15000; // 單段傳輸上限：缺紙、上蓋打開時印表機不再收資料，transferOut／write 會一直不 resolve
 
 function withTimeout(promise, ms = TRANSFER_TIMEOUT_MS) {
@@ -488,6 +489,9 @@ export class WebSerialEscposAdapter {
      * @returns {Promise<boolean>} 是否成功恢復連線
      */
     async reconnectIfAuthorized(vendorId, baudRate = DEFAULT_SERIAL_BAUD_RATE) {
+        // 已經連著就直接回 true：規格上對已開啟的 port 再 open() 會丟 InvalidStateError，
+        // 呼叫端（每筆 kiosk 工單、編輯器初始化都會重連一次）會把這個例外當成「沒連上」。
+        if (this.port && this.writer) return true;
         const ports = await this.listAuthorizedPorts();
         const port = (vendorId && ports.find((p) => p.getInfo().usbVendorId === vendorId)) || ports[0];
         if (!port) return false;
@@ -616,15 +620,24 @@ export class WebSerialEscposAdapter {
 
     async disconnect() {
         if (!this.port) return;
-        try {
-            if (this.writer) {
-                await this.writer.close();
-                this.writer = null;
+        const { port, writer } = this;
+        // 先讓 adapter 回到「未連線」：後面不論哪一步失敗，都不會留下半殘的 port／writer 狀態。
+        this.port = null;
+        this.writer = null;
+        if (writer) {
+            // 缺紙逾時、線被拔時還有一筆寫入卡在裡面，close() 要等它做完，可能永遠不返回；
+            // 等一下就放棄，改用 abort() 直接丟掉沒送完的資料，之後才能釋放鎖、關閉 port。
+            try {
+                await withTimeout(writer.close(), SERIAL_CLOSE_TIMEOUT_MS);
+            } catch {
+                await writer.abort().catch(() => {});
             }
-            await this.port.close();
-        } finally {
-            this.port = null;
-            this.writer = null;
+            try {
+                writer.releaseLock();
+            } catch {
+                // 已經釋放過就沒事
+            }
         }
+        await port.close();
     }
 }
