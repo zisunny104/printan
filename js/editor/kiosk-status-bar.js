@@ -94,10 +94,10 @@ export function updateKioskStatus({ job, message = "", jobId } = {}) {
     fields.printer.dot.dataset.tone = !printerChecked ? "warn" : connected ? "ok" : "error";
 
     if (job) {
-        const label = JOB_LABELS[job] || JOB_LABELS.idle;
+        const jobLabel = JOB_LABELS[job] || JOB_LABELS.idle;
         const time = job === "printed" || job === "failed" ? `（${formatClock(new Date())}）` : "";
-        fields.job.value.textContent = label.text + time + (message ? `：${message}` : "");
-        fields.job.dot.dataset.tone = label.tone;
+        fields.job.value.textContent = jobLabel.text + time + (message ? `：${message}` : "");
+        fields.job.dot.dataset.tone = jobLabel.tone;
         fields.job.chip.title = message;
     }
     if (jobId !== undefined) fields.jobId.textContent = jobId ? `工單 ${jobId}` : "";
