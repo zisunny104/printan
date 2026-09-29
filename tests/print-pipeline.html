@@ -574,13 +574,17 @@ test("相鄰元素不貼合：文字、QR、條碼、QR 上下相鄰，各元素
     ], { widthDots: 576, dpi: 203, mode: "thermal" });
     const ctx = r.canvas.getContext("2d");
     const { data } = ctx.getImageData(0, 0, r.canvas.width, r.canvas.height);
-    const rowDark = (y) => { for (let x = 0; x < r.canvas.width; x++) if (data[(y * r.canvas.width + x) * 4] < 128) return true; return false; };
+    // 只看條碼自己水平範圍內的欄位：相鄰文字的 CJK 字形上緣會比行框頂多出約 1 點（textBaseline "top"），
+    // 落在別的欄位的字不算侵入條碼的留白
+    const rowDark = (y, x0, x1) => { for (let x = x0; x < x1; x++) if (data[(y * r.canvas.width + x) * 4] < 128) return true; return false; };
     // 每個條碼／QR 項目自己的上下邊界內側 4 點都是白的，所以與上下相鄰元素的黑點至少隔 4 點
     for (const item of r.items.filter((i) => i.el.type === "barcode")) {
         const top = Math.round(item.y), bottom = Math.round(item.y + item.height);
         assert(item.height > 0, `${item.el.format} 沒有畫出來`);
-        for (let y = top; y < top + 4; y++) assert(!rowDark(y), `${item.el.format} 上緣第 ${y - top + 1} 點有黑點`);
-        for (let y = bottom - 4; y < bottom; y++) assert(!rowDark(y), `${item.el.format} 下緣第 ${bottom - y} 點有黑點`);
+        const x0 = item.el.align === "right" ? item.widthDots - item.drawWidth : item.el.align === "center" ? Math.round((item.widthDots - item.drawWidth) / 2) : 0;
+        const x1 = x0 + item.drawWidth;
+        for (let y = top; y < top + 4; y++) assert(!rowDark(y, x0, x1), `${item.el.format} 上緣第 ${y - top + 1} 點有黑點`);
+        for (let y = bottom - 4; y < bottom; y++) assert(!rowDark(y, x0, x1), `${item.el.format} 下緣第 ${bottom - y} 點有黑點`);
     }
 });
 
