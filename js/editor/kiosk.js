@@ -48,7 +48,7 @@ import { renderProjects } from "../core/compose.js";
 import { getEffectiveProfile } from "./editor.js";
 import { els, state } from "./context.js";
 import { attemptSilentPrinterReconnect, connectPrinter, printComposedSilently, printSilently } from "./printer-settings.js";
-import { mountStageElement, showStageNotice } from "./ui-helpers.js";
+import { mountStageElement } from "./ui-helpers.js";
 import { initKioskStatusBar, markPrinterChecked, setKioskTemplateNames, updateKioskStatus } from "./kiosk-status-bar.js";
 
 const KIOSK_CLASS = "is-kiosk";
@@ -59,12 +59,6 @@ const RESERVED_PARAMS = new Set(["tpl", "kiosk", "jobId", "parentOrigin", "gapDo
 // 不需要放進 state（跟編輯器畫面狀態無關，是這個 kiosk session 專屬的一次性資訊）。
 let currentJobId = null;
 let reportTargetOrigin = null;
-
-// 跟 editor.js 的字體／圖片提示同一套「畫面上一行不擋畫面的提示列」（ui-helpers.js showStageNotice）：
-// kiosk 沒有人會去點 confirm()，問題一律用這個顯示，不彈原生對話框。
-function showKioskNotice(message) {
-    showStageNotice("kiosk-notice", message);
-}
 
 // 候補配對按鈕按下、連線成功之後要執行的列印動作：單一範本模式傳 printSilently，
 // 多範本模式（見 runMultiAutoprintFlow）傳一個包好 projects/data/gapDots 的 closure。
@@ -113,7 +107,7 @@ function showKioskConnectButton(printFn) {
         button.id = "kiosk-connect-print";
         button.type = "button";
         button.className = "ts-button is-primary";
-        mountStageElement(button); // 同 showStageNotice，掛在工作區外面
+        mountStageElement(button); // 掛在工作區外面（見 mountStageElement）
         button.addEventListener("click", async () => {
             button.disabled = true;
             await connectPrinter();
@@ -129,8 +123,6 @@ function showKioskConnectButton(printFn) {
             updateKioskStatus({ job: "printing", jobId: currentJobId });
             const outcome = await printRetryingBusy(pendingConnectPrint);
             reportPrintOutcome(outcome);
-            if (outcome.ok && outcome.issues.length) showKioskNotice(outcome.issues.join("；"));
-            else if (!outcome.ok && outcome.reason === "print-failed") showKioskNotice(describePrintFailure(outcome));
         });
         els["kiosk-connect-print"] = button;
     }
@@ -181,9 +173,18 @@ function reportJobStatus(status, extra = {}) {
 
 // 每一次回報也同步顯示在畫面上方的狀態列（不論有沒有父視窗）；printer_connected／needs_connect 只影響
 // 印表機欄位，由狀態列直接讀連線旗標，這裡不用另外傳。
+// 失敗原因、被略過的問題（issues）都寫在狀態列上，畫面上沒有另外的提示框。
 const BAR_JOB_BY_STATUS = { ready: "idle", printed: "printed", print_failed: "failed", load_failed: "load_failed" };
 function showStatusOnBar(status, extra) {
-    updateKioskStatus({ job: BAR_JOB_BY_STATUS[status], message: extra.message || "", jobId: currentJobId });
+    let job = BAR_JOB_BY_STATUS[status];
+    // 狀態列已寫「列印失敗」；kiosk 畫面上也沒有可以按的列印鍵，所以拿掉訊息的前綴與「請改用列印鍵」
+    let message = (extra.message || "").replace(/^自動列印失敗：/, "").replace(/，請改用列印鍵$/, "");
+    if (status === "printed" && extra.issues?.length) {
+        job = "printed_issues";
+        message = extra.issues.join("；");
+    }
+    if (status === "load_failed") message = message.replace(/^範本載入失敗：/, ""); // 狀態文字本身已寫「範本載入失敗」
+    updateKioskStatus({ job, message, jobId: currentJobId });
 }
 
 // printSilently() 的回傳結果轉成對外回報用的狀態；describePrintFailure 沿用既有的中文訊息組法，
@@ -232,11 +233,10 @@ function isAllowedTemplateUrl(url) {
     }
 }
 
-/** 抓 tpl= 指定的 .ptan 內容、解析、註冊內嵌字體，回傳 project；失敗回傳 null 並顯示提示。 */
+/** 抓 tpl= 指定的 .ptan 內容、解析、註冊內嵌字體，回傳 { project }；失敗回傳 { error }（原因，供狀態列與回報使用）。 */
 async function loadTemplateFromUrl(url) {
     if (!isAllowedTemplateUrl(url)) {
-        showKioskNotice("範本網址不允許（僅接受同源網址）");
-        return null;
+        return { error: "網址不允許（僅接受同源網址）" };
     }
     let text;
     try {
@@ -244,13 +244,11 @@ async function loadTemplateFromUrl(url) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         text = await res.text();
     } catch {
-        showKioskNotice("範本讀取失敗，請確認網址是否正確");
-        return null;
+        return { error: "讀取失敗，請確認網址是否正確" };
     }
     const result = loadProject(text);
     if (!result.ok) {
-        showKioskNotice("範本內容有誤，無法開啟");
-        return null;
+        return { error: "內容有誤，無法開啟" };
     }
     if (result.project.embeddedFonts) {
         // 字體資料只用來註冊 FontFace，不留在專案裡，跟 ptan-file.js 的 readPtanFile 做法一致
@@ -258,7 +256,7 @@ async function loadTemplateFromUrl(url) {
         await registerEmbeddedFonts(embeddedFonts);
         result.project = rest;
     }
-    return result.project;
+    return { project: result.project };
 }
 
 /** 把 submit-job 送來的 data 套進 state.previewData，只收範本裡實際用到的變數名稱。 */
@@ -279,8 +277,6 @@ async function runAutoprintFlow() {
     if (state.usbConnected || state.serialConnected) {
         const outcome = await printRetryingBusy(printSilently);
         reportPrintOutcome(outcome);
-        if (outcome.ok && outcome.issues.length) showKioskNotice(outcome.issues.join("；"));
-        else if (!outcome.ok && outcome.reason === "print-failed") showKioskNotice(describePrintFailure(outcome));
     } else {
         // 沒有已授權裝置：WebUSB／Serial 規格要求跳選擇窗一定要使用者手勢，做不到全自動，
         // 顯示候補配對按鈕讓人點一次；工具列被 .is-kiosk 隱藏，原本的列印鍵點不到。
@@ -314,8 +310,6 @@ async function runMultiAutoprintFlow(projects, data, gapDots) {
     if (state.usbConnected || state.serialConnected) {
         const outcome = await printRetryingBusy(printFn);
         reportPrintOutcome(outcome);
-        if (outcome.ok && outcome.issues.length) showKioskNotice(outcome.issues.join("；"));
-        else if (!outcome.ok && outcome.reason === "print-failed") showKioskNotice(describePrintFailure(outcome));
     } else {
         reportJobStatus("needs_connect");
         showKioskConnectButton(printFn);
@@ -352,7 +346,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
 
     // origin 要在讀範本之前先算出來：範本讀取失敗（網址錯、範本內容壞掉、同源檢查沒過……）
     // 也要能回報給父視窗，不然父視窗只會看到「一直沒收到 ready」，完全不知道是什麼問題、
-    // 也無從在自己的畫面上顯示錯誤原因給現場人員看——只能盯著 iframe 裡那行小提示字。
+    // 也無從在自己的畫面上顯示錯誤原因給現場人員看。
     currentJobId = params.get("jobId") || null;
     reportTargetOrigin = resolveParentOrigin(params);
 
@@ -364,11 +358,13 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     updateKioskStatus({ job: "loading", jobId: currentJobId });
     const projects = [];
     for (const url of tplUrls) {
-        const project = await loadTemplateFromUrl(url);
+        const { project, error } = await loadTemplateFromUrl(url);
         if (!project) {
             // 任一份讀取失敗就整個中止，維持 kiosk 外觀顯示錯誤提示，不退回一般編輯畫面；
             // 同時盡量回報給父視窗（沒有 reportTargetOrigin 就跟以前一樣完全不動作）。
-            reportJobStatus("load_failed", { message: `範本載入失敗：${url}` });
+            setKioskTemplateNames([], "無法載入範本");
+            attemptSilentPrinterReconnect().catch(() => {}).finally(markPrinterChecked); // 指示燈仍要如實顯示印表機
+            reportJobStatus("load_failed", { message: `範本載入失敗：${url}（${error}）` });
             return true;
         }
         projects.push(project);
