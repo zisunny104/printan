@@ -25,7 +25,7 @@
         integrity="sha512-nMnXAGKzA0wZ4YsriudrdnAKSFYXwdCvSt1Auwz6q7XXtSRoRcMVud13Q1LnQnobA2hRhLtHUv9tbVR5pyStPw=="
         crossorigin="anonymous" defer></script>
     <!-- 圖示放在本專案目錄底下並明確宣告，不靠網站根目錄的 /favicon.ico（那是整個站共用的位置） -->
-    <link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars($appBasePath) ?>/favicon.svg">
-    <link rel="apple-touch-icon" href="<?= htmlspecialchars($appBasePath) ?>/apple-touch-icon.png">
+    <link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars($appBasePath) ?>/img/favicon.svg">
+    <link rel="apple-touch-icon" href="<?= htmlspecialchars($appBasePath) ?>/img/apple-touch-icon.png">
     <link rel="stylesheet" href="<?= htmlspecialchars($appBasePath) ?>/css/editor.css">
 </head>
