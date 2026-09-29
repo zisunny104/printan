@@ -59,9 +59,9 @@ cd printan
 
 ### 更新部署
 
-在伺服器上的專案目錄執行 `./deploy.sh`：先確認沒有未提交的本機修改，抓遠端 `main`，**合併前**用 `php -l` 檢查新增／修改的 PHP 檔語法（有錯就中止，線上檔案不動），再快轉更新並列出這次的變更。純 PHP 頁面殼加瀏覽器端 JS，沒有資料庫或需要 PHP 寫入的目錄，所以不需要額外擴充套件或修正權限。
+在伺服器上的專案目錄執行 `./deploy.sh`：先確認沒有未 commit 的修改，fetch remote `main`，**merge 前**用 `php -l` 檢查新增／修改的 PHP 檔語法（有錯就中止，線上檔案不動），再 fast-forward 更新並列出這次的 commit。純 PHP 頁面殼加瀏覽器端 JS，沒有資料庫或需要 PHP 寫入的目錄，所以不需要額外擴充套件或修正權限。
 
-- `DEPLOY_BRANCH`：要部署的分支，預設 `main`
+- `DEPLOY_BRANCH`：要部署的 branch，預設 `main`
 - `DEPLOY_RELOAD_CMD`：更新後要執行的指令，給 opcache 不檢查檔案時間戳的伺服器用，例如 `DEPLOY_RELOAD_CMD="systemctl reload php8.3-fpm" ./deploy.sh`
 
 伺服器上沒有 `php` 指令時會略過語法檢查（會提示），其餘流程照常。

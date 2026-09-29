@@ -21,16 +21,16 @@ BRANCH="${DEPLOY_BRANCH:-main}"
 # printan 是純 PHP 頁面殼＋瀏覽器端 JS：沒有資料庫、沒有必要的 PHP 擴充套件、
 # 也沒有需要 PHP 寫入的目錄，所以不需要檢查擴充套件或修正目錄權限。
 
-step "檢查工作目錄"
-# 伺服器上的檔案被手動改過時，git 快轉合併會中途失敗；先擋下來，講清楚是哪些檔案。
+step "檢查 working tree"
+# 伺服器上的檔案被手動改過時，git fast-forward merge 會中途失敗；先擋下來，講清楚是哪些檔案。
 DIRTY="$(git status --porcelain --untracked-files=no)"
 if [ -n "$DIRTY" ]; then
-  fail "有尚未提交的本機修改，部署已中止（怕蓋掉伺服器上的手動修改）："
+  fail "有尚未 commit 的修改，部署已中止（怕蓋掉伺服器上的手動修改）："
   sed 's/^/    /' <<< "$DIRTY"
   echo "  ${DIM}確認不需要之後，用 git checkout -- <檔案> 還原，再重新執行 ./deploy.sh${RESET}"
   exit 1
 fi
-ok "沒有未提交的修改"
+ok "沒有未 commit 的修改"
 
 HAS_PHP=0
 if command -v php >/dev/null 2>&1; then
@@ -41,16 +41,16 @@ else
 fi
 
 echo
-step "取得最新程式碼"
+step "Fetch 最新程式碼"
 BEFORE=$(git rev-parse --short HEAD)
 git fetch --quiet origin "$BRANCH"
 AFTER=$(git rev-parse --short FETCH_HEAD)
-ok "遠端 ${BRANCH}：${AFTER}"
+ok "remote ${BRANCH}：${AFTER}"
 
 if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ] && ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
-  # 本機有遠端沒有的提交（或兩邊分岔）：快轉合併做不到，硬合併會在伺服器上產生合併提交，都不是預期的部署結果
-  fail "本機（${BEFORE}）不是遠端（${AFTER}）的祖先，無法快轉更新，部署已中止"
-  echo "  ${DIM}伺服器上不該有遠端沒有的提交；請確認後再處理（例如 git log ${AFTER}..HEAD 看多出什麼）${RESET}"
+  # local 有 remote 沒有的 commit（或兩邊 diverge）：fast-forward 做不到，硬 merge 會在伺服器上產生 merge commit，都不是預期的部署結果
+  fail "local（${BEFORE}）不是 remote（${AFTER}）的 ancestor，無法 fast-forward，部署已中止"
+  echo "  ${DIM}伺服器上不該有 remote 沒有的 commit；請確認後再處理（例如 git log ${AFTER}..HEAD 看多出什麼）${RESET}"
   exit 1
 fi
 
@@ -60,8 +60,8 @@ if [ "$BEFORE" = "$AFTER" ]; then
 else
   echo
   step "部署前先檢查新增／修改的 PHP 語法"
-  # 在合併「之前」就檢查：直接用 git show 把遠端版本餵給 php -l，有錯就中止，
-  # 線上的檔案完全沒動。合併之後才發現，網站已經是壞的了。
+  # 在 merge「之前」就檢查：直接用 git show 把 remote 版本餵給 php -l，有錯就中止，
+  # 線上的檔案完全沒動。merge 之後才發現，網站已經是壞的了。
   if [ "$HAS_PHP" -eq 1 ]; then
     BAD=()
     COUNT=0
@@ -114,5 +114,5 @@ if [ "$HAS_PHP" -eq 1 ]; then
   VERSION="$(php -r '$c = require "config.php"; echo $c["version"] ?? "?";' 2>/dev/null || echo '?')"
   echo "  應用版本：${BOLD}v${VERSION}${RESET}"
 fi
-echo "  目前提交：${BOLD}$(git rev-parse --short HEAD)${RESET}"
+echo "  目前 commit：${BOLD}$(git rev-parse --short HEAD)${RESET}"
 echo "  完成時間：${DIM}$(date '+%Y-%m-%d %H:%M:%S')${RESET}"
