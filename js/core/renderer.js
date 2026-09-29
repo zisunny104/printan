@@ -812,6 +812,25 @@ function paintBoxBorder(ctx, x, y, w, h, el) {
 function renderFillCanvas(w, h, fill, invert = false) {
     w = Math.max(1, Math.round(w));
     h = Math.max(1, Math.round(h));
+    if (fill.mode === "solid" || w * h > FILL_CACHE_MAX_PIXELS) return drawFillCanvas(w, h, fill, invert);
+    // 呼叫端只把結果當 drawImage 來源；同樣的花紋（編輯時每次重繪都一樣）直接重用，省掉逐點抖色。
+    const key = `${w}x${h}|${invert ? 1 : 0}|${JSON.stringify(fill)}`;
+    let canvas = fillCanvasCache.get(key);
+    if (canvas) {
+        fillCanvasCache.delete(key);
+    } else {
+        canvas = drawFillCanvas(w, h, fill, invert);
+        if (fillCanvasCache.size >= FILL_CACHE_MAX_ENTRIES) fillCanvasCache.delete(fillCanvasCache.keys().next().value);
+    }
+    fillCanvasCache.set(key, canvas);
+    return canvas;
+}
+
+const FILL_CACHE_MAX_ENTRIES = 16;
+const FILL_CACHE_MAX_PIXELS = 1_000_000;
+const fillCanvasCache = new Map();
+
+function drawFillCanvas(w, h, fill, invert) {
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
