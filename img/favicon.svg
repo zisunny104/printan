@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Printan 單仔</title>
+  <!-- 深灰正圓，圖案收在中央半徑約 24 的圓內，四周仍有間距（apple-touch-icon.png 是同圖案的滿版方形，iOS 不支援透明） -->
+  <circle cx="32" cy="32" r="31" fill="#2b2b2f" stroke="#6b6b73" stroke-width="2"/>
+  <path fill="#d4d4d8" d="M20 13h24a2 2 0 0 1 2 2v36l-4.667-3.5L36.667 51 32 47.5 27.333 51l-4.666-3.5L18 51V15a2 2 0 0 1 2-2Z"/>
+  <g fill="#2b2b2f">
+    <rect x="23" y="20" width="18" height="2.6" rx="1.3"/>
+    <rect x="23" y="27" width="18" height="2.6" rx="1.3"/>
+    <rect x="23" y="34" width="11" height="2.6" rx="1.3"/>
+  </g>
+</svg>
