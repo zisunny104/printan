@@ -53,15 +53,15 @@ git clone https://github.com/zisunny104/printan.git
 cd printan
 ```
 
-2. 配置網頁伺服器（需支援 PHP）
+2. 設定網頁伺服器（需支援 PHP）
 
 3. 直接訪問 `index.php`
 
 ### 更新部署
 
-在伺服器上的專案目錄執行 `./deploy.sh`：先確認沒有未提交的本機修改，抓遠端 `main`，**合併前**用 `php -l` 檢查新增／修改的 PHP 檔語法（有錯就中止，線上檔案不動），再快轉更新並列出這次的變更。純 PHP 頁面殼加瀏覽器端 JS，沒有資料庫或需要 PHP 寫入的目錄，所以不需要額外擴充套件或修正權限。
+在伺服器上的專案目錄執行 `./deploy.sh`：先確認沒有未 commit 的修改，fetch remote `main`，**merge 前**用 `php -l` 檢查新增／修改的 PHP 檔語法（有錯就中止，線上檔案不動），再 fast-forward 更新並列出這次的 commit。純 PHP 頁面殼加瀏覽器端 JS，沒有資料庫或需要 PHP 寫入的目錄，所以不需要額外擴充套件或修正權限。
 
-- `DEPLOY_BRANCH`：要部署的分支，預設 `main`
+- `DEPLOY_BRANCH`：要部署的 branch，預設 `main`
 - `DEPLOY_RELOAD_CMD`：更新後要執行的指令，給 opcache 不檢查檔案時間戳的伺服器用，例如 `DEPLOY_RELOAD_CMD="systemctl reload php8.3-fpm" ./deploy.sh`
 
 伺服器上沒有 `php` 指令時會略過語法檢查（會提示），其餘流程照常。
@@ -112,8 +112,11 @@ cd printan
 ## 使用的開源函式庫
 
 - [Tocas UI](https://tocas-ui.com/) - MIT License
-- [MaterialDesign-Webfont](https://materialdesignicons.com/) - Apache-2.0 License（圖示）
 - [jsPDF](https://github.com/parallax/jsPDF) - MIT License
+- [JsBarcode](https://github.com/lindell/JsBarcode) - MIT License
+- [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) - MIT License
+- [libheif-js](https://github.com/catdad-experiments/libheif-js) - LGPL-3.0（自行託管於 `vendor/libheif/`，HEIC 解碼）
+- [Sarasa Mono TC](https://github.com/be5invis/Sarasa-Gothic)、[JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) - SIL OFL 1.1（字體）
 
 版面渲染、熱感模擬（灰階／抖動）、`.ptan` 讀寫等核心邏輯皆為原生實作。
 
