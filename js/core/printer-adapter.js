@@ -251,35 +251,60 @@ export function interpretRealtimeStatus(n, byte) {
 }
 
 const READY_CHECK_TIMEOUT_MS = 2500;
+const READY_RECHECK_DELAY_MS = 300;
+
+// 即時狀態回應（DLE EOT 1～4）的固定位元：bit0＝0、bit1＝1、bit4＝1、bit7＝0（Epson 規格，各 n 相同）。
+// 不符代表讀到的不是狀態位元組——例如前一個逾時的 GS I 查詢遲到的回應（標頭 0x5F，bit3 剛好是 1，
+// 會被誤讀成「離線」），這種資料不能拿來判斷。
+const isRealtimeStatusByte = (byte) => (byte & 0x93) === 0x12;
+
+async function readReadyStatus(adapter) {
+    const online = await adapter.queryStatus(1);
+    if (online.length === 0) return null;
+    const paper = await adapter.queryStatus(4);
+    if (!isRealtimeStatusByte(online[0]) || (paper.length && !isRealtimeStatusByte(paper[0]))) return null;
+    return { online: interpretRealtimeStatus(1, online[0]).online, paper: paper.length ? interpretRealtimeStatus(4, paper[0]).paper : "ok" };
+}
+
+function judgeReady(status) {
+    if (status.paper === "out") return { ready: false, reason: "paper-out" };
+    if (!status.online) return { ready: false, reason: "offline" };
+    return { ready: true };
+}
 
 /**
  * 列印前先問印表機一次狀態（DLE EOT 1／4，見 interpretRealtimeStatus）：離線或缺紙時資料送出去也印不出來，
  * 卻會被印表機收進緩衝區、看起來像送出成功，所以先擋下來讓使用者處理。
- * 「查不到」一律當作可以列印，不擋：印表機不支援即時狀態、沒有讀取端點、沒回應、逾時、讀取例外都算。
+ * 「查不到」一律當作可以列印，不擋：印表機不支援即時狀態、沒有讀取端點、沒回應、逾時、讀取例外、
+ * 回應的固定位元不對（讀到的不是狀態位元組）都算。
  * 第一次查不到就記在 adapter.statusCheckUnavailable（斷線時清掉），之後這條連線不再查，
  * 不會每次列印都多等一輪逾時。
+ * 判定要擋之前會再問一次確認，兩次結論相同才擋，避免單次誤讀就擋住列印。
  * 只讀取、不動印表機狀態；呼叫端要自己持有 printerBusy，避免跟其他操作交錯讀寫。
  * @returns {Promise<{ ready: true } | { ready: false, reason: "offline" | "paper-out" }>}
  */
-export async function checkPrinterReady(adapter, timeoutMs = READY_CHECK_TIMEOUT_MS) {
+export async function checkPrinterReady(adapter, timeoutMs = READY_CHECK_TIMEOUT_MS, recheckDelayMs = READY_RECHECK_DELAY_MS) {
     if (adapter.statusCheckUnavailable) return { ready: true };
     let timer;
-    const timedOut = new Promise((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); });
-    const query = (async () => {
-        const online = await adapter.queryStatus(1);
-        if (online.length === 0) return null;
-        const paper = await adapter.queryStatus(4);
-        return { online: interpretRealtimeStatus(1, online[0]).online, paper: paper.length ? interpretRealtimeStatus(4, paper[0]).paper : "ok" };
+    const timedOut = new Promise((resolve) => { timer = setTimeout(() => resolve("timeout"), timeoutMs); });
+    const run = (async () => {
+        const first = await readReadyStatus(adapter);
+        if (!first) return null;
+        const verdict = judgeReady(first);
+        if (verdict.ready) return verdict;
+        await new Promise((resolve) => setTimeout(resolve, recheckDelayMs));
+        const second = await readReadyStatus(adapter);
+        if (!second) return null;
+        const again = judgeReady(second);
+        return again.reason === verdict.reason ? again : { ready: true };
     })().catch(() => null);
-    const status = await Promise.race([query, timedOut]);
+    const result = await Promise.race([run, timedOut]);
     clearTimeout(timer);
-    if (!status) {
+    if (!result || result === "timeout") {
         adapter.statusCheckUnavailable = true;
         return { ready: true };
     }
-    if (status.paper === "out") return { ready: false, reason: "paper-out" };
-    if (!status.online) return { ready: false, reason: "offline" };
-    return { ready: true };
+    return result;
 }
 
 /**
