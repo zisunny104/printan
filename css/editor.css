@@ -2396,3 +2396,56 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
 #kiosk-connect-print:active {
     box-shadow: 0 3px 10px rgba(0, 0, 0, .25);
 }
+
+/* kiosk 最上方狀態列（js/editor/kiosk-status-bar.js）：版本、範本名稱、印表機連線與工單狀態。
+   只是一條細的資訊列，不搶紙張預覽的位置；圓點顏色與文字並用，色盲也讀得到狀態文字。 */
+#kiosk-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .25rem 1rem;
+    padding: .5rem 1rem;
+    font-size: .875rem;
+    border-bottom: 1px solid var(--ts-gray-300);
+}
+
+.kiosk-status-title {
+    font-weight: 700;
+}
+
+.kiosk-status-template,
+.kiosk-status-label {
+    color: var(--ts-gray-500);
+}
+
+.kiosk-status-spacer {
+    flex: 1 1 0;
+}
+
+.kiosk-status-jobid {
+    color: var(--ts-gray-500);
+    font-size: .75rem;
+}
+
+.kiosk-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    min-width: 0;
+}
+
+.kiosk-status-value {
+    overflow-wrap: anywhere;
+}
+
+.kiosk-status-dot {
+    width: .625rem;
+    height: .625rem;
+    border-radius: 50%;
+    background: var(--ts-gray-500);
+    flex: none;
+}
+
+.kiosk-status-dot[data-tone="ok"] { background: #2e9d5b; }
+.kiosk-status-dot[data-tone="warn"] { background: #d98e04; }
+.kiosk-status-dot[data-tone="error"] { background: #d33a3a; }
