@@ -21,7 +21,7 @@ pre { margin: 0 0 0 24px; white-space: pre-wrap; }
 // ESC/POS 位元組 golden 測試＋左右邊距校正計算，跟 tests/index.html 同一套跑法（標題顯示 PASS／FAIL）。
 import {
     WebSerialEscposAdapter, WebUsbEscposAdapter, buildEscposJob, canvasToEscposRaster, centerCanvasOnWidth,
-    describePrinterError, isSelectionCancelled,
+    describePrinterError, isSelectionCancelled, interpretRealtimeStatus, readFullPrinterStatus,
 } from "../js/core/printer-adapter.js";
 import {
     getPrinterProfile, marginPadDots, sanitizeMarginCalibration, withMarginCalibration,
@@ -586,6 +586,32 @@ test("相鄰元素不貼合：文字、QR、條碼、QR 上下相鄰，各元素
         for (let y = top; y < top + 4; y++) assert(!rowDark(y, x0, x1), `${item.el.format} 上緣第 ${y - top + 1} 點有黑點`);
         for (let y = bottom - 4; y < bottom; y++) assert(!rowDark(y, x0, x1), `${item.el.format} 下緣第 ${bottom - y} 點有黑點`);
     }
+});
+
+// 即時狀態（DLE EOT 1～4）：位元解讀＋整包讀取（模擬 adapter，不需要實體印表機）
+test("interpretRealtimeStatus：n=2 上蓋／缺紙停印／錯誤，n=3 切刀／不可恢復／可自動恢復", () => {
+    const n2 = interpretRealtimeStatus(2, 0x04 | 0x20 | 0x40);
+    assert(n2.coverOpen && n2.paperEndStop && n2.errorState, "n=2 三個位元都該成立");
+    const n2ok = interpretRealtimeStatus(2, 0x00);
+    assert(!n2ok.coverOpen && !n2ok.paperEndStop && !n2ok.errorState, "n=2 全 0 該全部不成立");
+    const n3 = interpretRealtimeStatus(3, 0x08 | 0x20 | 0x40);
+    assert(n3.cutterError && n3.unrecoverable && n3.autoRecoverable, "n=3 三個位元都該成立");
+    assert(!interpretRealtimeStatus(3, 0x00).cutterError, "n=3 全 0 不該有切刀錯誤");
+});
+
+test("readFullPrinterStatus：整理 1～4 並附原始位元組；讀不到就標記不支援、之後不再查", async () => {
+    const replies = { 1: 0x00, 2: 0x04, 3: 0x00, 4: 0x0c };
+    const good = { statusCheckUnavailable: false, async queryStatus(n) { return new Uint8Array([replies[n]]); } };
+    const s = await readFullPrinterStatus(good);
+    assert(s.supported && s.online && s.coverOpen && s.paper === "near-end", JSON.stringify(s));
+    assert(JSON.stringify(s.raw) === "[0,4,0,12]", "raw 位元組不對");
+    let calls = 0;
+    const silent = { statusCheckUnavailable: false, async queryStatus() { calls++; return new Uint8Array(); } };
+    assert((await readFullPrinterStatus(silent)).supported === false, "沒回應該回不支援");
+    assert(silent.statusCheckUnavailable === true, "沒記成不可用");
+    const before = calls;
+    await readFullPrinterStatus(silent);
+    assert(calls === before, "標記不可用後不該再查");
 });
 
 let failed = 0;

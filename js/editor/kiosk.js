@@ -27,6 +27,11 @@
 //     ready 之後 printan 會先靜默重連一次已授權印表機再回報結果，不用等第一筆列印工作：已連上是
 //     printer_connected；沒有已授權裝置是 needs_connect，並直接顯示配對按鈕（配對成功後回報
 //     printer_connected，不會列印）。這段檢查進行中收到的 submit-job 會等它做完才處理。
+//     另有 { source: "printan-kiosk", jobId: null, status: "printer_status", connected, supported, online, paper: "ok"|"near-end"|"out",
+//     coverOpen, paperEndStop, errorState, cutterError, unrecoverable, autoRecoverable, raw: [n1..n4 原始位元組] }：
+//     印表機閒置時每 STATUS_POLL_MS 讀一次即時狀態（DLE EOT 1～4），狀態有變或距離上次回報超過 STATUS_REPORT_MAX_MS 才送；
+//     USB／序列埠被拔掉時立刻送 connected:false。supported:false＝這台印表機／連線方式查不到狀態（其餘欄位沒有）。
+//     n=2／n=3 的位元定義尚未實機驗證，raw 供對照。
 //   父視窗 → printan（送資料，唯一的資料輸入管道）：
 //     { type: "printan:submit-job", jobId, data: { 變數名: 值 } }
 //     data 裡的鍵值比照範本 {{var}} 的規則套進 previewData（文字變數直接代換；照片變數是
@@ -47,7 +52,7 @@ import { describePrinterError } from "../core/printer-adapter.js";
 import { renderProjects } from "../core/compose.js";
 import { getEffectiveProfile } from "./editor.js";
 import { els, state } from "./context.js";
-import { attemptSilentPrinterReconnect, connectPrinter, printComposedSilently, printSilently } from "./printer-settings.js";
+import { attemptSilentPrinterReconnect, connectPrinter, pollPrinterStatusIfIdle, printComposedSilently, printSilently } from "./printer-settings.js";
 import { initKioskStatusBar, markPrinterChecked, mountPrinterCardAction, setKioskTemplateNames, updateKioskStatus } from "./kiosk-status-bar.js";
 
 const KIOSK_CLASS = "is-kiosk";
@@ -170,6 +175,39 @@ function reportJobStatus(status, extra = {}) {
     window.parent.postMessage({ source: "printan-kiosk", jobId: currentJobId, status, ...extra }, reportTargetOrigin);
 }
 
+// ---- 印表機即時狀態回報（printer_status）：讓父視窗（遠端後台）看得到缺紙、上蓋、切刀錯誤、拔線 ----
+const STATUS_POLL_MS = 30000;
+const STATUS_REPORT_MAX_MS = 60000;
+let lastStatusKey = "";
+let lastStatusSentAt = 0;
+
+function sendPrinterStatus(fields) {
+    if (window.parent === window || !reportTargetOrigin) return;
+    const key = JSON.stringify(fields);
+    const now = Date.now();
+    if (key === lastStatusKey && now - lastStatusSentAt < STATUS_REPORT_MAX_MS) return;
+    lastStatusKey = key;
+    lastStatusSentAt = now;
+    window.parent.postMessage({ source: "printan-kiosk", jobId: null, status: "printer_status", ...fields }, reportTargetOrigin);
+}
+
+async function pollAndReportPrinterStatus() {
+    if (!state.usbConnected && !state.serialConnected) {
+        sendPrinterStatus({ connected: false, supported: false });
+        return;
+    }
+    const s = await pollPrinterStatusIfIdle(); // null＝正在忙（列印中），這輪跳過，不插隊
+    if (s === null) return;
+    sendPrinterStatus({ connected: true, ...s });
+}
+
+function startPrinterStatusReporting() {
+    const onGone = () => setTimeout(() => pollAndReportPrinterStatus().catch(() => {}), 300); // 等 printer-settings 那邊先清掉連線旗標
+    if ("usb" in navigator) navigator.usb.addEventListener("disconnect", onGone);
+    if ("serial" in navigator) navigator.serial.addEventListener("disconnect", onGone);
+    setInterval(() => { pollAndReportPrinterStatus().catch(() => {}); }, STATUS_POLL_MS);
+}
+
 // 每一次回報也同步顯示在畫面上方的狀態列（不論有沒有父視窗）；printer_connected／needs_connect 只影響
 // 印表機欄位，由狀態列直接讀連線旗標，這裡不用另外傳。
 // 失敗原因、被略過的問題（issues）都寫在狀態列上，畫面上沒有另外的提示框。
@@ -189,6 +227,7 @@ function showStatusOnBar(status, extra) {
 // printSilently() 的回傳結果轉成對外回報用的狀態；describePrintFailure 沿用既有的中文訊息組法，
 // 不再另外維護一套回報專用文案。
 function reportPrintOutcome(outcome) {
+    setTimeout(() => pollAndReportPrinterStatus().catch(() => {}), 1500); // 每筆印完再讀一次：缺紙、切刀錯誤常常是這一筆才發生
     if (outcome.ok) {
         reportJobStatus("printed", { issues: outcome.issues });
         return;
@@ -417,8 +456,10 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
             await runAutoprintFlow();
         });
     });
+    startPrinterStatusReporting();
     reportJobStatus("ready");
     // 不 await：editor.js 等這個函式跑完才收起骨架畫面，印表機重連（可能卡在裝置 open）不該拖住畫面顯示。
     startupPrinterCheck = checkPrinterOnStartup().catch(() => {});
+    startupPrinterCheck.then(() => pollAndReportPrinterStatus()).catch(() => {}); // 啟動檢查完先讀一次，不用等第一輪定時
     return true;
 }
