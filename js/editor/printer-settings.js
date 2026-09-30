@@ -5,7 +5,7 @@ import {
     getPrinterProfile, matchPrinterProfile, sanitizeMarginCalibration, sanitizePrintableDotsOverrides,
 } from "../core/printer-profiles.js";
 import { PRINT_PREFS_KEY, els, serialAdapter, state, usbAdapter } from "./context.js";
-import { SystemDialogAdapter, checkPrinterReady, describePrinterError, interpretRealtimeStatus, isSelectionCancelled, rotateCanvas180 } from "../core/printer-adapter.js";
+import { SystemDialogAdapter, checkPrinterReady, describePrinterError, interpretRealtimeStatus, isSelectionCancelled, readFullPrinterStatus, rotateCanvas180 } from "../core/printer-adapter.js";
 import { getBaseProfile, getEffectiveProfile, schedulePreview } from "./editor.js";
 import { confirmFontFallbacks, describeFontFallbackIssues } from "./batch-export.js";
 import { safeGetItem, safeSetItem } from "../core/storage.js";
@@ -650,6 +650,23 @@ async function printTestSheet(label, build, button) {
         state.printerBusy = false;
         button.classList.remove("is-loading");
         for (const b of sending) b.disabled = !(state.usbConnected || state.serialConnected);
+    }
+}
+
+/**
+ * 給 kiosk 定時回報用：印表機閒置時讀一次完整狀態（DLE EOT 1～4）。
+ * 沒連線、正忙（列印／測試列印／查詢中）就回 null，不插隊；不支援狀態查詢回 { supported: false }。
+ */
+export async function pollPrinterStatusIfIdle() {
+    const adapter = state.usbConnected ? usbAdapter : state.serialConnected ? serialAdapter : null;
+    if (!adapter || state.printerBusy) return null;
+    state.printerBusy = true;
+    try {
+        return await readFullPrinterStatus(adapter);
+    } catch {
+        return null;
+    } finally {
+        state.printerBusy = false;
     }
 }
 

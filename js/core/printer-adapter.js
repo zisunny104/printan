@@ -237,11 +237,15 @@ export function buildEscposJob(renderResult, { feedLines = 0, cutPaper = false, 
 // - n=4（紙張感應器）bit5+6 同時為 1＝缺紙、bit2+3 同時為 1＝紙快用完，這組是 TM-T82
 //   系列專門記錄的結果：
 //   https://www.matthewswong.com/en/blog/epson-tm-t82-cash-drawer-cutter-status/
-// - n=2（離線原因）／n=3（錯誤原因）目前沒有查到可信、可交叉比對的位元定義來源，
-//   Epson 官方文件（download4.epson.biz）擋自動化擷取讀不到，這裡刻意不猜、不解讀，
-//   避免像 bladeOffsetMm 那次一樣把沒把握的猜測講得太肯定；只回報 n=1／n=4。
+// - n=2（離線原因）bit2＝上蓋打開、bit5＝因缺紙而停止列印、bit6＝發生錯誤；
+//   n=3（錯誤原因）bit3＝切刀錯誤、bit5＝不可恢復錯誤、bit6＝可自動恢復錯誤（例如感熱頭過熱）。
+//   這兩組來自 Epson ESC/POS 指令參考（DLE EOT）的搜尋摘要，Epson 官方文件本身擋自動化擷取、
+//   沒有第二個獨立來源交叉比對，也還沒在實機驗證過（見 README 已知限制），所以只當作「提示」：
+//   readFullPrinterStatus 一律把原始位元組一併帶出去，實機上可以對照。
 export function interpretRealtimeStatus(n, byte) {
     if (n === 1) return { online: (byte & 0x08) === 0 };
+    if (n === 2) return { coverOpen: (byte & 0x04) !== 0, paperEndStop: (byte & 0x20) !== 0, errorState: (byte & 0x40) !== 0 };
+    if (n === 3) return { cutterError: (byte & 0x08) !== 0, unrecoverable: (byte & 0x20) !== 0, autoRecoverable: (byte & 0x40) !== 0 };
     if (n === 4) {
         if ((byte & 0x60) === 0x60) return { paper: "out" };
         if ((byte & 0x0c) === 0x0c) return { paper: "near-end" };
@@ -280,6 +284,42 @@ export async function checkPrinterReady(adapter, timeoutMs = READY_CHECK_TIMEOUT
     if (status.paper === "out") return { ready: false, reason: "paper-out" };
     if (!status.online) return { ready: false, reason: "offline" };
     return { ready: true };
+}
+
+/**
+ * 一次讀完 DLE EOT 1～4，整理成一份狀態，給 kiosk 回報遠端看（見 kiosk.js 的 printer_status）。
+ * 跟 checkPrinterReady 一樣：查不到（沒有讀取端點、沒回應、逾時、例外）不算錯誤，回傳 { supported: false }，
+ * 並記在 adapter.statusCheckUnavailable，之後這條連線不再查。依序查詢，不平行（見 queryStatus 說明）。
+ * 只讀取；呼叫端要自己持有 printerBusy。
+ * @returns {Promise<{ supported: false } | { supported: true, online: boolean, paper: "ok"|"near-end"|"out", coverOpen: boolean, paperEndStop: boolean, errorState: boolean, cutterError: boolean, unrecoverable: boolean, autoRecoverable: boolean, raw: number[] }>}
+ */
+export async function readFullPrinterStatus(adapter, timeoutMs = 4000) {
+    if (adapter.statusCheckUnavailable) return { supported: false };
+    let timer;
+    const timedOut = new Promise((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); });
+    const query = (async () => {
+        const bytes = [];
+        for (const n of [1, 2, 3, 4]) {
+            const r = await adapter.queryStatus(n);
+            if (r.length === 0) return null;
+            bytes.push(r[0]);
+        }
+        return bytes;
+    })().catch(() => null);
+    const bytes = await Promise.race([query, timedOut]);
+    clearTimeout(timer);
+    if (!bytes) {
+        adapter.statusCheckUnavailable = true;
+        return { supported: false };
+    }
+    return {
+        supported: true,
+        ...interpretRealtimeStatus(1, bytes[0]),
+        ...interpretRealtimeStatus(2, bytes[1]),
+        ...interpretRealtimeStatus(3, bytes[2]),
+        ...interpretRealtimeStatus(4, bytes[3]),
+        raw: bytes,
+    };
 }
 
 /**
