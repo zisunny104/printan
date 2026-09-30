@@ -32,6 +32,8 @@
 //     印表機閒置時每 STATUS_POLL_MS 讀一次即時狀態（DLE EOT 1～4），狀態有變或距離上次回報超過 STATUS_REPORT_MAX_MS 才送；
 //     USB／序列埠被拔掉時立刻送 connected:false。supported:false＝這台印表機／連線方式查不到狀態（其餘欄位沒有）。
 //     n=2／n=3 的位元定義尚未實機驗證，raw 供對照。
+//   父視窗 → printan（要求立即讀一次印表機狀態，後台「立即檢查」用）：{ type: "printan:query-status" }
+//     不管狀態有沒有變都會回一則 printer_status；正在列印（忙碌）會每秒重試，最多約 6 秒，仍忙就不回（父視窗自己逾時處理）。
 //   父視窗 → printan（送資料，唯一的資料輸入管道）：
 //     { type: "printan:submit-job", jobId, data: { 變數名: 值 } }
 //     data 裡的鍵值比照範本 {{var}} 的規則套進 previewData（文字變數直接代換；照片變數是
@@ -181,24 +183,33 @@ const STATUS_REPORT_MAX_MS = 60000;
 let lastStatusKey = "";
 let lastStatusSentAt = 0;
 
-function sendPrinterStatus(fields) {
+function sendPrinterStatus(fields, force = false) {
     if (window.parent === window || !reportTargetOrigin) return;
     const key = JSON.stringify(fields);
     const now = Date.now();
-    if (key === lastStatusKey && now - lastStatusSentAt < STATUS_REPORT_MAX_MS) return;
+    if (!force && key === lastStatusKey && now - lastStatusSentAt < STATUS_REPORT_MAX_MS) return;
     lastStatusKey = key;
     lastStatusSentAt = now;
     window.parent.postMessage({ source: "printan-kiosk", jobId: null, status: "printer_status", ...fields }, reportTargetOrigin);
 }
 
-async function pollAndReportPrinterStatus() {
+async function pollAndReportPrinterStatus(force = false) {
     if (!state.usbConnected && !state.serialConnected) {
-        sendPrinterStatus({ connected: false, supported: false });
+        sendPrinterStatus({ connected: false, supported: false }, force);
         return;
     }
     const s = await pollPrinterStatusIfIdle(); // null＝正在忙（列印中），這輪跳過，不插隊
-    if (s === null) return;
-    sendPrinterStatus({ connected: true, ...s });
+    if (s === null) return false;
+    sendPrinterStatus({ connected: true, ...s }, force);
+    return true;
+}
+
+// 父視窗要求立即讀一次：忙碌就每秒重試，最多 6 次
+async function pollNowOnRequest() {
+    for (let i = 0; i < 6; i++) {
+        if ((await pollAndReportPrinterStatus(true)) !== false) return;
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
 }
 
 function startPrinterStatusReporting() {
@@ -432,6 +443,10 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     window.addEventListener("message", (event) => {
         if (event.origin !== reportTargetOrigin || event.source !== window.parent) return;
         const msg = event.data;
+        if (msg && msg.type === "printan:query-status") {
+            pollNowOnRequest().catch(() => {});
+            return;
+        }
         if (!msg || msg.type !== "printan:submit-job") return;
         const jobId = msg.jobId || null;
         const data = msg.data && typeof msg.data === "object" ? msg.data : {};
