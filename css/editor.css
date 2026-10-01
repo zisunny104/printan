@@ -1814,7 +1814,7 @@ body {
     white-space: nowrap;
 }
 
-/* 可列印點數與邊距校正：每個紙寬一列。窄螢幕（<480px）改用格線，換算文字與 badge 固定排在輸入框下方，不各自亂折行 */
+/* 可列印點數：每個紙寬一列。窄螢幕（<480px）改用格線，換算文字與 badge 固定排在輸入框下方，不各自亂折行 */
 .printer-dots-row {
     display: flex;
     flex-wrap: wrap;
@@ -1850,16 +1850,6 @@ body {
     #printer-dots-list .printer-dots-row > span:last-child {
         grid-column: 3;
         grid-row: 1;
-    }
-
-    #printer-margin-list .printer-dots-row {
-        display: grid;
-        grid-template-columns: 3.5rem minmax(0, 1fr) minmax(0, 1fr) auto;
-        align-items: center;
-    }
-
-    #printer-margin-list .printer-dots-input {
-        width: auto;
     }
 }
 

@@ -18,15 +18,12 @@ pre { margin: 0 0 0 24px; white-space: pre-wrap; }
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode_UTF8.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
 <script type="module">
-// ESC/POS 位元組 golden 測試＋左右邊距校正計算，跟 tests/index.html 同一套跑法（標題顯示 PASS／FAIL）。
+// ESC/POS 位元組 golden 測試＋列印頭置中計算，跟 tests/index.html 同一套跑法（標題顯示 PASS／FAIL）。
 import {
     WebSerialEscposAdapter, WebUsbEscposAdapter, buildEscposJob, canvasToEscposRaster, centerCanvasOnWidth,
     describePrinterError, isSelectionCancelled, interpretRealtimeStatus, readFullPrinterStatus,
 } from "../js/core/printer-adapter.js";
-import {
-    getPrinterProfile, marginPadDots, sanitizeMarginCalibration, withMarginCalibration,
-    getMarginPad, getPrintHeadWidthDots, PRINTABLE_DOTS_MIN, MARGIN_MM_MAX,
-} from "../js/core/printer-profiles.js";
+import { getPrinterProfile, getPrintHeadWidthDots } from "../js/core/printer-profiles.js";
 
 import { composeResults } from "../js/core/compose.js";
 import { csvToRecords } from "../js/core/csv.js";
@@ -176,13 +173,10 @@ test("centerCanvasOnWidth：來源已達目標寬度就原樣回傳", () => {
     assert(centerCanvasOnWidth(c, null) === c);
     assert(centerCanvasOnWidth(c, 0) === c);
 });
-test("centerCanvasOnWidth：左補白＝置中位置再右移 padLeft，高度不變", () => {
-    const out = centerCanvasOnWidth(canvasFrom(["####", "####"]), 20, 3, 0);
+test("centerCanvasOnWidth：水平置中，高度不變", () => {
+    const out = centerCanvasOnWidth(canvasFrom(["####", "####"]), 20);
     eq([out.width, out.height], [20, 2]);
-    eq(blackCols(out), [9, 10, 11, 12]); // slack=13 → 6，+3
-});
-test("centerCanvasOnWidth：右補白讓置中位置左移", () => {
-    eq(blackCols(centerCanvasOnWidth(canvasFrom(["####"]), 20, 0, 4)), [6, 7, 8, 9]); // slack=12 → 6，不加 padLeft
+    eq(blackCols(out), [8, 9, 10, 11]); // slack=16 → 8
 });
 test("centerCanvasOnWidth：高度 0 的 canvas 不崩潰", () => {
     const c = document.createElement("canvas");
@@ -194,103 +188,14 @@ test("buildEscposJob 帶 targetWidthDots：raster 寬度＝列印頭寬度", () 
     eq(hex(out.subarray(9, 17)), "1d 76 30 00 48 00 02 00");
 });
 
-// ---- 邊距校正 ----
+// ---- 列印頭置中 ----
 const T82 = getPrinterProfile("epson-tm-t82ii");
-const DPI = T82.dpi.x;
-test("marginPadDots：左 2／右 5（80mm 不對稱）→ 左側補 24 點、右 0", () => {
-    eq(marginPadDots({ leftMm: 2, rightMm: 5 }, DPI), { left: 24, right: 0 }); // 3/25.4*203 = 23.97
-});
-test("marginPadDots：左 5／右 2 → 補右側", () => {
-    eq(marginPadDots({ leftMm: 5, rightMm: 2 }, DPI), { left: 0, right: 24 });
-});
-test("marginPadDots：左右相等 → 不補", () => {
-    eq(marginPadDots({ leftMm: 3, rightMm: 3 }, DPI), { left: 0, right: 0 });
-});
-test("marginPadDots：只補一側（不會兩側同時有值）", () => {
-    for (const [l, r] of [[1, 9], [9, 1], [0.1, 20], [20, 0.1], [4.4, 4.5]]) {
-        const p = marginPadDots({ leftMm: l, rightMm: r }, DPI);
-        assert(p.left === 0 || p.right === 0, `${l}/${r}`);
-    }
-});
-test("sanitizeMarginCalibration：取到 0.1mm、超過 20 夾到 20", () => {
-    eq(sanitizeMarginCalibration({ "80mm": { leftMm: 2.04, rightMm: 99 } }), { "80mm": { leftMm: 2, rightMm: MARGIN_MM_MAX } });
-});
-test("sanitizeMarginCalibration：缺值、負值、0、NaN、非數字整筆丟掉", () => {
-    const bad = {
-        a: { leftMm: 2 }, b: { rightMm: 2 }, c: { leftMm: -1, rightMm: 2 }, d: { leftMm: 0, rightMm: 2 },
-        e: { leftMm: "x", rightMm: 2 }, f: null, g: 5, h: { leftMm: NaN, rightMm: 1 }, i: { leftMm: Infinity, rightMm: 1 },
-    };
-    eq(sanitizeMarginCalibration(bad), {});
-});
-test("sanitizeMarginCalibration：null／undefined／字串回空物件", () => {
-    eq(sanitizeMarginCalibration(null), {});
-    eq(sanitizeMarginCalibration(undefined), {});
-    eq(sanitizeMarginCalibration("abc"), {});
-});
-test("withMarginCalibration：80mm 左 2／右 5 → 可列印 576-24=552，pad 左 24", () => {
-    const p = withMarginCalibration(T82, { "80mm": { leftMm: 2, rightMm: 5 } });
-    const paper = p.paperWidths.find((w) => w.id === "80mm");
-    eq(paper.printableWidthDots, 552);
-    eq(getMarginPad(p, "80mm"), { left: 24, right: 0 });
-    assert(Math.abs(paper.printableWidthMm - (552 / DPI) * 25.4) < 1e-9);
-});
-test("withMarginCalibration：58mm 只影響自己、80mm 不動", () => {
-    const p = withMarginCalibration(T82, { "58mm": { leftMm: 6, rightMm: 1 } });
-    eq(p.paperWidths.find((w) => w.id === "80mm").printableWidthDots, 576);
-    eq(getMarginPad(p, "80mm"), { left: 0, right: 0 });
-    eq(getMarginPad(p, "58mm"), { left: 0, right: 40 }); // 5/25.4*203 = 39.96
-    eq(p.paperWidths.find((w) => w.id === "58mm").printableWidthDots, 380);
-});
-test("withMarginCalibration：不改動原 profile", () => {
-    withMarginCalibration(T82, { "80mm": { leftMm: 2, rightMm: 5 } });
-    eq(T82.paperWidths.find((w) => w.id === "80mm").printableWidthDots, 576);
-    assert(!("marginPadDots" in T82.paperWidths[0]));
-});
-test("withMarginCalibration：沒有有效校正原樣回傳同一物件", () => {
-    assert(withMarginCalibration(T82, {}) === T82);
-    assert(withMarginCalibration(T82, undefined) === T82);
-    assert(withMarginCalibration(T82, { "80mm": { leftMm: -3, rightMm: 5 } }) === T82);
-});
-test("withMarginCalibration：極端值（0.1／20）補白夾在可列印點數下限內", () => {
-    const p = withMarginCalibration(T82, { "58mm": { leftMm: 0.1, rightMm: 20 } });
-    const paper = p.paperWidths.find((w) => w.id === "58mm");
-    assert(paper.printableWidthDots >= PRINTABLE_DOTS_MIN, "低於下限");
-    const pad = getMarginPad(p, "58mm");
-    assert(pad.left > 0 && pad.right === 0);
-});
-test("withMarginCalibration：不認得的紙寬 id 忽略", () => {
-    const p = withMarginCalibration(T82, { "99mm": { leftMm: 1, rightMm: 9 } });
-    eq(p.paperWidths.map((w) => w.printableWidthDots), [576, 420]);
-});
-test("getMarginPad：沒校正／未知紙寬回 0", () => {
-    eq(getMarginPad(T82, "80mm"), { left: 0, right: 0 });
-    eq(getMarginPad(T82, "nope"), { left: 0, right: 0 });
-});
-test("getPrintHeadWidthDots：校正前 576；校正後的 profile 會變窄（呼叫端須用 base）", () => {
+test("getPrintHeadWidthDots：取各紙寬最大的可列印點數（576）", () => {
     eq(getPrintHeadWidthDots(T82), 576);
-    eq(getPrintHeadWidthDots(withMarginCalibration(T82, { "80mm": { leftMm: 2, rightMm: 5 } })), 552);
 });
-
-// ---- 端到端：校正後的位置 ----
 function edgeCanvas(width) { return canvasFrom(["#" + ".".repeat(width - 2) + "#"]); }
-test("端到端：80mm 左 2／右 5 → 內容右移補白，右緣不超出列印頭", () => {
-    const eff = withMarginCalibration(T82, { "80mm": { leftMm: 2, rightMm: 5 } });
-    const pad = getMarginPad(eff, "80mm");
-    const width = eff.paperWidths[0].printableWidthDots; // 552
-    const out = centerCanvasOnWidth(edgeCanvas(width), getPrintHeadWidthDots(T82), pad.left, pad.right);
-    eq(out.width, 576);
-    const cols = blackCols(out);
-    eq([cols[0], cols[cols.length - 1]], [24, 24 + width - 1]);
-});
-test("端到端：右側補白（左 5／右 2）→ 內容貼左、右側留白", () => {
-    const eff = withMarginCalibration(T82, { "80mm": { leftMm: 5, rightMm: 2 } });
-    const pad = getMarginPad(eff, "80mm");
-    const width = eff.paperWidths[0].printableWidthDots;
-    const cols = blackCols(centerCanvasOnWidth(edgeCanvas(width), 576, pad.left, pad.right));
-    eq([cols[0], cols[cols.length - 1]], [0, width - 1]);
-});
-test("端到端：58mm 無校正在 576 頭上置中", () => {
-    const cols = blackCols(centerCanvasOnWidth(edgeCanvas(420), 576, 0, 0));
+test("端到端：58mm 內容在 576 列印頭上置中", () => {
+    const cols = blackCols(centerCanvasOnWidth(edgeCanvas(420), getPrintHeadWidthDots(T82)));
     eq([cols[0], cols[cols.length - 1]], [78, 497]);
 });
 

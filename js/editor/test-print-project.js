@@ -1,5 +1,5 @@
 // 測試列印：內建一份收據風版型，走專案自己的排版管線（renderTemplate），
-// 上下再各接一段直接畫在 canvas 上的量測用刻度（未校正原始邊緣、校正後邊緣）。
+// 並接一段直接畫在 canvas 上的量測用刻度（邊緣色條＋尺規）。
 // 尺規、色塊沒有對應的元素類型，用小 canvas 轉成圖片元素放進版型。
 
 import { createEmptyProject } from "../core/schema.js";
@@ -27,10 +27,10 @@ function makeCanvas(width, height, { willReadFrequently = false } = {}) {
     return { canvas, ctx };
 }
 
-// 邊緣量尺（測試收據與邊距校正紙共用）：貼齊範圍左右的粗黑條、每 1 mm 刻度、每 5 mm 標數字、中心線。
+// 邊緣量尺（測試收據用）：貼齊範圍左右的粗黑條、每 1 mm 刻度、每 5 mm 標數字、中心線。
 // 回傳佔用高度。
-export const EDGE_GAUGE_HEIGHT = 58;
-export function drawEdgeGauge(ctx, x0, y0, widthDots, dpi) {
+const EDGE_GAUGE_HEIGHT = 58;
+function drawEdgeGauge(ctx, x0, y0, widthDots, dpi) {
     const perMm = dotsPerMm(dpi);
     ctx.fillStyle = "#000";
     ctx.fillRect(x0, y0, 8, 30);
@@ -50,8 +50,8 @@ export function drawEdgeGauge(ctx, x0, y0, widthDots, dpi) {
     return EDGE_GAUGE_HEIGHT;
 }
 
-// 校正後版面的邊緣色條＋尺規＋8 階濃淡（用密度不同的點陣格）
-function buildCalibratedStrip(widthDots, dpi) {
+// 版面的邊緣色條＋尺規＋8 階濃淡（用密度不同的點陣格）
+function buildRulerStrip(widthDots, dpi) {
     const { canvas, ctx } = makeCanvas(widthDots, 96);
     drawEdgeGauge(ctx, 0, 0, widthDots, dpi);
     const cell = Math.floor(widthDots / 8);
@@ -448,23 +448,20 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
 }
 
 /**
- * 產生測試列印用 canvas（寬度＝列印頭寬度，位置已含邊距校正的補白，送出時 adapter 不會再動它）。
- * ctx：{ baseProfile, profile（已套用校正）, widthId, headWidthDots, pad, prefs, connection, firmware }
+ * 產生測試列印用 canvas（寬度＝列印頭寬度，內容已置中，送出時 adapter 不會再動它）。
+ * ctx：{ baseProfile, profile, widthId, headWidthDots, prefs, connection, firmware }
  */
-export async function renderTestPrint({ baseProfile, profile, widthId, headWidthDots, pad, prefs, connection, firmware }) {
+export async function renderTestPrint({ baseProfile, profile, widthId, headWidthDots, prefs, connection, firmware }) {
     const dpi = baseProfile.dpi.x;
     const basePaper = baseProfile.paperWidths.find((p) => p.id === widthId);
     const paper = profile.paperWidths.find((p) => p.id === widthId);
     const rawWidth = basePaper.printableWidthDots;
-    const margin = prefs.margins?.[widthId];
 
     const info = [
         ["機型", `${baseProfile.brand} ${baseProfile.model}`],
         ["連線", connection],
         ["紙寬", [paper.label, `${dpi} dpi`]],
         ["可印", `${paper.printableWidthDots} / ${rawWidth} 點`],
-        ["邊距", margin ? [`左 ${margin.leftMm}`, `右 ${margin.rightMm} mm`] : "未校正"],
-        ["補白", [`左 ${pad.left}`, `右 ${pad.right} 點`]],
         ["走紙", [`${prefs.feedLines} 行`, `切紙${prefs.cutPaper ? "開" : "關"}`]],
         ["時間", new Date().toLocaleString("zh-TW", { hour12: false })],
     ];
@@ -476,7 +473,7 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
         info,
         model,
         buildBrandIcon(brandIconSize(paper.printableWidthDots >= 500 ? 56 : 40)),
-        buildCalibratedStrip(paper.printableWidthDots, dpi),
+        buildRulerStrip(paper.printableWidthDots, dpi),
         buildCutLine(paper.printableWidthDots),
         buildFineDetailStrip(paper.printableWidthDots),
         buildDitherSwatch(paper.printableWidthDots),
@@ -485,58 +482,9 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
     );
     const body = await renderTemplate(project, {}, { mode: "thermal", profile });
 
-    // 校正後的內容：位置比照 adapter 的置中＋左補白
+    // 內容位置比照 adapter 的置中
     const { canvas, ctx } = makeCanvas(headWidthDots, body.canvas.height);
-    const bodyX = Math.max(0, Math.floor((headWidthDots - (body.canvas.width + pad.left + pad.right)) / 2)) + pad.left;
+    const bodyX = Math.max(0, Math.floor((headWidthDots - body.canvas.width) / 2));
     ctx.drawImage(body.canvas, bodyX, 0);
     return { canvas, fontFallbacks: body.fontFallbacks };
-}
-
-// 邊距校正紙，由上而下三段：
-// ① 寬版（640 點＝80 mm，比可列印區寬）：從影像最左 dot 0 起每 1 mm 一格、每 5 mm 標數字，
-//    粗黑線在 0、72 mm（576 點）、80 mm；最右邊印得出來的數字就是機器實際上限，最左邊看得到的第一個數字就是被吃掉的量。
-// ② 未校正的可列印範圍；③ 套用目前補白後的範圍：量紙緣到黑條，填進邊距校正。
-export const SHEET_WIDTH_DOTS = 640;
-export function renderCalibrationSheet({ baseProfile, profile, widthId, headWidthDots, pad }) {
-    const dpi = baseProfile.dpi.x;
-    const perMm = dotsPerMm(dpi);
-    const rawWidth = baseProfile.paperWidths.find((p) => p.id === widthId).printableWidthDots;
-    const calWidth = profile.paperWidths.find((p) => p.id === widthId).printableWidthDots;
-    const labelH = 32;
-    const sectionH = labelH + EDGE_GAUGE_HEIGHT + 24;
-    const width = Math.max(SHEET_WIDTH_DOTS, headWidthDots);
-    const { canvas, ctx } = makeCanvas(width, sectionH * 3 + 64);
-    ctx.textBaseline = "top";
-    ctx.textAlign = "left";
-
-    // ① 寬版
-    ctx.font = `24px ${FONT}`;
-    ctx.fillText("① 機器寬度", 12, 0);
-    const wideY = labelH;
-    ctx.font = `14px ${FONT}`;
-    ctx.fillRect(0, wideY, width, 2);
-    for (let mm = 0; mm * perMm < width; mm++) {
-        const x = Math.round(mm * perMm);
-        ctx.fillRect(x, wideY, 1, mm % 10 === 0 ? 22 : mm % 5 === 0 ? 15 : 8);
-        if (mm % 5 === 0 && mm > 0) ctx.fillText(String(mm), x + 2, wideY + 24);
-    }
-    ctx.fillRect(0, wideY, 8, 30);
-    ctx.fillRect(headWidthDots - 3, wideY, 6, 40);
-    ctx.fillRect(width - 8, wideY, 8, 30);
-    ctx.fillText(String(headWidthDots), headWidthDots - 30, wideY + 42);
-
-    // ②③ 可列印範圍：位置比照 adapter 的置中＋左補白
-    const rawX = Math.max(0, Math.floor((headWidthDots - rawWidth) / 2));
-    const calX = Math.max(0, Math.floor((headWidthDots - (calWidth + pad.left + pad.right)) / 2)) + pad.left;
-    ctx.font = `24px ${FONT}`;
-    let y = sectionH;
-    for (const [label, x, w] of [["② 未校正", rawX, rawWidth], ["③ 已校正", calX, calWidth]]) {
-        ctx.fillText(label, x + 12, y);
-        drawEdgeGauge(ctx, x, y + labelH, w, dpi);
-        y += sectionH;
-    }
-    // 兩個填寫欄各佔一半寬度，等距排列，不用全形空白隔開
-    ctx.fillText("左 ______ mm", rawX + 12, y + 8);
-    ctx.fillText("右 ______ mm", rawX + Math.round(rawWidth / 2) + 12, y + 8);
-    return { canvas };
 }
