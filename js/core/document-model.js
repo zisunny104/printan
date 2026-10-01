@@ -112,6 +112,7 @@ export function createTextElement(overrides = {}) {
         vAlign: "top", // 內容在框內的垂直位置：top｜middle｜bottom。框高剛好等於內容時看不出差異，只有 heightMode="fixed" 且框比內容高（或 auto 但沒填滿）時才有作用；換模板套不同長度內容時，靠這個維持版面觀感一致，見 resolveTextVAlign
         border: createBorder(), // 文字框外框，常見於做一個方框提示／備註，見 createBorder
         cornerRadiusDots: 0, // 圓角半徑，0＝直角；渲染時會依框寬高夾住上限，見 renderer.js clampCornerRadius
+        collapseWhenEmpty: false, // true＝套用資料後整段文字都是空白（含全形空白）就完全不占高度（連最小框高也不留）；清單型版面資料不足時，空的格子才不會留白。預設 false＝空白文字照樣佔一行（舊檔行為）
         ...overrides,
     };
 }

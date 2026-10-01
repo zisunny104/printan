@@ -43,7 +43,7 @@ export const PTAN_VERSION = 3;
  *
  *   // type==="text"：見 createTextElement
  *   runs?, fontFamily?, fontSize?, lineHeight?, letterSpacing?, bold?, inverse?, inkFill?, bgFill?,
- *   align?, wrap?, writingMode?, maxLines?, widthMode?, widthDots?, heightMode?, heightDots?, overflow?, vAlign?, border?, cornerRadiusDots?,
+ *   align?, wrap?, writingMode?, maxLines?, widthMode?, widthDots?, heightMode?, heightDots?, overflow?, vAlign?, border?, cornerRadiusDots?, collapseWhenEmpty?,
  *
  *   // type==="image"：見 createImageElement
  *   assetId?, heightDots?, align?, widthPercent?, fit?, rotation?, cropRect?, brightness?, contrast?, invert?, ditherMode?, thresholdLevel?, border?, cornerRadiusDots?,
