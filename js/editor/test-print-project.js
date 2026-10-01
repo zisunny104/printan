@@ -101,12 +101,13 @@ function buildCutLine(widthDots) {
 }
 
 // 細線／細字辨識：1～4 點粗細的橫線各畫 6 條（間距等於線寬，測試印字頭能否分辨相鄰細線是否糊在一起），
-// 下面接兩行字級樣本：第一行由大到小，測試熱感紙在這台印表機上實際能看清的最小字級下限；
-// 第二行是本文～標題常用的正常／偏大字級參考。第一行窄紙常常提早遇到防呆 break 停止、右側留白，
-// 與其留白不用，乾脆多開一行把正常／較大字級也秀出來。不寫標題文字，線條與字級樣本本身就看得出來在測什麼。
+// 下面接兩組字級樣本，各只排一行（放不下的略過，不會為了擠進去多出一行）：第一組由大到小，測試熱感紙
+// 在這台印表機上實際能看清的最小字級下限；第二組是標題常用的偏大字級參考。每行的樣本用容器均分間距，
+// 排版方式見 layoutPtSizeRows。不寫標題文字，線條與字級樣本本身就看得出來在測什麼。
 const FINE_DETAIL_BARS_HEIGHT = 4 * 16; // 1～4 點粗細橫線各佔一列 16 高
 const FONT_SIZE_TEST_SMALL_PT = [12, 10, 9, 8, 7, 6, 5, 4]; // 由大到小找可讀下限
-const FONT_SIZE_TEST_LARGE_PT = [12, 16, 20, 24]; // 本文～標題常用尺寸參考
+// 標題常用尺寸參考，依優先順序挑：一行放得下幾個就放幾個（見 pickPtSizes），最大的 24pt 排前面確保一定出現
+const FONT_SIZE_TEST_LARGE_PT = [24, 16, 20, 12, 14, 18, 22];
 
 function ptToDots(pt) {
     // 這個檔案沒有 profile context 可讀，目前也只有單一印表機、固定 203 dpi，直接寫死換算；
@@ -114,27 +115,80 @@ function ptToDots(pt) {
     return Math.round((pt * 203) / 72);
 }
 
-function drawPtSizeRow(ctx, sizes, y, widthDots) {
-    ctx.textBaseline = "top";
-    ctx.textAlign = "left";
-    let x = 0;
+const PT_ROW_MIN_GAP = 8; // 字級樣本之間至少留的點數；剩下的空間平均分給各個間隔
+
+/**
+ * 字級樣本排版：先量每個樣本（「12pt」這種標籤）的寬度，一行放得下就放、放不下換下一行，
+ * 同一行的樣本用容器均分間距（左右頂邊、間隔相等），不靠空白字元撐距離——空白字元的寬度跟著字級走，
+ * 大字級後面的空白會把後面的樣本擠出紙外被裁掉，也會無端多出一行。
+ * maxRows：最多排幾行，放不下的樣本略過。
+ */
+/** 依優先順序挑樣本：放得下（寬度加最小間距）才收，一行盡量塞滿；回傳依字級由小到大排好的清單。 */
+function pickPtSizes(measureCtx, priority, widthDots) {
+    const picked = [];
+    let used = 0;
+    for (const pt of priority) {
+        measureCtx.font = `${ptToDots(pt)}px ${FONT}`;
+        const width = Math.ceil(measureCtx.measureText(`${pt}pt`).width) + PT_ROW_MIN_GAP;
+        if (used + width - PT_ROW_MIN_GAP > widthDots) continue;
+        picked.push(pt);
+        used += width;
+    }
+    return picked.sort((a, b) => a - b);
+}
+
+function layoutPtSizeRows(measureCtx, sizes, widthDots, maxRows = Infinity) {
+    const rows = [];
+    let row = null;
     for (const pt of sizes) {
         const dots = ptToDots(pt);
-        ctx.font = `${dots}px ${FONT}`;
+        measureCtx.font = `${dots}px ${FONT}`;
         const label = `${pt}pt`;
-        ctx.fillText(label, x, y);
-        x += Math.ceil(ctx.measureText(`${label}　`).width);
-        if (x > widthDots - 40) break;
+        const width = Math.ceil(measureCtx.measureText(label).width);
+        const used = row ? row.items.reduce((sum, it) => sum + it.width, 0) + PT_ROW_MIN_GAP * row.items.length : 0;
+        if (!row || used + width > widthDots) {
+            if (rows.length >= maxRows) break;
+            row = { items: [], height: 0 };
+            rows.push(row);
+        }
+        row.items.push({ label, dots, width });
+        row.height = Math.max(row.height, dots);
     }
+    for (const r of rows) {
+        const free = widthDots - r.items.reduce((sum, it) => sum + it.width, 0);
+        const gap = r.items.length > 1 ? free / (r.items.length - 1) : 0;
+        let x = 0;
+        for (const it of r.items) {
+            it.x = Math.round(x);
+            x += it.width + gap;
+        }
+    }
+    return rows;
+}
+
+function drawPtSizeRows(ctx, rows, top) {
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+    let y = top;
+    for (const row of rows) {
+        for (const it of row.items) {
+            ctx.font = `${it.dots}px ${FONT}`;
+            ctx.fillText(it.label, it.x, y);
+        }
+        y += row.height + 4;
+    }
+    return y;
 }
 
 function buildFineDetailStrip(widthDots) {
     const barsTop = 4;
     const smallRowTop = barsTop + FINE_DETAIL_BARS_HEIGHT + 2;
-    const smallRowMaxDots = ptToDots(Math.max(...FONT_SIZE_TEST_SMALL_PT));
-    const largeRowTop = smallRowTop + smallRowMaxDots + 8;
-    const largeRowMaxDots = ptToDots(Math.max(...FONT_SIZE_TEST_LARGE_PT));
-    const height = largeRowTop + largeRowMaxDots + 6;
+    const measure = makeCanvas(1, 1).ctx;
+    const smallRows = layoutPtSizeRows(measure, FONT_SIZE_TEST_SMALL_PT, widthDots, 1);
+    const largeRows = layoutPtSizeRows(measure, pickPtSizes(measure, FONT_SIZE_TEST_LARGE_PT, widthDots), widthDots, 1);
+    const rowsHeight = (rows) => rows.reduce((sum, r) => sum + r.height + 4, 0);
+    const largeRowTop = smallRowTop + rowsHeight(smallRows) + 4;
+    const height = largeRowTop + rowsHeight(largeRows) + 2;
 
     const { canvas, ctx } = makeCanvas(widthDots, height);
     let y = barsTop;
@@ -142,8 +196,8 @@ function buildFineDetailStrip(widthDots) {
         for (let n = 0; n < 8; n++) ctx.fillRect(n * w * 3, y, w, 12);
         y += 16;
     }
-    drawPtSizeRow(ctx, FONT_SIZE_TEST_SMALL_PT, smallRowTop, widthDots);
-    drawPtSizeRow(ctx, FONT_SIZE_TEST_LARGE_PT, largeRowTop, widthDots);
+    drawPtSizeRows(ctx, smallRows, smallRowTop);
+    drawPtSizeRows(ctx, largeRows, largeRowTop);
     return canvas.toDataURL("image/png");
 }
 
@@ -268,7 +322,7 @@ const menuItems = () => {
     ];
 };
 
-const DISCOUNT = ["優惠　一點點……耐心", -15];
+const DISCOUNT = ["優惠 一點點……耐心", -15];
 
 function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDetailUrl, ditherUrl, widthDots, dpi) {
     // 字級依紙寬取值：80mm 特大，58mm（約 420 點）退一級才放得下。
@@ -289,9 +343,15 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
     const center = (runs, overrides = {}) => text(runs, { align: "center", ...overrides });
     const gap = () => createSpacerElement({ heightDots: 8 });
     const space = () => createSpacerElement({ heightDots: 12 });
+    // 備註縮排用容器（左邊留一欄空的）表示，不用全形空白撐
+    const remarkRow = (remark) => {
+        const row = createRowElement([1, 19]);
+        row.columns[1].push(text(`└ ${remark}`, { fontSize: noteSize }));
+        return row;
+    };
     const menuRows = menu.flatMap(([name, qty, price, remark]) => [
         itemRow(name, String(qty), money((Number(qty) || 0) * price), {}),
-        text(`　└ ${remark}`, { fontSize: noteSize }),
+        remarkRow(remark),
     ]);
     // 標題列：icon＋名稱貼在一起整組置中。欄寬用「點」當比例：兩側留白 | icon | 間距 | 名稱（量出實際字寬）| 兩側留白
     const nameWidth = measureBrand(brandSize) + 16;
@@ -326,7 +386,14 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
     const infoRows = info.map(([k, v]) => {
         const row = createRowElement([1, 2]);
         row.columns[0].push(text(k, { fontSize: smallSize }));
-        row.columns[1].push(text(v, { fontSize: smallSize, align: "right" }));
+        if (Array.isArray(v)) {
+            // 一格裡有好幾段（例如「左 0」「右 0 mm」）：各放進自己的欄，欄寬相等、等距排列，不用全形空白隔開
+            const parts = createRowElement(v.map(() => 1));
+            v.forEach((part, i) => parts.columns[i].push(text(part, { fontSize: smallSize, align: "right" })));
+            row.columns[1].push(parts);
+        } else {
+            row.columns[1].push(text(v, { fontSize: smallSize, align: "right" }));
+        }
         return row;
     });
 
@@ -347,7 +414,7 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
         center("toka.dev/koilisu/printan", { fontSize: smallSize }),
         gap(),
         // 品項：上方一條反白窄帶當區段標頭
-        center("ORDER　本次開發明細", { fontSize: noteSize + 4, bold: true, inverse: true }),
+        center("ORDER 本次開發明細", { fontSize: noteSize + 4, bold: true, inverse: true }),
         createSpacerElement({ heightDots: 4 }),
         ...menuRows,
         createDividerElement(),
@@ -394,11 +461,11 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
     const info = [
         ["機型", `${baseProfile.brand} ${baseProfile.model}`],
         ["連線", connection],
-        ["紙寬", `${paper.label}　${dpi} dpi`],
+        ["紙寬", [paper.label, `${dpi} dpi`]],
         ["可印", `${paper.printableWidthDots} / ${rawWidth} 點`],
-        ["邊距", margin ? `左 ${margin.leftMm}　右 ${margin.rightMm} mm` : "未校正"],
-        ["補白", `左 ${pad.left}　右 ${pad.right} 點`],
-        ["走紙", `${prefs.feedLines} 行　切紙${prefs.cutPaper ? "開" : "關"}`],
+        ["邊距", margin ? [`左 ${margin.leftMm}`, `右 ${margin.rightMm} mm`] : "未校正"],
+        ["補白", [`左 ${pad.left}`, `右 ${pad.right} 點`]],
+        ["走紙", [`${prefs.feedLines} 行`, `切紙${prefs.cutPaper ? "開" : "關"}`]],
         ["時間", new Date().toLocaleString("zh-TW", { hour12: false })],
     ];
 
@@ -428,7 +495,7 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
 // 邊距校正紙，由上而下三段：
 // ① 寬版（640 點＝80 mm，比可列印區寬）：從影像最左 dot 0 起每 1 mm 一格、每 5 mm 標數字，
 //    粗黑線在 0、72 mm（576 點）、80 mm；最右邊印得出來的數字就是機器實際上限，最左邊看得到的第一個數字就是被吃掉的量。
-// ② 未校正的可列印範圍　③ 套用目前補白後的範圍：量紙緣到黑條，填進邊距校正。
+// ② 未校正的可列印範圍；③ 套用目前補白後的範圍：量紙緣到黑條，填進邊距校正。
 export const SHEET_WIDTH_DOTS = 640;
 export function renderCalibrationSheet({ baseProfile, profile, widthId, headWidthDots, pad }) {
     const dpi = baseProfile.dpi.x;
@@ -468,6 +535,8 @@ export function renderCalibrationSheet({ baseProfile, profile, widthId, headWidt
         drawEdgeGauge(ctx, x, y + labelH, w, dpi);
         y += sectionH;
     }
-    ctx.fillText("左 ______ mm　右 ______ mm", rawX + 12, y + 8);
+    // 兩個填寫欄各佔一半寬度，等距排列，不用全形空白隔開
+    ctx.fillText("左 ______ mm", rawX + 12, y + 8);
+    ctx.fillText("右 ______ mm", rawX + Math.round(rawWidth / 2) + 12, y + 8);
     return { canvas };
 }
