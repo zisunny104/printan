@@ -1,7 +1,7 @@
 // 印表機：連線、列印、偏好與「印表機設定」面板。
 
 import {
-    PRINTABLE_DOTS_MAX, PRINTABLE_DOTS_MIN, getPaperWidth, getPrintHeadWidthDots,
+    PRINTABLE_DOTS_MAX, PRINTABLE_DOTS_MIN, getPaperWidth,
     getPrinterProfile, matchPrinterProfile, sanitizePrintableDotsOverrides,
 } from "../core/printer-profiles.js";
 import { PRINT_PREFS_KEY, els, serialAdapter, state, usbAdapter } from "./context.js";
@@ -13,9 +13,7 @@ import { createInfoIcon, hideStageNotice, showSnackbar, showStageNotice } from "
 import { renderTestPrint } from "./test-print-project.js";
 import { renderPages } from "../core/renderer.js";
 
-// ESC/POS 直連列印（WebUSB／WebSerial）用的列印選項：在使用者的走紙／切紙偏好之外，
-// 額外帶入目前印表機 profile 的列印頭最大寬度，讓 buildEscposJob 統一置中輸出
-// （見 printer-adapter.js centerCanvasOnWidth），避免紙寬較窄時印出來的內容偏移。
+// ESC/POS 直連列印（WebUSB／WebSerial）用的列印選項：使用者的走紙／切紙偏好，加上多頁列印時每頁各自的切紙旗標。
 // pageCutAfter：多頁列印時每一頁各自的切紙旗標（見 schema.js Page.cutAfter）。跟使用者全域的
 // 「切紙」偏好（state.printPrefs.cutPaper）是「且」的關係——全域偏好本來就是給沒有自動切刀、
 // 或不想切紙的使用者關掉用的，單頁專案沒有 pages 概念之前這個偏好就是唯一開關，多頁專案
@@ -26,7 +24,6 @@ function getEscposPrintOptions(pageCutAfter = true, project = state.project) {
     return {
         ...state.printPrefs,
         cutPaper: state.printPrefs.cutPaper && pageCutAfter,
-        targetWidthDots: getPrintHeadWidthDots(getBaseProfile(project)),
     };
 }
 
@@ -567,7 +564,6 @@ async function printTestSheet() {
             baseProfile: getBaseProfile(),
             profile,
             widthId,
-            headWidthDots: getPrintHeadWidthDots(getBaseProfile()),
             prefs: state.printPrefs,
             connection: state.usbConnected ? "USB" : "序列埠",
             firmware: state.printerIdentity?.firmware || "",
