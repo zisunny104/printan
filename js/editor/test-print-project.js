@@ -101,9 +101,9 @@ function buildCutLine(widthDots) {
 }
 
 // 細線／細字辨識：1～4 點粗細的橫線各畫 6 條（間距等於線寬，測試印字頭能否分辨相鄰細線是否糊在一起），
-// 下面接兩行字級樣本：第一行由大到小，測試熱感紙在這台印表機上實際能看清的最小字級下限；
-// 第二行是本文～標題常用的正常／偏大字級參考。第一行窄紙常常提早遇到防呆 break 停止、右側留白，
-// 與其留白不用，乾脆多開一行把正常／較大字級也秀出來。不寫標題文字，線條與字級樣本本身就看得出來在測什麼。
+// 下面接兩組字級樣本：第一組由大到小，測試熱感紙在這台印表機上實際能看清的最小字級下限（只排一行）；
+// 第二組是本文～標題常用的正常／偏大字級參考（放不下就換行）。每行的樣本用容器均分間距，
+// 排版方式見 layoutPtSizeRows。不寫標題文字，線條與字級樣本本身就看得出來在測什麼。
 const FINE_DETAIL_BARS_HEIGHT = 4 * 16; // 1～4 點粗細橫線各佔一列 16 高
 const FONT_SIZE_TEST_SMALL_PT = [12, 10, 9, 8, 7, 6, 5, 4]; // 由大到小找可讀下限
 const FONT_SIZE_TEST_LARGE_PT = [12, 16, 20, 24]; // 本文～標題常用尺寸參考
@@ -114,27 +114,66 @@ function ptToDots(pt) {
     return Math.round((pt * 203) / 72);
 }
 
-function drawPtSizeRow(ctx, sizes, y, widthDots) {
-    ctx.textBaseline = "top";
-    ctx.textAlign = "left";
-    let x = 0;
+const PT_ROW_MIN_GAP = 12; // 字級樣本之間至少留的點數；剩下的空間平均分給各個間隔
+
+/**
+ * 字級樣本排版：先量每個樣本（「12pt」這種標籤）的寬度，一行放得下就放、放不下換下一行，
+ * 同一行的樣本用容器均分間距（左右頂邊、間隔相等），不靠空白字元撐距離——空白字元的寬度跟著字級走，
+ * 大字級後面的空白會把後面的樣本擠出紙外被裁掉。單一樣本比整張紙還寬時只會獨佔一行。
+ * maxRows：最多排幾行，超過的樣本略過（小字級那列只想要一行）。
+ */
+function layoutPtSizeRows(measureCtx, sizes, widthDots, maxRows = Infinity) {
+    const rows = [];
+    let row = null;
     for (const pt of sizes) {
         const dots = ptToDots(pt);
-        ctx.font = `${dots}px ${FONT}`;
+        measureCtx.font = `${dots}px ${FONT}`;
         const label = `${pt}pt`;
-        ctx.fillText(label, x, y);
-        x += Math.ceil(ctx.measureText(`${label}　`).width);
-        if (x > widthDots - 40) break;
+        const width = Math.ceil(measureCtx.measureText(label).width);
+        const used = row ? row.items.reduce((sum, it) => sum + it.width, 0) + PT_ROW_MIN_GAP * row.items.length : 0;
+        if (!row || used + width > widthDots) {
+            if (rows.length >= maxRows) break;
+            row = { items: [], height: 0 };
+            rows.push(row);
+        }
+        row.items.push({ label, dots, width });
+        row.height = Math.max(row.height, dots);
     }
+    for (const r of rows) {
+        const free = widthDots - r.items.reduce((sum, it) => sum + it.width, 0);
+        const gap = r.items.length > 1 ? free / (r.items.length - 1) : 0;
+        let x = 0;
+        for (const it of r.items) {
+            it.x = Math.round(x);
+            x += it.width + gap;
+        }
+    }
+    return rows;
+}
+
+function drawPtSizeRows(ctx, rows, top) {
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+    let y = top;
+    for (const row of rows) {
+        for (const it of row.items) {
+            ctx.font = `${it.dots}px ${FONT}`;
+            ctx.fillText(it.label, it.x, y);
+        }
+        y += row.height + 4;
+    }
+    return y;
 }
 
 function buildFineDetailStrip(widthDots) {
     const barsTop = 4;
     const smallRowTop = barsTop + FINE_DETAIL_BARS_HEIGHT + 2;
-    const smallRowMaxDots = ptToDots(Math.max(...FONT_SIZE_TEST_SMALL_PT));
-    const largeRowTop = smallRowTop + smallRowMaxDots + 8;
-    const largeRowMaxDots = ptToDots(Math.max(...FONT_SIZE_TEST_LARGE_PT));
-    const height = largeRowTop + largeRowMaxDots + 6;
+    const measure = makeCanvas(1, 1).ctx;
+    const smallRows = layoutPtSizeRows(measure, FONT_SIZE_TEST_SMALL_PT, widthDots, 1);
+    const largeRows = layoutPtSizeRows(measure, FONT_SIZE_TEST_LARGE_PT, widthDots);
+    const rowsHeight = (rows) => rows.reduce((sum, r) => sum + r.height + 4, 0);
+    const largeRowTop = smallRowTop + rowsHeight(smallRows) + 4;
+    const height = largeRowTop + rowsHeight(largeRows) + 2;
 
     const { canvas, ctx } = makeCanvas(widthDots, height);
     let y = barsTop;
@@ -142,8 +181,8 @@ function buildFineDetailStrip(widthDots) {
         for (let n = 0; n < 8; n++) ctx.fillRect(n * w * 3, y, w, 12);
         y += 16;
     }
-    drawPtSizeRow(ctx, FONT_SIZE_TEST_SMALL_PT, smallRowTop, widthDots);
-    drawPtSizeRow(ctx, FONT_SIZE_TEST_LARGE_PT, largeRowTop, widthDots);
+    drawPtSizeRows(ctx, smallRows, smallRowTop);
+    drawPtSizeRows(ctx, largeRows, largeRowTop);
     return canvas.toDataURL("image/png");
 }
 
