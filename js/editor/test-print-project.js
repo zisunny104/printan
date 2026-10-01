@@ -106,7 +106,8 @@ function buildCutLine(widthDots) {
 // 排版方式見 layoutPtSizeRows。不寫標題文字，線條與字級樣本本身就看得出來在測什麼。
 const FINE_DETAIL_BARS_HEIGHT = 4 * 16; // 1～4 點粗細橫線各佔一列 16 高
 const FONT_SIZE_TEST_SMALL_PT = [12, 10, 9, 8, 7, 6, 5, 4]; // 由大到小找可讀下限
-const FONT_SIZE_TEST_LARGE_PT = [16, 20, 24]; // 標題常用尺寸參考（12pt 本文尺寸上面那組已經有）
+// 標題常用尺寸參考，依優先順序挑：一行放得下幾個就放幾個（見 pickPtSizes），最大的 24pt 排前面確保一定出現
+const FONT_SIZE_TEST_LARGE_PT = [24, 16, 20, 12, 14, 18, 22];
 
 function ptToDots(pt) {
     // 這個檔案沒有 profile context 可讀，目前也只有單一印表機、固定 203 dpi，直接寫死換算；
@@ -114,7 +115,7 @@ function ptToDots(pt) {
     return Math.round((pt * 203) / 72);
 }
 
-const PT_ROW_MIN_GAP = 12; // 字級樣本之間至少留的點數；剩下的空間平均分給各個間隔
+const PT_ROW_MIN_GAP = 8; // 字級樣本之間至少留的點數；剩下的空間平均分給各個間隔
 
 /**
  * 字級樣本排版：先量每個樣本（「12pt」這種標籤）的寬度，一行放得下就放、放不下換下一行，
@@ -122,6 +123,20 @@ const PT_ROW_MIN_GAP = 12; // 字級樣本之間至少留的點數；剩下的�
  * 大字級後面的空白會把後面的樣本擠出紙外被裁掉，也會無端多出一行。
  * maxRows：最多排幾行，放不下的樣本略過。
  */
+/** 依優先順序挑樣本：放得下（寬度加最小間距）才收，一行盡量塞滿；回傳依字級由小到大排好的清單。 */
+function pickPtSizes(measureCtx, priority, widthDots) {
+    const picked = [];
+    let used = 0;
+    for (const pt of priority) {
+        measureCtx.font = `${ptToDots(pt)}px ${FONT}`;
+        const width = Math.ceil(measureCtx.measureText(`${pt}pt`).width) + PT_ROW_MIN_GAP;
+        if (used + width - PT_ROW_MIN_GAP > widthDots) continue;
+        picked.push(pt);
+        used += width;
+    }
+    return picked.sort((a, b) => a - b);
+}
+
 function layoutPtSizeRows(measureCtx, sizes, widthDots, maxRows = Infinity) {
     const rows = [];
     let row = null;
@@ -170,7 +185,7 @@ function buildFineDetailStrip(widthDots) {
     const smallRowTop = barsTop + FINE_DETAIL_BARS_HEIGHT + 2;
     const measure = makeCanvas(1, 1).ctx;
     const smallRows = layoutPtSizeRows(measure, FONT_SIZE_TEST_SMALL_PT, widthDots, 1);
-    const largeRows = layoutPtSizeRows(measure, FONT_SIZE_TEST_LARGE_PT, widthDots, 1);
+    const largeRows = layoutPtSizeRows(measure, pickPtSizes(measure, FONT_SIZE_TEST_LARGE_PT, widthDots), widthDots, 1);
     const rowsHeight = (rows) => rows.reduce((sum, r) => sum + r.height + 4, 0);
     const largeRowTop = smallRowTop + rowsHeight(smallRows) + 4;
     const height = largeRowTop + rowsHeight(largeRows) + 2;
