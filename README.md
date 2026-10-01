@@ -122,7 +122,7 @@ cd printan
 
 ---
 
-**版本**：0.3.1
+**版本**：0.3.2
 **作者**：Tokas (Xiang-zi Xie)
 **專案**：KoiLiSu 開利手
 **網址**：https://toka.dev/koilisu/printan
