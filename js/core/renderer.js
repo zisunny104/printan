@@ -238,7 +238,7 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, show
         } else if (el.type === "barcode") {
             const result = renderBarcodeResult(el, widthDots);
             // 產生不出來（內容空白／不合格式／紙寬放不下）時，只有 screen 預覽畫佔位框；thermal（列印、PDF 都是這個模式）維持不佔高度
-            const barcodeCanvas = result.canvas || (result.error && showBarcodeErrors ? renderBarcodeErrorCanvas(result.error, widthDots) : null);
+            const barcodeCanvas = result.canvas || (result.error && showBarcodeErrors ? renderBarcodeErrorCanvas(result.error, widthDots, fontFamily) : null);
             const drawWidth = barcodeCanvas ? barcodeCanvas.width : 0;
             const drawHeight = barcodeCanvas ? barcodeCanvas.height : 0;
             items.push({ el, y, height: drawHeight, widthDots, barcodeCanvas, barcodeError: result.error, drawWidth, drawHeight });
