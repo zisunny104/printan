@@ -731,6 +731,23 @@ test("checkPrinterReady：離線／缺紙擋下（複查一致才擋），查不
     assert(performance.now() - t0 < 1000 && hung.statusCheckUnavailable, "逾時要放行");
 });
 
+test("條碼佔位框用文件的字體（預設 sans-serif，不再寫死特定字型）", async () => {
+    const proto = CanvasRenderingContext2D.prototype;
+    const desc = Object.getOwnPropertyDescriptor(proto, "font");
+    const seen = [];
+    Object.defineProperty(proto, "font", { set(v) { seen.push(v); desc.set.call(this, v); }, get() { return desc.get.call(this); }, configurable: true });
+    try {
+        const bad = createBarcodeElement({ format: "ean13", value: "abc" });
+        await renderElements([bad], { widthDots: 384, mode: "screen" });
+        await renderElements([bad], { widthDots: 384, mode: "screen", fontFamily: '"Sarasa Mono TC", monospace' });
+    } finally {
+        Object.defineProperty(proto, "font", desc);
+    }
+    assert(!seen.some((f) => /Noto Sans TC|JhengHei/.test(f)), "不應寫死特定字型：" + [...new Set(seen)].join(" | "));
+    assert(seen.some((f) => /20px sans-serif$/.test(f)), "預設應為 sans-serif");
+    assert(seen.some((f) => /Sarasa Mono TC/.test(f)), "要跟著文件指定的字體");
+});
+
 const list = document.getElementById("list");
 let failed = 0;
 for (const c of cases) {
