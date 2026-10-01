@@ -3,7 +3,7 @@ import { csvToRecords } from "../core/csv.js";
 import { exportToPdf } from "../core/pdf-export.js";
 import { safeGetItem, safeSetItem } from "../core/storage.js";
 import { BATCH_PANEL_EXPANDED_KEY, els, state } from "./context.js";
-import { getEffectiveProfile, schedulePreview } from "./editor.js";
+import { getBaseProfile, schedulePreview } from "./editor.js";
 import { showSnackbar } from "./ui-helpers.js";
 
 // ---- 匯出 / 列印 ----
@@ -31,7 +31,7 @@ export function describeFontFallbackIssues(results) {
 
 export async function exportSinglePdf() {
     // 匯出單份 PDF＝把整份專案的每一頁依序輸出，跟「列印」是同一份內容（見 printer-settings.js printCurrent）。
-    const results = await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() });
+    const results = await renderPages(state.project, state.previewData, { mode: "thermal", profile: getBaseProfile() });
     if (!confirmFontFallbacks(results)) return;
     exportToPdf(results, { fileName: `${state.project.meta.name || "printan"}.pdf` });
 }
@@ -57,7 +57,7 @@ export async function exportBatchPdf() {
     // 跟印表機實際列印順序一致（同一筆資料的各頁本來就該接續印出）。
     const results = [];
     for (const data of dataArray) {
-        results.push(...await renderPages(state.project, data, { mode: "thermal", profile: getEffectiveProfile() }));
+        results.push(...await renderPages(state.project, data, { mode: "thermal", profile: getBaseProfile() }));
     }
     if (!confirmFontFallbacks(results)) return;
     exportToPdf(results, { fileName: `${state.project.meta.name || "printan"}-batch.pdf` });

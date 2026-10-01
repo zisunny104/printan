@@ -18,7 +18,7 @@ import {
     alignGroup, IMAGE_FIT_OPTIONS, IMAGE_SIDE_OPTIONS, checkboxInput, dropdownField, emptyState, field, fieldRow, foldSection, gradientRangeField, iconButton, iconToggleButton, mkButton, numberStepperInput, sectionDivider,
     sectionHeader, selectInput, sliderField, textInput,
 } from "./inspector-widgets.js";
-import { getEffectiveProfile, inlineEditor, onModelChange, textSel } from "./editor.js";
+import { getBaseProfile, inlineEditor, onModelChange, textSel } from "./editor.js";
 import { deleteElement, deleteElements, duplicateElement, duplicateElements, ungroupElements } from "./element-actions.js";
 import { currentElements, els, rt, state } from "./context.js";
 
@@ -26,10 +26,10 @@ import { currentElements, els, rt, state } from "./context.js";
 // style.fontSize 相關換算）與 .ptan 舊檔都假設 dots。只在「輸入框顯示」這個邊界做 pt↔dots 換算，
 // 換算公式本身在 units.js（樣式預設展開時也是同一份公式，見 document-model.js applyTextStylePreset）。
 function dotsToPt(dots) {
-    return dotsToPtRaw(dots, getEffectiveProfile().dpi.x);
+    return dotsToPtRaw(dots, getBaseProfile().dpi.x);
 }
 function ptToDots(pt) {
-    return ptToDotsRaw(pt, getEffectiveProfile().dpi.x);
+    return ptToDotsRaw(pt, getBaseProfile().dpi.x);
 }
 // 分隔線粗細：dot 數字本身沒有實體大小概念，用「細／普通／粗／特粗」預設選單，標示 mm 讓使用者看得出「這條多粗」。色塊（fill）模式是拿來當裝飾色塊，預設值比線條粗上
 // 一截。內部資料仍存 dot（渲染公式、.ptan 都是 dot），選單只是換算成 dot 存回去，兩者互相對得起來。
@@ -42,7 +42,7 @@ const DIVIDER_FILL_THICKNESS_PRESETS_MM = [
 // 預設選單快速選常用粗細，下面永遠留一個 mm 數字輸入框可以打精確值（不用先選「自訂」才看得到、
 // 也不會因為目前值剛好卡在某個預設值上就找不到自訂輸入框——兩者一直並存，改其中一個兩邊都會同步）。
 function dividerThicknessSelect(el, presets) {
-    const dpiX = getEffectiveProfile().dpi.x;
+    const dpiX = getBaseProfile().dpi.x;
     const options = presets.map(([name, mm]) => [String(mmToDots(mm, dpiX)), `${name}（${mm} mm）`]);
     const current = String(el.thicknessDots);
     if (!options.some(([v]) => v === current)) {
@@ -63,7 +63,7 @@ function dividerThicknessSelect(el, presets) {
 // 容器外框粗細預設沿用分隔線線條模式同一組（見 DIVIDER_LINE_THICKNESS_PRESETS_MM），框線視覺上
 // 就是同一種東西，選單沒理由分兩套數字。
 function borderThicknessSelect(el) {
-    const dpiX = getEffectiveProfile().dpi.x;
+    const dpiX = getBaseProfile().dpi.x;
     const border = resolveBorder(el.border);
     const options = DIVIDER_LINE_THICKNESS_PRESETS_MM.map(([name, mm]) => [String(mmToDots(mm, dpiX)), `${name}（${mm} mm）`]);
     const current = String(border.thicknessDots);
@@ -483,7 +483,7 @@ function applyParagraphField(el, presetGroup, mutate) {
 function buildTextInspector(panel, el) {
     panel.appendChild(sectionHeader("font", "文字樣式", TEXT_STYLE_PRESET_INFO));
     const presetGroup = textStylePresetPicker(el.stylePreset || null, (preset) => {
-        applyTextStylePreset(el, preset, getEffectiveProfile().dpi.x);
+        applyTextStylePreset(el, preset, getBaseProfile().dpi.x);
         onModelChange(); // 展開後的字級／粗體／行高／字距欄位在下面「段落樣式」要一併重繪，不能只 skipInspector
     });
     panel.appendChild(presetGroup);

@@ -134,9 +134,9 @@ export function renderBarcodeResult(el, maxWidthDots) {
 }
 
 /** 編輯預覽用的佔位框：條碼產生不出來時在畫面上留一塊虛線框寫明原因，避免元素憑空消失又選不到。 */
-export function renderBarcodeErrorCanvas(message, widthDots) {
+export function renderBarcodeErrorCanvas(message, widthDots, fontFamily = "sans-serif") {
     const width = Math.max(1, Math.round(widthDots || 240));
-    const font = `${PLACEHOLDER_FONT_SIZE}px "Noto Sans TC", "Microsoft JhengHei", sans-serif`;
+    const font = `${PLACEHOLDER_FONT_SIZE}px ${fontFamily}`;
     const measure = document.createElement("canvas").getContext("2d");
     measure.font = font;
     const lines = [];

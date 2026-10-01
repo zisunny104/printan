@@ -52,7 +52,7 @@ import { loadProject } from "../core/schema.js";
 import { registerEmbeddedFonts } from "../core/web-fonts.js";
 import { describePrinterError } from "../core/printer-adapter.js";
 import { renderProjects } from "../core/compose.js";
-import { getEffectiveProfile } from "./editor.js";
+import { getBaseProfile } from "./editor.js";
 import { els, state } from "./context.js";
 import { attemptSilentPrinterReconnect, connectPrinter, pollPrinterStatusIfIdle, printComposedSilently, printSilently } from "./printer-settings.js";
 import { initKioskStatusBar, markPrinterChecked, mountPrinterCardAction, setKioskTemplateNames, updateKioskStatus } from "./kiosk-status-bar.js";
@@ -347,7 +347,7 @@ async function runAutoprintFlow() {
 async function composeAndPrint(projects, data, gapDots) {
     const composed = await renderProjects(
         projects.map((project) => ({ project, data })),
-        { gapDots, options: { mode: "thermal", profile: getEffectiveProfile(projects[0]) } },
+        { gapDots, options: { mode: "thermal", profile: getBaseProfile(projects[0]) } },
     );
     return printComposedSilently(composed, projects[0]);
 }

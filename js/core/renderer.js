@@ -19,7 +19,7 @@ import { applyThermalSimulation, toGrayscale, applyDither, orderedDitherGradient
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
 import { ensureWebFonts } from "./web-fonts.js";
 
-export const DEFAULT_FONT_FAMILY = '"Noto Sans TC", "Microsoft JhengHei", sans-serif';
+export const DEFAULT_FONT_FAMILY = 'sans-serif'; // 單據預設字體：直接用瀏覽器的無襯線字（不指定特定字型，各機器的 sans-serif 由系統決定）
 
 /**
  * 對單一 template + 單筆資料做完整渲染，回傳 { canvas, widthDots, heightDots, widthMm, heightMm, dpi }。
@@ -238,7 +238,7 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, show
         } else if (el.type === "barcode") {
             const result = renderBarcodeResult(el, widthDots);
             // 產生不出來（內容空白／不合格式／紙寬放不下）時，只有 screen 預覽畫佔位框；thermal（列印、PDF 都是這個模式）維持不佔高度
-            const barcodeCanvas = result.canvas || (result.error && showBarcodeErrors ? renderBarcodeErrorCanvas(result.error, widthDots) : null);
+            const barcodeCanvas = result.canvas || (result.error && showBarcodeErrors ? renderBarcodeErrorCanvas(result.error, widthDots, fontFamily) : null);
             const drawWidth = barcodeCanvas ? barcodeCanvas.width : 0;
             const drawHeight = barcodeCanvas ? barcodeCanvas.height : 0;
             items.push({ el, y, height: drawHeight, widthDots, barcodeCanvas, barcodeError: result.error, drawWidth, drawHeight });

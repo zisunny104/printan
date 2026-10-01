@@ -3,7 +3,7 @@
 // 確保「編輯器看到的結果」跟「實際輸出結果」用同一套邏輯（見需求單第廿一節）。
 
 import { extractPlaceholders } from "../core/document-model.js";
-import { getPaperWidth, getPrinterProfile, withMarginCalibration, withPrintableDotsOverrides } from "../core/printer-profiles.js";
+import { getPaperWidth, getPrinterProfile, withPrintableDotsOverrides } from "../core/printer-profiles.js";
 import { findElementById } from "../core/element-tree.js";
 import { renderTemplate } from "../core/renderer.js";
 
@@ -101,7 +101,7 @@ function cacheDom() {
         "btn-printer-connect", "btn-printer-disconnect", "pref-serial-baud-rate",
         "pref-feed-lines", "pref-feed-lines-hint", "pref-cut-paper", "pref-rotate-180", "btn-printer-settings-close",
         "btn-printer-test-print", "btn-printer-query-status", "printer-status-result",
-        "btn-printer-forget", "printer-dots-list", "btn-printer-dots-reset", "printer-margin-list", "btn-printer-margin-reset", "btn-printer-margin-sheet",
+        "btn-printer-forget", "printer-dots-list", "btn-printer-dots-reset", 
         "printer-info-device", "printer-info-firmware", "printer-info-spec", "printer-info-dpi",
         "printer-info-paper", "printer-info-printable", "printer-info-blade", "export-embed-fonts", "export-embed-fonts-row",
         "btn-project-name", "project-name-input", "project-name-input-wrap", "project-name-text",
@@ -117,11 +117,6 @@ function cacheDom() {
 // 但一樣需要算出正確的 profile 給渲染／送印參數用，所以留這個口子讓它傳進自己手上的 project。
 export function getBaseProfile(project = state.project) {
     return withPrintableDotsOverrides(getPrinterProfile(project.printerProfile.id), state.printPrefs.printableDots);
-}
-
-// 再套上左右邊距校正（可列印寬度扣掉補白）；列印頭寬度、印表機資訊要用校正前的 getBaseProfile()
-export function getEffectiveProfile(project = state.project) {
-    return withMarginCalibration(getBaseProfile(project), state.printPrefs.margins);
 }
 
 // ---- 變數 / 預覽資料 ----
@@ -177,7 +172,7 @@ function renderVariables() {
 // 縮放與尺規（見 workspace-view.js）；縮放後紙張的 CSS 寬度變了，編輯疊層座標跟著重算
 const workspace = createWorkspaceView({
     // 「符合寬度」把左右不可印區也算進去，整張紙才看得到
-    getPaperWidthMm: () => getPaperWidth(getEffectiveProfile(), state.project.paper.widthId).printableWidthMm + 2 * unprintableMm(),
+    getPaperWidthMm: () => getPaperWidth(getBaseProfile(), state.project.paper.widthId).printableWidthMm + 2 * unprintableMm(),
     getUnprintableMm: () => unprintableMm(),
     onZoom: () => {
         updatePaperFrame();
@@ -193,7 +188,7 @@ function wireZoomRevealsActivePage() {
     }
 }
 
-// 紙寬與可列印寬度之差的一半＝左右各印不到的寬度（左右對稱，用標準值；可列印點數含使用者覆寫，不含邊距校正）
+// 紙寬與可列印寬度之差的一半＝左右各印不到的寬度（左右對稱，用標準值；可列印點數含使用者覆寫）
 function unprintableMm() {
     const paper = getPaperWidth(getBaseProfile(), state.project.paper.widthId);
     return Math.max(0, ((paper.rollWidthMm ?? paper.printableWidthMm) - paper.printableWidthMm) / 2);
@@ -216,7 +211,7 @@ function ensureUnprintableZones() {
 
 function updatePaperFrame() {
     ensureUnprintableZones();
-    const profile = getEffectiveProfile();
+    const profile = getBaseProfile();
     const paper = getPaperWidth(profile, state.project.paper.widthId);
     // 連續紙沒有實體「上邊界」；下緣的切刀安全線是切刀刀片跟列印頭的實際距離（bladeOffsetMm）——
     // 太靠下緣的內容，切紙時有被裁到的風險。
@@ -251,7 +246,7 @@ async function updatePreview({ live = false } = {}) {
         // 開頭說明），這裡用一個「借用 template.elements」的殼物件呼叫它，不需要另外複製一份渲染邏輯；
         // 多頁一次全部列印／匯出改呼叫 renderPages()（見 printer-settings.js／batch-export.js）。
         const pageProject = { ...state.project, template: { elements: currentElements() } };
-        result = await renderTemplate(pageProject, data, { mode: state.mode, profile: getEffectiveProfile() });
+        result = await renderTemplate(pageProject, data, { mode: state.mode, profile: getBaseProfile() });
     } catch (err) {
         console.error(err);
         return;
@@ -270,7 +265,7 @@ async function updatePreview({ live = false } = {}) {
     renderEditOverlay();
     if (rebuilt) revealActivePage();
     // 拖曳／打字這類 live 更新只改作用中頁面，其他頁的縮圖不用跟著每個畫格重算
-    if (!live) renderPageThumbs({ data, mode: state.mode, profile: getEffectiveProfile() });
+    if (!live) renderPageThumbs({ data, mode: state.mode, profile: getBaseProfile() });
 }
 
 /** 批次資料的圖片網址被拒絕或載入失敗時，在預覽區上方提示已略過。 */
