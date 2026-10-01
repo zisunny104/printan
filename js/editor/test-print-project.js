@@ -101,12 +101,12 @@ function buildCutLine(widthDots) {
 }
 
 // 細線／細字辨識：1～4 點粗細的橫線各畫 6 條（間距等於線寬，測試印字頭能否分辨相鄰細線是否糊在一起），
-// 下面接兩組字級樣本：第一組由大到小，測試熱感紙在這台印表機上實際能看清的最小字級下限（只排一行）；
-// 第二組是本文～標題常用的正常／偏大字級參考（放不下就換行）。每行的樣本用容器均分間距，
+// 下面接兩組字級樣本，各只排一行（放不下的略過，不會為了擠進去多出一行）：第一組由大到小，測試熱感紙
+// 在這台印表機上實際能看清的最小字級下限；第二組是標題常用的偏大字級參考。每行的樣本用容器均分間距，
 // 排版方式見 layoutPtSizeRows。不寫標題文字，線條與字級樣本本身就看得出來在測什麼。
 const FINE_DETAIL_BARS_HEIGHT = 4 * 16; // 1～4 點粗細橫線各佔一列 16 高
 const FONT_SIZE_TEST_SMALL_PT = [12, 10, 9, 8, 7, 6, 5, 4]; // 由大到小找可讀下限
-const FONT_SIZE_TEST_LARGE_PT = [12, 16, 20, 24]; // 本文～標題常用尺寸參考
+const FONT_SIZE_TEST_LARGE_PT = [16, 20, 24]; // 標題常用尺寸參考（12pt 本文尺寸上面那組已經有）
 
 function ptToDots(pt) {
     // 這個檔案沒有 profile context 可讀，目前也只有單一印表機、固定 203 dpi，直接寫死換算；
@@ -119,8 +119,8 @@ const PT_ROW_MIN_GAP = 12; // 字級樣本之間至少留的點數；剩下的�
 /**
  * 字級樣本排版：先量每個樣本（「12pt」這種標籤）的寬度，一行放得下就放、放不下換下一行，
  * 同一行的樣本用容器均分間距（左右頂邊、間隔相等），不靠空白字元撐距離——空白字元的寬度跟著字級走，
- * 大字級後面的空白會把後面的樣本擠出紙外被裁掉。單一樣本比整張紙還寬時只會獨佔一行。
- * maxRows：最多排幾行，超過的樣本略過（小字級那列只想要一行）。
+ * 大字級後面的空白會把後面的樣本擠出紙外被裁掉，也會無端多出一行。
+ * maxRows：最多排幾行，放不下的樣本略過。
  */
 function layoutPtSizeRows(measureCtx, sizes, widthDots, maxRows = Infinity) {
     const rows = [];
@@ -170,7 +170,7 @@ function buildFineDetailStrip(widthDots) {
     const smallRowTop = barsTop + FINE_DETAIL_BARS_HEIGHT + 2;
     const measure = makeCanvas(1, 1).ctx;
     const smallRows = layoutPtSizeRows(measure, FONT_SIZE_TEST_SMALL_PT, widthDots, 1);
-    const largeRows = layoutPtSizeRows(measure, FONT_SIZE_TEST_LARGE_PT, widthDots);
+    const largeRows = layoutPtSizeRows(measure, FONT_SIZE_TEST_LARGE_PT, widthDots, 1);
     const rowsHeight = (rows) => rows.reduce((sum, r) => sum + r.height + 4, 0);
     const largeRowTop = smallRowTop + rowsHeight(smallRows) + 4;
     const height = largeRowTop + rowsHeight(largeRows) + 2;
