@@ -1,7 +1,14 @@
-// 「授權」modal：內文讀根目錄 LICENSE（Markdown，以 ## 分章），第一次開啟時載入並轉成 HTML，
-// 每章一個分頁。載入失敗只顯示簡短錯誤，不留空白。標記與轉換規則見 markdown.js。
+// 「授權」modal：兩個固定分頁，第一次開啟時平行載入對應檔案並轉成 HTML。
+// LICENSE 維持純英文官方範本（供 GitHub 授權徽章偵測），中文譯文與第三方元件各自分檔，
+// 這樣才不會干擾 GitHub 對 LICENSE 內容的自動比對。載入失敗只顯示簡短錯誤，不留空白。
+// 標記與轉換規則見 markdown.js。
 
-import { renderMarkdown, splitChapters } from "./markdown.js";
+import { renderMarkdown } from "./markdown.js";
+
+const TABS = [
+    { title: "MIT License", files: ["LICENSE", "LICENSE.zh-TW.md"] },
+    { title: "第三方元件", files: ["THIRD-PARTY-NOTICES.md"] },
+];
 
 export function wireLicenseDialog() {
     const dialog = document.getElementById("license-dialog");
@@ -9,7 +16,7 @@ export function wireLicenseDialog() {
     if (!dialog || !openButton) return;
     const tabsBox = dialog.querySelector(".help-tabs");
     const body = dialog.querySelector(".help-body");
-    const src = dialog.dataset.licenseSrc;
+    const base = dialog.dataset.licenseBase;
     let loaded = false;
     let loading = null;
 
@@ -48,11 +55,11 @@ export function wireLicenseDialog() {
         select(String((next + tabs.length) % tabs.length), { focus: true });
     });
 
-    function build(chapters) {
+    function build(bodies) {
         tabsBox.hidden = false;
         tabsBox.textContent = "";
         body.textContent = "";
-        chapters.forEach((chapter, index) => {
+        TABS.forEach((tabDef, index) => {
             const name = String(index);
             const tab = document.createElement("button");
             tab.type = "button";
@@ -61,7 +68,7 @@ export function wireLicenseDialog() {
             tab.setAttribute("role", "tab");
             tab.setAttribute("aria-controls", `license-panel-${name}`);
             tab.dataset.licenseTab = name;
-            tab.textContent = chapter.title;
+            tab.textContent = tabDef.title;
             tab.addEventListener("click", () => select(name));
             tabsBox.appendChild(tab);
             const panel = document.createElement("div");
@@ -69,7 +76,7 @@ export function wireLicenseDialog() {
             panel.setAttribute("role", "tabpanel");
             panel.setAttribute("aria-labelledby", `license-tab-${name}`);
             panel.dataset.licensePanel = name;
-            panel.innerHTML = renderMarkdown(chapter.body); // markdown.js 已先跳脫再套標記
+            panel.innerHTML = bodies[index]; // markdown.js 已先跳脫再套標記
             body.appendChild(panel);
         });
         select("0");
@@ -78,15 +85,20 @@ export function wireLicenseDialog() {
 
     function load() {
         if (loaded || loading) return;
-        loading = fetch(src)
-            .then((res) => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return res.text();
-            })
-            .then((text) => {
-                const chapters = splitChapters(text);
-                if (!chapters.length) throw new Error("沒有章節");
-                build(chapters);
+        loading = Promise.all(
+            TABS.map((tabDef) =>
+                Promise.all(
+                    tabDef.files.map((file) =>
+                        fetch(`${base}/${file}`).then((res) => {
+                            if (!res.ok) throw new Error(`HTTP ${res.status}（${file}）`);
+                            return res.text();
+                        })
+                    )
+                ).then((texts) => renderMarkdown(texts.join("\n\n---\n\n")))
+            )
+        )
+            .then((bodies) => {
+                build(bodies);
                 if (dialog.open) tabsBox.querySelector('[tabindex="0"]')?.focus();
             })
             .catch((err) => {

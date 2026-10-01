@@ -1,6 +1,6 @@
 <?php defined('PRINTAN_VIEW') || exit; ?>
-    <!-- 授權內容讀根目錄 LICENSE，由 js/help/license-dialog.js 第一次開啟時載入，每章一個分頁。 -->
-    <dialog id="license-dialog" class="ts-modal is-large" aria-labelledby="license-dialog-title" data-license-src="<?= htmlspecialchars($appBasePath) ?>/LICENSE">
+    <!-- 授權內容讀 LICENSE／LICENSE.zh-TW.md／THIRD-PARTY-NOTICES.md，由 js/help/license-dialog.js 第一次開啟時平行載入，固定兩個分頁。 -->
+    <dialog id="license-dialog" class="ts-modal is-large" aria-labelledby="license-dialog-title" data-license-base="<?= htmlspecialchars($appBasePath) ?>">
         <div class="content help-dialog-content">
             <div class="ts-content">
                 <div class="ts-header is-start-icon" id="license-dialog-title">
