@@ -10,7 +10,7 @@ import { els, rt, state } from "./context.js";
 import { addElement, insertElement, wireAddMenu } from "./element-actions.js";
 import { wireOutlineKeyboard } from "./outline.js";
 import { renderEditOverlay } from "./canvas-overlay.js";
-import { getEffectiveProfile, schedulePreview } from "./editor.js";
+import { getBaseProfile, schedulePreview } from "./editor.js";
 import { showSnackbar } from "./ui-helpers.js";
 
 // 通用下拉選單開關：開／關／切換，碰撞感知（下方空間不夠時翻到上面顯示），點擊選單外
@@ -219,7 +219,7 @@ async function defaultImageWidthPercent(assetId) {
     const img = new Image();
     img.src = asset?.dataUrl || "";
     try { await img.decode(); } catch { return 100; }
-    const printable = getPaperWidth(getEffectiveProfile(), state.project.paper.widthId).printableWidthDots;
+    const printable = getPaperWidth(getBaseProfile(), state.project.paper.widthId).printableWidthDots;
     return Math.min(100, Math.max(10, Math.round((img.naturalWidth / printable) * 100)));
 }
 

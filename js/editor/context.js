@@ -25,7 +25,7 @@ export const state = {
     // 連線後讀到的印表機識別資料（WebUSB 裝置名稱 + GS I 回傳的廠牌／型號／韌體）與比對到的 profile，
     // 未連線時為 null；見 identifyConnectedPrinter()。
     printerIdentity: null,
-    printPrefs: { feedLines: 4, cutPaper: true, rotate180: false, serialBaudRate: 9600, connectMethod: "usb", printableDots: {}, margins: {} }, // 走紙／切紙／上下顛倒安裝旋轉／序列傳輸速率／上次選的連線方式／各紙寬「可列印點數」覆寫（{ 紙寬id: 點數 }，空物件＝全用內建規格值）／各紙寬左右邊距校正（{ 紙寬id: { leftMm, rightMm } }，空物件＝不校正）偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）；rotate180 預設關閉，只有印表機真的倒裝的人才需要開。
+    printPrefs: { feedLines: 4, cutPaper: true, rotate180: false, serialBaudRate: 9600, connectMethod: "usb", printableDots: {} }, // 走紙／切紙／上下顛倒安裝旋轉／序列傳輸速率／上次選的連線方式／各紙寬「可列印點數」覆寫（{ 紙寬id: 點數 }，空物件＝全用內建規格值）偏好，跟印表機連線一樣是本機操作習慣，不進 .ptan 文件；切紙預設開啟（大多數熱感印表機使用情境都希望列印完直接切下來）；rotate180 預設關閉，只有印表機真的倒裝的人才需要開。
     // feedLines 預設 4（2026-09 實機驗證：0 會切到內容尾端、4 不會）：印表機規格檔的
     // autocutter.bladeOffsetMm（切刀跟列印頭之間固定的實體距離）不是自動切紙機構自己會走的，
     // 是「切紙前」需要應用程式自己走紙走過這段距離，走不夠切刀就會切在剛印完、還沒通過

@@ -100,20 +100,6 @@
                             <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-dots-reset">
                                 <span class="ts-icon is-rotate-left-icon" aria-hidden="true"></span> 還原預設點數
                             </button>
-                            <div class="has-top-spaced"></div>
-                            <div class="ts-text is-label">邊距校正</div>
-                            <div class="has-top-spaced-small"></div>
-                            <!-- 每個紙寬一列（左／右留白 mm），由 renderMarginRows() 產生，見 printer-settings.js -->
-                            <div id="printer-margin-list"></div>
-                            <div class="has-top-spaced-small"></div>
-                            <div class="ts-wrap">
-                                <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-margin-reset">
-                                    <span class="ts-icon is-rotate-left-icon" aria-hidden="true"></span> 重設
-                                </button>
-                                <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-printer-margin-sheet">
-                                    <span class="ts-icon is-ruler-icon" aria-hidden="true"></span> 校正紙
-                                </button>
-                            </div>
                         </div>
                         <div class="ts-divider"></div>
                         <!-- 測試列印：套用目前走紙／切紙偏好印一小段測試圖樣，不用印整張收據就能校正

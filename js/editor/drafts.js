@@ -6,7 +6,7 @@ import { deleteDraft, listRecent, loadDraft, safeGetItem, safeSetItem, saveDraft
 import { LAST_DRAFT_KEY, els, state } from "./context.js";
 import { resetHistory } from "./history.js";
 import { endBatchPreview } from "./batch-export.js";
-import { renderMarginRows, renderPrintableDotsRows, updateFeedLinesHint } from "./printer-settings.js";
+import { renderPrintableDotsRows, updateFeedLinesHint } from "./printer-settings.js";
 import { renderPageList } from "./pages.js";
 import { runAutosave } from "./save-status.js";
 import { onModelChange } from "./editor.js";
@@ -45,7 +45,6 @@ export function loadProjectIntoEditor(project) {
     endBatchPreview();
     updateFeedLinesHint();
     renderPrintableDotsRows();
-    renderMarginRows();
     populatePaperWidthTabs();
     populateRecentDrafts();
     renderProjectName();

@@ -1,21 +1,21 @@
 // 印表機：連線、列印、偏好與「印表機設定」面板。
 
 import {
-    MARGIN_MM_MAX, PRINTABLE_DOTS_MAX, PRINTABLE_DOTS_MIN, getMarginPad, getPaperWidth, getPrintHeadWidthDots,
-    getPrinterProfile, matchPrinterProfile, sanitizeMarginCalibration, sanitizePrintableDotsOverrides,
+    PRINTABLE_DOTS_MAX, PRINTABLE_DOTS_MIN, getPaperWidth, getPrintHeadWidthDots,
+    getPrinterProfile, matchPrinterProfile, sanitizePrintableDotsOverrides,
 } from "../core/printer-profiles.js";
 import { PRINT_PREFS_KEY, els, serialAdapter, state, usbAdapter } from "./context.js";
 import { SystemDialogAdapter, checkPrinterReady, describePrinterError, interpretRealtimeStatus, isSelectionCancelled, readFullPrinterStatus, rotateCanvas180 } from "../core/printer-adapter.js";
-import { getBaseProfile, getEffectiveProfile, schedulePreview } from "./editor.js";
+import { getBaseProfile, schedulePreview } from "./editor.js";
 import { confirmFontFallbacks, describeFontFallbackIssues } from "./batch-export.js";
 import { safeGetItem, safeSetItem } from "../core/storage.js";
 import { createInfoIcon, hideStageNotice, showSnackbar, showStageNotice } from "./ui-helpers.js";
-import { renderCalibrationSheet, renderTestPrint } from "./test-print-project.js";
+import { renderTestPrint } from "./test-print-project.js";
 import { renderPages } from "../core/renderer.js";
 
 // ESC/POS 直連列印（WebUSB／WebSerial）用的列印選項：在使用者的走紙／切紙偏好之外，
 // 額外帶入目前印表機 profile 的列印頭最大寬度，讓 buildEscposJob 統一置中輸出
-// （見 printer-adapter.js centerCanvasOnWidth），避免紙寬較窄時印出來的內容偏移；左右邊距校正的補白點數一併帶入。
+// （見 printer-adapter.js centerCanvasOnWidth），避免紙寬較窄時印出來的內容偏移。
 // pageCutAfter：多頁列印時每一頁各自的切紙旗標（見 schema.js Page.cutAfter）。跟使用者全域的
 // 「切紙」偏好（state.printPrefs.cutPaper）是「且」的關係——全域偏好本來就是給沒有自動切刀、
 // 或不想切紙的使用者關掉用的，單頁專案沒有 pages 概念之前這個偏好就是唯一開關，多頁專案
@@ -23,13 +23,10 @@ import { renderPages } from "../core/renderer.js";
 // project 參數預設是 state.project；kiosk.js 多範本模式（printComposedSilently）沒有單一
 // state.project 可用，傳自己手上第一份範本的 project 進來算 profile／紙寬，見 getBaseProfile。
 function getEscposPrintOptions(pageCutAfter = true, project = state.project) {
-    const pad = getMarginPad(getEffectiveProfile(project), project.paper.widthId);
     return {
         ...state.printPrefs,
         cutPaper: state.printPrefs.cutPaper && pageCutAfter,
         targetWidthDots: getPrintHeadWidthDots(getBaseProfile(project)),
-        padLeftDots: pad.left,
-        padRightDots: pad.right,
     };
 }
 
@@ -83,7 +80,7 @@ export async function printCurrent() {
     printButton.classList.add("is-loading");
     hideStageNotice(PRINT_NOTICE_KEY);
     try {
-        const results = applyRotationPref(await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() }));
+        const results = applyRotationPref(await renderPages(state.project, state.previewData, { mode: "thermal", profile: getBaseProfile() }));
         if (!confirmFontFallbacks(results)) return;
 
         if (state.usbConnected || state.serialConnected) {
@@ -142,7 +139,7 @@ export async function printSilently() {
     if (!state.usbConnected && !state.serialConnected) return { ok: false, reason: "not-connected" };
     state.printerBusy = true;
     try {
-        const results = applyRotationPref(await renderPages(state.project, state.previewData, { mode: "thermal", profile: getEffectiveProfile() }));
+        const results = applyRotationPref(await renderPages(state.project, state.previewData, { mode: "thermal", profile: getBaseProfile() }));
         const issues = describeFontFallbackIssues(results);
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
         const notReady = await describeNotReady(adapter);
@@ -224,7 +221,7 @@ export function loadPrintPrefs() {
         const saved = JSON.parse(safeGetItem(PRINT_PREFS_KEY) || "{}");
         state.printPrefs = { ...state.printPrefs, ...saved };
         state.printPrefs.printableDots = sanitizePrintableDotsOverrides(state.printPrefs.printableDots);
-        state.printPrefs.margins = sanitizeMarginCalibration(state.printPrefs.margins);
+        delete state.printPrefs.margins; // 不再使用的欄位，不留在本機偏好裡
     } catch {
         // 格式壞掉就用預設值，不擋流程
     }
@@ -362,7 +359,6 @@ function updatePrinterConnectionUi() {
     // 「查詢印表機狀態」再跳 alert 說明——那樣使用者得先點一次才知道不能用，體驗上
     // 比按鈕本身直接變成無法點擊差一截。
     els["btn-printer-test-print"].disabled = !connected;
-    els["btn-printer-margin-sheet"].disabled = !connected;
     els["btn-printer-query-status"].disabled = !connected;
 }
 
@@ -487,62 +483,6 @@ export function renderPrintableDotsRows() {
     syncResetButton();
 }
 
-// 每個紙寬一列「邊距校正」：填測試列印量到的左右留白（mm），兩格都填才生效、兩格清空＝不校正；
-// 存在本機偏好，不進 .ptan。
-export function renderMarginRows() {
-    const base = getPrinterProfile(state.project.printerProfile.id);
-    const margins = state.printPrefs.margins;
-    els["printer-margin-list"].replaceChildren();
-    for (const paper of base.paperWidths) {
-        const row = document.createElement("div");
-        row.className = "printer-dots-row";
-
-        const label = document.createElement("span");
-        label.className = "ts-text is-label printer-dots-label";
-        label.textContent = paper.label;
-        row.appendChild(label);
-
-        const inputs = [["leftMm", "左"], ["rightMm", "右"]].map(([key, name]) => {
-            const wrap = document.createElement("div");
-            wrap.className = "ts-input is-small printer-dots-input";
-            const input = document.createElement("input");
-            input.type = "number";
-            input.min = 0;
-            input.max = MARGIN_MM_MAX;
-            input.step = 0.1;
-            input.placeholder = name;
-            input.value = margins[paper.id]?.[key] ?? "";
-            input.setAttribute("aria-label", `${paper.label} ${name}邊距（mm）`);
-            wrap.appendChild(input);
-            row.appendChild(wrap);
-            return { key, input };
-        });
-
-        const unit = document.createElement("span");
-        unit.className = "ts-text is-description is-small";
-        unit.textContent = "mm";
-        row.appendChild(unit);
-
-        const commit = () => {
-            const [left, right] = inputs.map(({ input }) => input.value.trim());
-            if (left === "" && right === "") {
-                delete margins[paper.id];
-            } else {
-                const next = sanitizeMarginCalibration({ [paper.id]: { leftMm: left, rightMm: right } })[paper.id];
-                if (!next) return; // 只填一邊：等另一邊也填了才生效
-                margins[paper.id] = next;
-                inputs.forEach(({ key, input }) => { input.value = next[key]; });
-            }
-            savePrintPrefs();
-            els["btn-printer-margin-reset"].disabled = Object.keys(margins).length === 0;
-            schedulePreview();
-        };
-        inputs.forEach(({ input }) => input.addEventListener("change", commit));
-        els["printer-margin-list"].appendChild(row);
-    }
-    els["btn-printer-margin-reset"].disabled = Object.keys(margins).length === 0;
-}
-
 // 連線後讀印表機自報的辨識資料，再拿去比對內建規格表（query:false＝自動重連，只讀裝置名稱、不送 GS I）：
 // 1. WebUSB 有 manufacturerName／productName（裝置描述元，不用送指令）；序列埠讀不到裝置名稱。
 // 2. GS I n（n=66 廠牌、67 型號、65 韌體）是 ESC/POS 標準的「傳送印表機 ID」指令，但只有
@@ -602,8 +542,10 @@ async function identifyConnectedPrinter({ query = true } = {}) {
     updatePrinterInfo();
 }
 
-// 測試列印／校正紙：canvas 由 test-print-project.js 產生，跟一般列印共用 adapter.print() 與 printerBusy 序列化
-async function printTestSheet(label, build, button) {
+// 測試列印：canvas 由 test-print-project.js 產生，跟一般列印共用 adapter.print() 與 printerBusy 序列化
+async function printTestSheet() {
+    const label = "測試列印";
+    const button = els["btn-printer-test-print"];
     if (!state.usbConnected && !state.serialConnected) {
         showSnackbar(`請先連線 USB 或序列埠印表機才能${label}`);
         return;
@@ -614,26 +556,24 @@ async function printTestSheet(label, build, button) {
     }
     state.printerBusy = true;
     // 資料送給印表機要花時間（印表機缺紙、上蓋打開時會一直等到逾時），按下去沒有任何變化會讓人以為沒反應、
-    // 又按一次就撞到「忙碌中」：傳送期間按下的那顆按鈕轉圈圈（Tocas is-loading）、兩顆都鎖住
-    const sending = [els["btn-printer-test-print"], els["btn-printer-margin-sheet"]];
-    for (const b of sending) b.disabled = true;
+    // 又按一次就撞到「忙碌中」：傳送期間按鈕轉圈圈（Tocas is-loading）並鎖住
+    button.disabled = true;
     button.classList.add("is-loading");
     let outcome = "";
     try {
         const widthId = state.project.paper.widthId;
-        const profile = getEffectiveProfile();
+        const profile = getBaseProfile();
         const ctx = {
             baseProfile: getBaseProfile(),
             profile,
             widthId,
             headWidthDots: getPrintHeadWidthDots(getBaseProfile()),
-            pad: getMarginPad(profile, widthId),
             prefs: state.printPrefs,
             connection: state.usbConnected ? "USB" : "序列埠",
             firmware: state.printerIdentity?.firmware || "",
         };
-        const renderResult = await build(ctx);
-        // 測試列印／校正紙正是使用者要確認倒裝旋轉有沒有裝對的地方，跟正式列印用同一份偏好、同一個轉換函式。
+        const renderResult = await renderTestPrint(ctx);
+        // 測試列印正是使用者要確認倒裝旋轉有沒有裝對的地方，跟正式列印用同一份偏好、同一個轉換函式。
         if (state.printPrefs.rotate180) renderResult.canvas = rotateCanvas180(renderResult.canvas);
         if (!confirmFontFallbacks(renderResult)) return;
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
@@ -649,7 +589,7 @@ async function printTestSheet(label, build, button) {
     } finally {
         state.printerBusy = false;
         button.classList.remove("is-loading");
-        for (const b of sending) b.disabled = !(state.usbConnected || state.serialConnected);
+        button.disabled = !(state.usbConnected || state.serialConnected);
     }
 }
 
@@ -716,7 +656,6 @@ export function bindPrinterSettings() {
     els["pref-rotate-180"].checked = state.printPrefs.rotate180;
     els["pref-serial-baud-rate"].value = state.printPrefs.serialBaudRate;
     renderPrintableDotsRows();
-    renderMarginRows();
     updatePrinterConnectionUi();
 
     els["btn-printer-settings"].addEventListener("click", () => {
@@ -775,13 +714,6 @@ export function bindPrinterSettings() {
         schedulePreview();
     });
 
-    els["btn-printer-margin-reset"].addEventListener("click", () => {
-        state.printPrefs.margins = {};
-        savePrintPrefs();
-        renderMarginRows();
-        schedulePreview();
-    });
-
     els["pref-feed-lines"].addEventListener("change", () => {
         const n = Math.max(0, Math.round(Number(els["pref-feed-lines"].value) || 0));
         state.printPrefs.feedLines = n;
@@ -800,11 +732,7 @@ export function bindPrinterSettings() {
     });
 
     els["btn-printer-test-print"].addEventListener("click", () => {
-        printTestSheet("測試列印", renderTestPrint, els["btn-printer-test-print"]);
-    });
-
-    els["btn-printer-margin-sheet"].addEventListener("click", () => {
-        printTestSheet("列印校正紙", renderCalibrationSheet, els["btn-printer-margin-sheet"]);
+        printTestSheet();
     });
 
     els["btn-printer-query-status"].addEventListener("click", () => {
