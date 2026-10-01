@@ -322,7 +322,7 @@ const menuItems = () => {
     ];
 };
 
-const DISCOUNT = ["優惠　一點點……耐心", -15];
+const DISCOUNT = ["優惠 一點點……耐心", -15];
 
 function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDetailUrl, ditherUrl, widthDots, dpi) {
     // 字級依紙寬取值：80mm 特大，58mm（約 420 點）退一級才放得下。
@@ -343,9 +343,15 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
     const center = (runs, overrides = {}) => text(runs, { align: "center", ...overrides });
     const gap = () => createSpacerElement({ heightDots: 8 });
     const space = () => createSpacerElement({ heightDots: 12 });
+    // 備註縮排用容器（左邊留一欄空的）表示，不用全形空白撐
+    const remarkRow = (remark) => {
+        const row = createRowElement([1, 19]);
+        row.columns[1].push(text(`└ ${remark}`, { fontSize: noteSize }));
+        return row;
+    };
     const menuRows = menu.flatMap(([name, qty, price, remark]) => [
         itemRow(name, String(qty), money((Number(qty) || 0) * price), {}),
-        text(`　└ ${remark}`, { fontSize: noteSize }),
+        remarkRow(remark),
     ]);
     // 標題列：icon＋名稱貼在一起整組置中。欄寬用「點」當比例：兩側留白 | icon | 間距 | 名稱（量出實際字寬）| 兩側留白
     const nameWidth = measureBrand(brandSize) + 16;
@@ -380,7 +386,14 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
     const infoRows = info.map(([k, v]) => {
         const row = createRowElement([1, 2]);
         row.columns[0].push(text(k, { fontSize: smallSize }));
-        row.columns[1].push(text(v, { fontSize: smallSize, align: "right" }));
+        if (Array.isArray(v)) {
+            // 一格裡有好幾段（例如「左 0」「右 0 mm」）：各放進自己的欄，欄寬相等、等距排列，不用全形空白隔開
+            const parts = createRowElement(v.map(() => 1));
+            v.forEach((part, i) => parts.columns[i].push(text(part, { fontSize: smallSize, align: "right" })));
+            row.columns[1].push(parts);
+        } else {
+            row.columns[1].push(text(v, { fontSize: smallSize, align: "right" }));
+        }
         return row;
     });
 
@@ -401,7 +414,7 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
         center("toka.dev/koilisu/printan", { fontSize: smallSize }),
         gap(),
         // 品項：上方一條反白窄帶當區段標頭
-        center("ORDER　本次開發明細", { fontSize: noteSize + 4, bold: true, inverse: true }),
+        center("ORDER 本次開發明細", { fontSize: noteSize + 4, bold: true, inverse: true }),
         createSpacerElement({ heightDots: 4 }),
         ...menuRows,
         createDividerElement(),
@@ -448,11 +461,11 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
     const info = [
         ["機型", `${baseProfile.brand} ${baseProfile.model}`],
         ["連線", connection],
-        ["紙寬", `${paper.label}　${dpi} dpi`],
+        ["紙寬", [paper.label, `${dpi} dpi`]],
         ["可印", `${paper.printableWidthDots} / ${rawWidth} 點`],
-        ["邊距", margin ? `左 ${margin.leftMm}　右 ${margin.rightMm} mm` : "未校正"],
-        ["補白", `左 ${pad.left}　右 ${pad.right} 點`],
-        ["走紙", `${prefs.feedLines} 行　切紙${prefs.cutPaper ? "開" : "關"}`],
+        ["邊距", margin ? [`左 ${margin.leftMm}`, `右 ${margin.rightMm} mm`] : "未校正"],
+        ["補白", [`左 ${pad.left}`, `右 ${pad.right} 點`]],
+        ["走紙", [`${prefs.feedLines} 行`, `切紙${prefs.cutPaper ? "開" : "關"}`]],
         ["時間", new Date().toLocaleString("zh-TW", { hour12: false })],
     ];
 
@@ -482,7 +495,7 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
 // 邊距校正紙，由上而下三段：
 // ① 寬版（640 點＝80 mm，比可列印區寬）：從影像最左 dot 0 起每 1 mm 一格、每 5 mm 標數字，
 //    粗黑線在 0、72 mm（576 點）、80 mm；最右邊印得出來的數字就是機器實際上限，最左邊看得到的第一個數字就是被吃掉的量。
-// ② 未校正的可列印範圍　③ 套用目前補白後的範圍：量紙緣到黑條，填進邊距校正。
+// ② 未校正的可列印範圍；③ 套用目前補白後的範圍：量紙緣到黑條，填進邊距校正。
 export const SHEET_WIDTH_DOTS = 640;
 export function renderCalibrationSheet({ baseProfile, profile, widthId, headWidthDots, pad }) {
     const dpi = baseProfile.dpi.x;
@@ -522,6 +535,8 @@ export function renderCalibrationSheet({ baseProfile, profile, widthId, headWidt
         drawEdgeGauge(ctx, x, y + labelH, w, dpi);
         y += sectionH;
     }
-    ctx.fillText("左 ______ mm　右 ______ mm", rawX + 12, y + 8);
+    // 兩個填寫欄各佔一半寬度，等距排列，不用全形空白隔開
+    ctx.fillText("左 ______ mm", rawX + 12, y + 8);
+    ctx.fillText("右 ______ mm", rawX + Math.round(rawWidth / 2) + 12, y + 8);
     return { canvas };
 }
