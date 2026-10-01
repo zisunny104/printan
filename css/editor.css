@@ -1885,28 +1885,29 @@ body {
     text-decoration: none;
 }
 
-.footer-github-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    background: #24292f;
-    color: white;
-    text-decoration: none;
-    border-radius: 6px;
-    font-size: .85em;
-    font-weight: 500;
-    margin-left: 4px;
+/* 顏色不可寫死色碼，沿用 .ts-button 的 light-dark() 預設色，深色模式才不會融進背景。
+   選擇器要寫 .ts-button.footer-action-button（而非單純 .footer-action-button），
+   權重才贏得過原生 .ts-button.is-small，不然 --height／font-size 會被蓋掉。 */
+.ts-button.footer-action-button {
+    --height: 24px;
+    min-width: 0;
+    padding: 0 .65em;
+    border-width: 1px;
+    font-size: .8em;
 }
 
-.footer-github-badge svg,
-.footer-github-badge .ts-icon {
-    vertical-align: text-bottom;
-    margin-right: 4px;
+/* Tocas 的 .ts-selection 無直向堆疊版型，手機寬度下改垂直排列並重設高度/圓角 */
+.ts-selection.theme-switcher-stacked {
+    flex-direction: column;
+    height: auto;
+    align-items: stretch;
+    gap: 0.2rem;
+    padding: 0.35rem;
+    border-radius: var(--ts-border-radius-container, 8px);
 }
 
-.footer-github-badge:where(button) {
-    border: 0;
-    font: inherit;
-    cursor: pointer;
+.ts-selection.theme-switcher-stacked .item .text {
+    width: 100%;
 }
 
 /* ==== 觸控裝置（深色模式一律以 light-dark() 寫在各規則內） ==== */
