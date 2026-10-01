@@ -448,10 +448,10 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
 }
 
 /**
- * 產生測試列印用 canvas（寬度＝列印頭寬度，內容已置中，送出時 adapter 不會再動它）。
- * ctx：{ baseProfile, profile, widthId, headWidthDots, prefs, connection, firmware }
+ * 產生測試列印用 canvas（寬度＝目前紙寬的可列印點數）。
+ * ctx：{ baseProfile, profile, widthId, prefs, connection, firmware }
  */
-export async function renderTestPrint({ baseProfile, profile, widthId, headWidthDots, prefs, connection, firmware }) {
+export async function renderTestPrint({ baseProfile, profile, widthId, prefs, connection, firmware }) {
     const dpi = baseProfile.dpi.x;
     const basePaper = baseProfile.paperWidths.find((p) => p.id === widthId);
     const paper = profile.paperWidths.find((p) => p.id === widthId);
@@ -482,9 +482,5 @@ export async function renderTestPrint({ baseProfile, profile, widthId, headWidth
     );
     const body = await renderTemplate(project, {}, { mode: "thermal", profile });
 
-    // 內容位置比照 adapter 的置中
-    const { canvas, ctx } = makeCanvas(headWidthDots, body.canvas.height);
-    const bodyX = Math.max(0, Math.floor((headWidthDots - body.canvas.width) / 2));
-    ctx.drawImage(body.canvas, bodyX, 0);
-    return { canvas, fontFallbacks: body.fontFallbacks };
+    return { canvas: body.canvas, fontFallbacks: body.fontFallbacks };
 }

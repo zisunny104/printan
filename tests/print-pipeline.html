@@ -18,12 +18,11 @@ pre { margin: 0 0 0 24px; white-space: pre-wrap; }
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode_UTF8.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
 <script type="module">
-// ESC/POS 位元組 golden 測試＋列印頭置中計算，跟 tests/index.html 同一套跑法（標題顯示 PASS／FAIL）。
+// ESC/POS 位元組 golden 測試，跟 tests/index.html 同一套跑法（標題顯示 PASS／FAIL）。
 import {
-    WebSerialEscposAdapter, WebUsbEscposAdapter, buildEscposJob, canvasToEscposRaster, centerCanvasOnWidth,
+    WebSerialEscposAdapter, WebUsbEscposAdapter, buildEscposJob, canvasToEscposRaster,
     describePrinterError, isSelectionCancelled, interpretRealtimeStatus, readFullPrinterStatus,
 } from "../js/core/printer-adapter.js";
-import { getPrinterProfile, getPrintHeadWidthDots } from "../js/core/printer-profiles.js";
 
 import { composeResults } from "../js/core/compose.js";
 import { csvToRecords } from "../js/core/csv.js";
@@ -53,16 +52,6 @@ function canvasFrom(rows) {
     ctx.fillStyle = "#000";
     rows.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === "#") ctx.fillRect(x, y, 1, 1); }));
     return c;
-}
-function blackCols(canvas) {
-    const { data } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
-    const cols = [];
-    for (let x = 0; x < canvas.width; x++) {
-        for (let y = 0; y < canvas.height; y++) {
-            if (data[(y * canvas.width + x) * 4] < 128) { cols.push(x); break; }
-        }
-    }
-    return cols;
 }
 const HEADER = "1b 40 1d 4c 00 00 1b 61 00";
 const one = () => ({ canvas: canvasFrom(["#......."]) });
@@ -157,47 +146,12 @@ test("尺寸超出 0xffff 丟錯", () => {
     assert(msg.includes("超過"), "應丟尺寸錯誤：" + msg);
 });
 
-// ---- 置中與補白 ----
-test("centerCanvasOnWidth：置中（左右各 floor(slack/2)）", () => {
-    const out = centerCanvasOnWidth(canvasFrom(["####"]), 10);
-    eq(out.width, 10);
-    eq(blackCols(out), [3, 4, 5, 6]);
-});
-test("centerCanvasOnWidth：奇數 slack 多的一點在右側", () => {
-    eq(blackCols(centerCanvasOnWidth(canvasFrom(["####"]), 9)), [2, 3, 4, 5]);
-});
-test("centerCanvasOnWidth：來源已達目標寬度就原樣回傳", () => {
-    const c = canvasFrom(["####"]);
-    assert(centerCanvasOnWidth(c, 4) === c);
-    assert(centerCanvasOnWidth(c, 3) === c);
-    assert(centerCanvasOnWidth(c, null) === c);
-    assert(centerCanvasOnWidth(c, 0) === c);
-});
-test("centerCanvasOnWidth：水平置中，高度不變", () => {
-    const out = centerCanvasOnWidth(canvasFrom(["####", "####"]), 20);
-    eq([out.width, out.height], [20, 2]);
-    eq(blackCols(out), [8, 9, 10, 11]); // slack=16 → 8
-});
-test("centerCanvasOnWidth：高度 0 的 canvas 不崩潰", () => {
-    const c = document.createElement("canvas");
-    c.width = 4; c.height = 0;
-    eq(centerCanvasOnWidth(c, 10).width, 10);
-});
-test("buildEscposJob 帶 targetWidthDots：raster 寬度＝列印頭寬度", () => {
-    const out = buildEscposJob({ canvas: canvasFrom(Array.from({ length: 2 }, () => ".".repeat(420))) }, { targetWidthDots: 576 });
-    eq(hex(out.subarray(9, 17)), "1d 76 30 00 48 00 02 00");
+// ---- 內容寬度 ----
+test("buildEscposJob：raster 寬度＝canvas 寬度（不補白）", () => {
+    const out = buildEscposJob({ canvas: canvasFrom(Array.from({ length: 2 }, () => ".".repeat(420))) });
+    eq(hex(out.subarray(9, 17)), "1d 76 30 00 35 00 02 00");
 });
 
-// ---- 列印頭置中 ----
-const T82 = getPrinterProfile("epson-tm-t82ii");
-test("getPrintHeadWidthDots：取各紙寬最大的可列印點數（576）", () => {
-    eq(getPrintHeadWidthDots(T82), 576);
-});
-function edgeCanvas(width) { return canvasFrom(["#" + ".".repeat(width - 2) + "#"]); }
-test("端到端：58mm 內容在 576 列印頭上置中", () => {
-    const cols = blackCols(centerCanvasOnWidth(edgeCanvas(420), getPrintHeadWidthDots(T82)));
-    eq([cols[0], cols[cols.length - 1]], [78, 497]);
-});
 
 // ---- 錯誤路徑（stub 裝置）----
 const domErr = (name, message) => Object.assign(new Error(message), { name });
