@@ -75,7 +75,7 @@ function nextId(prefix) {
 
 /**
  * 一個文字元素的內容由多個 run 組成（同一段文字裡不同片段可以各自
- * 覆寫字體／字級／粗體／斜體／底線／刪除線／反白）。run 沒指定的樣式欄位會繼承所屬
+ * 覆寫字型／字級／粗體／斜體／底線／刪除線／反白）。run 沒指定的樣式欄位會繼承所屬
  * 文字元素的預設值（fontFamily/fontSize/bold），斜體／底線／刪除線／反白沒有元素層級
  * 預設值（元素的 inverse 是整行反白，另一回事），未指定一律視為 false。align／wrap／maxLines／lineHeight／letterSpacing
  * 是「段落」層級設定，仍然掛在元素上，不隨 run 變化。
@@ -92,7 +92,7 @@ export function createTextElement(overrides = {}) {
         id: nextId("text"),
         type: "text",
         runs: [createTextRun({ text: "" })],
-        fontFamily: null, // null = 使用渲染時的全域預設字體
+        fontFamily: null, // null = 使用渲染時的全域預設字型
         fontSize: 32, // dots，run 沒指定字級時的預設值
         lineHeight: 1.3,
         letterSpacing: 0, // dots

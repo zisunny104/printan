@@ -10,7 +10,7 @@
 
 // [格式 id, 下拉選單顯示名稱]，順序即選單順序；用途說明在 BARCODE_FORMAT_INFO。
 export const BARCODE_FORMATS = [
-    ["qrcode", "QR Code（二維碼）"],
+    ["qrcode", "QR Code"],
     ["code128", "Code128（英數通用）"],
     ["ean13", "EAN-13（商品）"],
     ["ean8", "EAN-8（小型商品）"],

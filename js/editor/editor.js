@@ -61,7 +61,7 @@ async function init() {
     // 到這裡大綱／畫布／檢視器都已經是真的內容，骨架畫面可以淡出了；下面印表機重連、
     // kiosk 版型套用都跟畫面初次可見無關，不用等它們（也可能因裝置環境卡住，會拖著骨架不放）。
     hideEditorSkeleton();
-    onWebFontStatusChange(() => { // 字體載入失敗／恢復時，選單上的標示要跟著更新；非作用中頁面的縮圖可能是用替代字體畫的
+    onWebFontStatusChange(() => { // 字型載入失敗／恢復時，選單上的標示要跟著更新；非作用中頁面的縮圖可能是用替代字型畫的
         renderInspector();
         invalidatePageThumbs();
         schedulePreview();
@@ -274,10 +274,10 @@ function updateImageFailureNotice(failures) {
     showStageNotice("image-failure-notice", `有 ${failures.length} 張圖片無法載入，已略過`, { title: failures.join("\n") });
 }
 
-/** 網頁字體（等寬）載入失敗時，在預覽區上方明確提示目前顯示與列印的是系統字體，不默默換字。 */
+/** 網頁字型（等寬）載入失敗時，在預覽區上方明確提示目前顯示與列印的是系統字型，不默默換字。 */
 function updateFontFallbackNotice(failedLabels) {
     if (!failedLabels?.length) return hideStageNotice("font-fallback-notice");
-    showStageNotice("font-fallback-notice", `字體「${failedLabels.join("、")}」沒有載入成功（可能沒有網路），預覽與列印暫時改用系統字體。`);
+    showStageNotice("font-fallback-notice", `字型「${failedLabels.join("、")}」沒有載入成功（可能沒有網路），預覽與列印暫時改用系統字型。`);
 }
 
 // 預覽區行內文字編輯（見 inline-text-editor.js）。textSel 是面板工具列操作的選取範圍，

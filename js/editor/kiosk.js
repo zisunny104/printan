@@ -282,7 +282,7 @@ function isAllowedTemplateUrl(url) {
     }
 }
 
-/** 抓 tpl= 指定的 .ptan 內容、解析、註冊內嵌字體，回傳 { project }；失敗回傳 { error }（原因，供狀態列與回報使用）。 */
+/** 抓 tpl= 指定的 .ptan 內容、解析、註冊內嵌字型，回傳 { project }；失敗回傳 { error }（原因，供狀態列與回報使用）。 */
 async function loadTemplateFromUrl(url) {
     if (!isAllowedTemplateUrl(url)) {
         return { error: "網址不允許（僅接受同源網址）" };
@@ -300,7 +300,7 @@ async function loadTemplateFromUrl(url) {
         return { error: "內容有誤，無法開啟" };
     }
     if (result.project.embeddedFonts) {
-        // 字體資料只用來註冊 FontFace，不留在專案裡，跟 ptan-file.js 的 readPtanFile 做法一致
+        // 字型資料只用來註冊 FontFace，不留在專案裡，跟 ptan-file.js 的 readPtanFile 做法一致
         const { embeddedFonts, ...rest } = result.project;
         await registerEmbeddedFonts(embeddedFonts);
         result.project = rest;

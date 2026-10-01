@@ -136,15 +136,15 @@ test("__proto__／constructor 之類的鍵不會污染 Object.prototype", () => 
     assert(!("polluted" in {}), "Object.prototype 被污染");
 });
 
-// ---- 圖片與字體資料 ----
+// ---- 圖片與字型資料 ----
 test("素材 dataUrl 壞掉（非 base64、空字串、非字串）：載入不檢查內容、不當機", () => {
     survives({ format: "ptan", version: 1, assets: [{ id: "a", dataUrl: "data:image/png;base64,@@@" }, { id: "b", dataUrl: "" }, { id: "c", dataUrl: 5 }, { id: "d" }], template: { elements: [{ type: "image", assetId: "a" }] } });
 });
 test("素材陣列裡夾雜 null／數字", () => {
     survives({ format: "ptan", version: 1, assets: [null, 5, "x", { id: "ok", dataUrl: "data:," }], template: { elements: [] } });
 });
-test("readPtanFile：內嵌字體資料異常（非陣列、非 base64、缺欄位、null）仍能開啟，字體不留在專案", async () => {
-    for (const embeddedFonts of ["x", 5, [null, 5, "x"], [{}], [{ family: "不存在的字體", data: "@@@" }], [{ family: "思源黑體", weight: 700, data: "@@@@" }], [{ family: "思源黑體", data: 5 }]]) {
+test("readPtanFile：內嵌字型資料異常（非陣列、非 base64、缺欄位、null）仍能開啟，字型不留在專案", async () => {
+    for (const embeddedFonts of ["x", 5, [null, 5, "x"], [{}], [{ family: "不存在的字型", data: "@@@" }], [{ family: "思源黑體", weight: 700, data: "@@@@" }], [{ family: "思源黑體", data: 5 }]]) {
         const out = await withTimeout(readPtanFile(file(JSON.stringify({ format: "ptan", version: 2, embeddedFonts, template: { elements: [] } }))));
         assert(out.ok, out.error);
         assert(!("embeddedFonts" in out.project), "embeddedFonts 應被移除");

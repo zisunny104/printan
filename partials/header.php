@@ -4,10 +4,12 @@
             <div id="app-header">
                 <div class="ts-grid is-middle-aligned">
                     <div class="column is-fluid">
-                        <div class="ts-header is-heavy is-large is-start-icon" role="heading" aria-level="1">
-                            <span class="ts-icon is-receipt-icon" aria-hidden="true"></span>
-                            Printan 單仔
-                            <span class="app-version">v<?= htmlspecialchars($appVersion) ?></span>
+                        <div class="ts-wrap is-middle-aligned is-compact">
+                            <div class="ts-header is-heavy is-large is-start-icon" role="heading" aria-level="1">
+                                <span class="ts-icon is-receipt-icon" aria-hidden="true"></span>
+                                Printan 單仔
+                            </div>
+                            <span class="ts-text is-description app-version">v<?= htmlspecialchars($appVersion) ?></span>
                         </div>
                         <div class="ts-text is-description mobile:has-hidden">熱感紙收據／標籤設計與預覽工具，所見即所印。</div>
                     </div>

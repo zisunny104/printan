@@ -8,7 +8,7 @@ import { deleteElements, duplicateElements, getSelectedIds, groupElements, highl
 import { renderPageList } from "./pages.js";
 
 // ---- 復原／重做：版面歷史 ----
-// 快照對象是整個 project.template.pages，不只是目前頁的 elements——
+// 快照範圍是整個 project.template.pages，不只是目前頁的 elements——
 // 這樣「新增／刪除／合併／分割頁面、頁面排序」這類頁面層級操作也一併進復原堆疊，不會出現
 // 「不小心刪掉一整頁卻復原不了」這種資料遺失風險（見需求單）。頁內編輯（拖曳、打字）只是
 // 剛好也落在同一份快照裡，行為跟改版前一致。

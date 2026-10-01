@@ -1,7 +1,7 @@
-// 隨選載入的網頁字體（等寬）：首頁不預載，文件裡真的用到才載入。
+// 隨選載入的網頁字型（等寬）：首頁不預載，文件裡真的用到才載入。
 // 預覽、列印、PDF 都經過 renderer.renderElements，所以載入與失敗判斷集中在 ensureWebFonts()，
-// 畫布繪製前一定先等字體載好（沒等到只會量成備用字體的寬度，版面就錯了）。
-// 載入失敗（沒網路、CDN 被擋、逾時）時，字體堆疊會落到系統等寬字體，並且回報給呼叫端讓畫面明確提示。
+// 畫布繪製前一定先等字型載好（沒等到只會量成備用字型的寬度，版面就錯了）。
+// 載入失敗（沒網路、CDN 被擋、逾時）時，字型堆疊會落到系統等寬字型，並且回報給呼叫端讓畫面明確提示。
 
 const LOAD_TIMEOUT_MS = 10000;
 const RETRY_AFTER_MS = 15000;
@@ -9,7 +9,7 @@ const RETRY_AFTER_MS = 15000;
 const SARASA_DIR = new URL("../../fonts/sarasa-mono-tc/", import.meta.url).href;
 const JETBRAINS_CDN = "https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.3.0/";
 
-// stack 是寫進文件的 font-family 值：網頁字體在前，字型裡沒有的字（罕用字）與載入失敗時都落到系統的台灣黑體。
+// stack 是寫進文件的 font-family 值：網頁字型在前，字型裡沒有的字（罕用字）與載入失敗時都落到系統的台灣黑體。
 // 中間不放 monospace：它會被系統換成細明體或大陸字型，缺字就出現襯線或簡體字形。
 export const WEB_FONTS = [
     {
@@ -28,13 +28,13 @@ export const WEB_FONTS = [
     },
 ];
 
-const embeddedKeys = new Set(); // "family|weight"：來自 .ptan 內嵌字體，不必再連網載入
+const embeddedKeys = new Set(); // "family|weight"：來自 .ptan 內嵌字型，不必再連網載入
 const state = new Map(); // id → { failedAt: number|null }
 const sheetPromises = new Map(); // css 網址 → Promise（同一份只插一次 <link>）
-const sheetLinks = new Map(); // css 網址 → <link>，失敗時拔掉，下次重試才會重新建立字體物件
+const sheetLinks = new Map(); // css 網址 → <link>，失敗時拔掉，下次重試才會重新建立字型物件
 const listeners = new Set();
 
-/** 字體堆疊的第一個字體若是這裡的網頁字體就回傳它，否則 null。 */
+/** 字型堆疊的第一個字型若是這裡的網頁字型就回傳它，否則 null。 */
 export function findWebFont(stack) {
     const first = String(stack || "").split(",")[0].trim().replace(/^["']|["']$/g, "");
     return WEB_FONTS.find((f) => f.family === first) || null;
@@ -44,7 +44,7 @@ export function isWebFontFailed(id) {
     return state.get(id)?.failedAt != null;
 }
 
-/** 字體載入狀態改變（成功／失敗）時通知，回傳取消訂閱函式。 */
+/** 字型載入狀態改變（成功／失敗）時通知，回傳取消訂閱函式。 */
 export function onWebFontStatusChange(listener) {
     listeners.add(listener);
     return () => listeners.delete(listener);
@@ -86,7 +86,7 @@ function resetSheets(font) {
     }
 }
 
-// 走訪 element tree，收集每款網頁字體用到的 { 字重 → 字元集合 }
+// 走訪 element tree，收集每款網頁字型用到的 { 字重 → 字元集合 }
 function collectUsage(elements, defaultFamily) {
     const usage = new Map();
     const add = (stack, bold, text) => {
@@ -119,7 +119,7 @@ async function loadFont(font, byWeight) {
 }
 
 /**
- * 排版／繪製前呼叫：把 elements 用到的網頁字體載好。回傳這次載入失敗、實際落到備用字體的字體清單（label）。
+ * 排版／繪製前呼叫：把 elements 用到的網頁字型載好。回傳這次載入失敗、實際落到備用字型的字型清單（label）。
  * 失敗後 RETRY_AFTER_MS 內不重試（避免每次重繪都卡逾時），之後的重繪會自動再試。
  */
 export async function ensureWebFonts(elements, defaultFamily) {
@@ -136,7 +136,7 @@ export async function ensureWebFonts(elements, defaultFamily) {
             await loadFont(font, byWeight);
             setFailed(font.id, false);
         } catch (err) {
-            console.warn(`網頁字體載入失敗：${font.label}`, err);
+            console.warn(`網頁字型載入失敗：${font.label}`, err);
             resetSheets(font);
             setFailed(font.id, true);
             failedLabels.push(font.label);
@@ -145,7 +145,7 @@ export async function ensureWebFonts(elements, defaultFamily) {
     return failedLabels;
 }
 
-// ---- .ptan 內嵌字體：只帶「用到字元」所在的 woff2 分片（Sarasa 本來就依字元切片；JetBrains 只有 Latin 一片），不做另外的 subset ----
+// ---- .ptan 內嵌字型：只帶「用到字元」所在的 woff2 分片（Sarasa 本來就依字元切片；JetBrains 只有 Latin 一片），不做另外的 subset ----
 
 const SAFE_ASCII = Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)).join(""); // {{變數}} 的英數內容預留
 
@@ -164,7 +164,7 @@ function bytesToBase64(bytes) {
 
 /**
  * 匯出用：回傳 { fonts: [{ family, weight, unicodeRange, data(base64 woff2) }], failed: [label] }。
- * 只處理專案內自帶的開源網頁字體；本機字體不在 WEB_FONTS 裡，自然不會被帶入。
+ * 只處理專案內自帶的開源網頁字型；本機字型不在 WEB_FONTS 裡，自然不會被帶入。
  */
 export async function buildEmbeddedFonts(elements, defaultFamily) {
     const fonts = [];
@@ -187,18 +187,18 @@ export async function buildEmbeddedFonts(elements, defaultFamily) {
                 }
             }
         } catch (err) {
-            console.warn(`內嵌字體失敗：${font.label}`, err);
+            console.warn(`內嵌字型失敗：${font.label}`, err);
             failed.push(font.label);
         }
     }
     return { fonts, failed };
 }
 
-// 匯入檔內嵌字體的上限（分片字體一片通常不到 200KB）
+// 匯入檔內嵌字型的上限（分片字型一片通常不到 200KB）
 const MAX_EMBEDDED_FONTS = 64;
 const MAX_EMBEDDED_FONT_CHARS = 6_000_000;
 
-/** 匯入用：把 .ptan 內嵌的字體註冊成 FontFace。只接受已知的網頁字體家族，回傳成功註冊的片數。 */
+/** 匯入用：把 .ptan 內嵌的字型註冊成 FontFace。只接受已知的網頁字型家族，回傳成功註冊的片數。 */
 export async function registerEmbeddedFonts(list) {
     if (!Array.isArray(list)) return 0;
     let count = 0;
@@ -213,7 +213,7 @@ export async function registerEmbeddedFonts(list) {
             embeddedKeys.add(`${item.family}|${weight}`);
             count += 1;
         } catch (err) {
-            console.warn("內嵌字體載入失敗", err);
+            console.warn("內嵌字型載入失敗", err);
         }
     }
     return count;

@@ -184,9 +184,9 @@ test("downloadPtan：實際產生的檔案內容能被 readPtanFile 讀回，檔
     assert(back.ok, back.error);
     eq(back.project, p);
 });
-test("內嵌字體：匯出 v2 → readPtanFile 讀回後字體不留在專案、其餘不變", async () => {
+test("內嵌字型：匯出 v2 → readPtanFile 讀回後字型不留在專案、其餘不變", async () => {
     const p = loadProject(clone(V1_FILE)).project;
-    const fonts = [{ family: "不存在的字體", weight: 400, unicodeRange: "U+0-7F", data: "AAEC" }];
+    const fonts = [{ family: "不存在的字型", weight: 400, unicodeRange: "U+0-7F", data: "AAEC" }];
     const text = serializeProject({ ...p, embeddedFonts: fonts });
     eq(JSON.parse(text).version, 2); // 單頁專案，不因為目前版本是 v3 就跟著升版
     const back = await readPtanFile(new File([text], "f.ptan"));

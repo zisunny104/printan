@@ -22,7 +22,7 @@ export function mountStageElement(element) {
  * 工作區上方一行不擋畫面的提示列（ts-notice），同一個 key 只會有一條、重複呼叫只更新文字。
  * 掛載位置見 mountStageElement。
  * dismissible：加一顆關閉鈕，給「使用者看完就可以收掉」的訊息（例如列印失敗）；
- * 會隨預覽自動消失的狀態提示（字體、圖片）不需要。
+ * 會隨預覽自動消失的狀態提示（字型、圖片）不需要。
  */
 export function showStageNotice(key, message, { title = "", dismissible = false } = {}) {
     let notice = els[key];
@@ -50,7 +50,7 @@ export function showStageNotice(key, message, { title = "", dismissible = false 
 /**
  * 短暫通知（Tocas ts-snackbar）：操作結果、錯誤這類「看過就好」的即時訊息，取代會擋住畫面的 alert()。
  * 同時只顯示少數幾則、由下往上堆疊，時間到自動消失；錯誤訊息停留較久並可手動關閉。
- * 需要一直留在畫面上的狀態（字體沒載入、圖片載入失敗）仍用 showStageNotice。
+ * 需要一直留在畫面上的狀態（字型沒載入、圖片載入失敗）仍用 showStageNotice。
  * 容器用 popover="manual" 放進 top layer：列印設定等 <dialog> 開著時通知才不會被蓋在下面。
  * @param {string} message 純文字（用 textContent 放入，不解析 HTML）
  * @param {{ error?: boolean, duration?: number }} options duration 毫秒，0＝不自動消失

@@ -72,9 +72,9 @@
                 <div class="item" id="export-embed-fonts-row">
                     <label class="ts-checkbox is-small">
                         <input type="checkbox" id="export-embed-fonts">
-                        <div class="text">內嵌字體</div>
+                        <div class="text">內嵌字型</div>
                     </label>
-                    <span class="info-icon" tabindex="0" role="img" aria-label="僅開源字體，檔案會變大" data-tooltip="僅開源字體，檔案會變大" data-trigger="hover focus"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span>
+                    <span class="info-icon" tabindex="0" role="img" aria-label="僅開源字型，檔案會變大" data-tooltip="僅開源字型，檔案會變大" data-trigger="hover focus"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span>
                 </div>
                 <a class="item" id="btn-export-pdf">
                     <span class="ts-icon is-file-pdf-icon" aria-hidden="true"></span> 匯出 PDF

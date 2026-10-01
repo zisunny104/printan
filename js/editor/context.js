@@ -44,9 +44,9 @@ export function currentElements() {
     return currentPage().elements;
 }
 
-export const usbAdapter = new WebUsbEscposAdapter(); // 整個編輯器共用同一個連線實例
+export const usbAdapter = new WebUsbEscposAdapter(); // 整個編輯器共用同一個連線物件
 
-export const serialAdapter = new WebSerialEscposAdapter(); // 跟 usbAdapter 一樣整個編輯器共用同一個連線實例
+export const serialAdapter = new WebSerialEscposAdapter(); // 跟 usbAdapter 一樣整個編輯器共用同一個連線物件
 
 export const BATCH_PANEL_EXPANDED_KEY = "printan-batch-panel-expanded";
 

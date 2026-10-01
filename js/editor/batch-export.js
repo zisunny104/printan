@@ -8,10 +8,10 @@ import { showSnackbar } from "./ui-helpers.js";
 
 // ---- 匯出 / 列印 ----
 
-// 輸出前的確認：網頁字體沒載入成功會改用系統字體、版面跟預覽不同；內容超過最大高度會被截掉
+// 輸出前的確認：網頁字型沒載入成功會改用系統字型、版面跟預覽不同；內容超過最大高度會被截掉
 export function confirmFontFallbacks(results) {
     const list = [].concat(results);
-    if (list.some((r) => r.fontFallbacks?.length) && !confirm("字體未載入，仍要列印？")) return false;
+    if (list.some((r) => r.fontFallbacks?.length) && !confirm("字型未載入，仍要列印？")) return false;
     if (list.some((r) => r.truncated) && !confirm("內容太長，超出部分會被截掉，仍要輸出？")) return false;
     const failedImages = new Set(list.flatMap((r) => r.imageFailures || []));
     return !failedImages.size || confirm(`有 ${failedImages.size} 張圖片無法載入，已略過，仍要輸出？`);
@@ -22,7 +22,7 @@ export function confirmFontFallbacks(results) {
 export function describeFontFallbackIssues(results) {
     const list = [].concat(results);
     const issues = [];
-    if (list.some((r) => r.fontFallbacks?.length)) issues.push("字體未載入，改用系統字體");
+    if (list.some((r) => r.fontFallbacks?.length)) issues.push("字型未載入，改用系統字型");
     if (list.some((r) => r.truncated)) issues.push("內容太長，超出部分被截掉");
     const failedImages = new Set(list.flatMap((r) => r.imageFailures || []));
     if (failedImages.size) issues.push(`有 ${failedImages.size} 張圖片無法載入`);

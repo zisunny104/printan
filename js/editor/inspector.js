@@ -127,7 +127,7 @@ function buildBorderRadiusSection(panel, el) {
     }));
 }
 
-// 選取對象改變時通知訂閱者（小螢幕抽屜據此打開元素設定面板）；同一個元素重繪不會重發
+// 選取的元素改變時通知訂閱者（小螢幕抽屜據此打開元素設定面板）；同一個元素重繪不會重發
 let announcedSelection = null;
 
 export function renderInspector() {
@@ -223,7 +223,7 @@ function buildMultiInspector(panel, ids) {
     panel.appendChild(actions);
 }
 
-// 可選字體（對齊等段落屬性在元素層級，這裡列的字體/字級/粗體/
+// 可選字型（對齊等段落屬性在元素層級，這裡列的字型/字級/粗體/
 // 斜體/底線/刪除線則是「片段（run）」層級，同一個文字元素裡的每個片段可以各自
 // 覆寫；片段沒指定時繼承這份清單第一項以外的元素預設值（見 renderer.js resolveRunStyle）。
 const FONT_CHOICES = [
@@ -235,22 +235,22 @@ const FONT_CHOICES = [
 ];
 
 /**
- * 字體下拉選單（段落預設字體與選取範圍字體共用）：leading 是最前面的固定選項，接著內建清單，
- * 授權過本機字體就再接一組「本機字體」；目前值不在清單裡（例如 .ptan 來自別台電腦的本機字體）就補一項並標明這台電腦有沒有。
+ * 字型下拉選單（段落預設字型與選取範圍字型共用）：leading 是最前面的固定選項，接著內建清單，
+ * 授權過本機字型就再接一組「本機字型」；目前值不在清單裡（例如 .ptan 來自別台電腦的本機字型）就補一項並標明這台電腦有沒有。
  */
 function buildFontSelect({ value, leading, disabled = false, onChange }) {
     const fontChoices = FONT_CHOICES.map(([v, label]) => [
-        v, findWebFont(v) && isWebFontFailed(findWebFont(v).id) ? `${label}（載入失敗，暫用系統字體）` : label,
+        v, findWebFont(v) && isWebFontFailed(findWebFont(v).id) ? `${label}（載入失敗，暫用系統字型）` : label,
     ]);
     const groups = [[null, [...leading, ...fontChoices]]];
 
     const localFonts = getLocalFontFamilies();
-    if (localFonts.length) groups.push(["本機字體", localFonts.map((family) => [localFontStack(family), family])]);
+    if (localFonts.length) groups.push(["本機字型", localFonts.map((family) => [localFontStack(family), family])]);
 
     const known = new Set(groups.flatMap(([, options]) => options.map(([v]) => v)));
     if (value && value !== MIXED && !known.has(value)) {
         const name = primaryFamilyName(value);
-        groups.push([null, [[value, isFontInstalled(name) ? `${name}（本機字體）` : `${name}（此電腦沒有）`]]]);
+        groups.push([null, [[value, isFontInstalled(name) ? `${name}（本機字型）` : `${name}（此電腦沒有）`]]]);
     }
 
     const { el } = dropdownField(groups, value === MIXED ? "__mixed__" : (value || ""), (v) => onChange(v || null), { disabled });
@@ -261,7 +261,7 @@ function fontFamilySelect(value, onChange, inheritLabel) {
     return buildFontSelect({ value, leading: [["", inheritLabel]], onChange });
 }
 
-/** 「使用本機字體」入口：授權後把這台電腦的字體併入所有字體下拉選單；瀏覽器不支援 Local Font Access 時整個不顯示。 */
+/** 「使用本機字型」入口：授權後把這台電腦的字型併入所有字型下拉選單；瀏覽器不支援 Local Font Access 時整個不顯示。 */
 function localFontEntry() {
     if (!isLocalFontAccessSupported()) return null;
     const wrap = document.createElement("div");
@@ -269,13 +269,13 @@ function localFontEntry() {
     const note = document.createElement("div");
     note.className = "ts-text is-small is-description has-top-spaced-small";
     const count = getLocalFontFamilies().length;
-    const info = createInfoIcon("允許後可選用本機字體；.ptan 只記字體名稱，沒有該字體的電腦改用預設字體");
+    const info = createInfoIcon("允許後可選用本機字型；.ptan 只記字型名稱，沒有該字型的電腦改用預設字型");
     if (count) {
-        note.append(`已加入 ${count} 款本機字體`, info);
+        note.append(`已加入 ${count} 款本機字型`, info);
         wrap.appendChild(note);
         return wrap;
     }
-    const button = mkButton("使用本機字體", "font", async () => {
+    const button = mkButton("使用本機字型", "font", async () => {
         button.disabled = true;
         try {
             await loadLocalFonts();
@@ -285,8 +285,8 @@ function localFontEntry() {
             note.hidden = false;
             note.className = "ts-text is-small is-negative has-top-spaced-small";
             note.textContent = err.name === "NotAllowedError" || err.name === "SecurityError"
-                ? "沒有取得本機字體的存取權限，請在瀏覽器詢問時選擇「允許」。"
-                : `無法讀取本機字體：${err.message}`;
+                ? "沒有取得本機字型的存取權限，請在瀏覽器詢問時選擇「允許」。"
+                : `無法讀取本機字型：${err.message}`;
         }
     });
     note.hidden = true;
@@ -507,7 +507,7 @@ function buildTextInspector(panel, el) {
     textarea.setAttribute("aria-label", "文字內容");
     textarea.value = getTextContent(el);
     textareaWrap.appendChild(textarea);
-    // 內容在最上面，選取文字後的樣式（工具列、字體字級）緊接在下
+    // 內容在最上面，選取文字後的樣式（工具列、字型字級）緊接在下
     panel.appendChild(textareaWrap);
     panel.appendChild(toolbar);
     panel.appendChild(styleRow);
@@ -532,7 +532,7 @@ function buildTextInspector(panel, el) {
         if (styleRow.contains(document.activeElement)) return;
         styleRow.innerHTML = "";
         styleRow.appendChild(fieldRow([
-            ["字體", rangeFontFamilySelect(style.fontFamily, hasRange, (v) => applyRangeStyle("fontFamily", v))],
+            ["字型", rangeFontFamilySelect(style.fontFamily, hasRange, (v) => applyRangeStyle("fontFamily", v))],
             ["字級 (pt)", rangeFontSizeInput(style.fontSize, hasRange, (v) => applyRangeStyle("fontSize", v))],
         ]));
         const localEntry = localFontEntry();
@@ -565,7 +565,7 @@ function buildTextInspector(panel, el) {
     panel.appendChild(sectionDivider());
     panel.appendChild(sectionHeader("font", "段落樣式"));
     panel.appendChild(fieldRow([
-        ["預設字體", fontFamilySelect(el.fontFamily, (v) => { el.fontFamily = v; onModelChange({ skipInspector: true }); }, "跟隨全域預設")],
+        ["預設字型", fontFamilySelect(el.fontFamily, (v) => { el.fontFamily = v; onModelChange({ skipInspector: true }); }, "跟隨全域預設")],
         ["預設字級 (pt)", textInput(dotsToPt(el.fontSize), (v) => applyParagraphField(el, presetGroup, () => { el.fontSize = ptToDots(v); }), "number")],
     ]));
     // 水平對齊跟垂直對齊是同一組「對齊」概念，擺在一起；

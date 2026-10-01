@@ -64,7 +64,7 @@ test("v1 匯出再匯入結果一致", () => {
     eq(out.project.meta.name, "t");
     eq(out.project.paper, p.paper);
 });
-test("沒用到群組與內嵌字體時寫 v1", () => {
+test("沒用到群組與內嵌字型時寫 v1", () => {
     eq(JSON.parse(serializeProject(sampleProject(plainElements()))).version, 1);
 });
 test("有群組時寫 v2（含巢狀在 row 內的群組；單頁專案沒用到多頁功能，不會因為目前版本是 v3 就跟著升版）", () => {
@@ -72,13 +72,13 @@ test("有群組時寫 v2（含巢狀在 row 內的群組；單頁專案沒用到
     row.columns[0].push(createGroupElement([createTextElement()]));
     eq(JSON.parse(serializeProject(sampleProject([row]))).version, 2);
 });
-test("有內嵌字體時寫 v2，空陣列仍寫 v1", () => {
+test("有內嵌字型時寫 v2，空陣列仍寫 v1", () => {
     const p = sampleProject(plainElements());
     eq(JSON.parse(serializeProject({ ...p, embeddedFonts: [{ family: "F", weight: 400, unicodeRange: "U+0-7F", data: "AA==" }] })).version, 2);
     eq(JSON.parse(serializeProject({ ...p, embeddedFonts: [] })).version, 1);
 });
 test("v1 與 v2 匯入後結構等價", () => {
-    // 用同一個 sampleProject 實例序列化兩次（而不是各自呼叫 sampleProject），這樣兩邊的
+    // 用同一個 sampleProject 物件序列化兩次（而不是各自呼叫 sampleProject），這樣兩邊的
     // template.pageId 才會相同——序列化單頁 legacy 格式會夾帶頁面 id（見 schema.js），
     // 不同的 sampleProject() 呼叫各自產生新頁面、id 本來就不會一樣，不是這個測試要驗證的東西。
     const p = sampleProject(plainElements());
@@ -129,8 +129,8 @@ test("embeddedFonts 欄位寫出後可讀回", () => {
     assert(out.ok, out.error);
     eq(out.project.embeddedFonts, fonts);
 });
-test("readPtanFile：讀入後 embeddedFonts 被移出專案（未知字體不註冊也不出錯）", async () => {
-    const fonts = [{ family: "不存在的字體", weight: 400, unicodeRange: "U+0-7F", data: "AAEC" }];
+test("readPtanFile：讀入後 embeddedFonts 被移出專案（未知字型不註冊也不出錯）", async () => {
+    const fonts = [{ family: "不存在的字型", weight: 400, unicodeRange: "U+0-7F", data: "AAEC" }];
     const text = serializeProject({ ...sampleProject(plainElements()), embeddedFonts: fonts });
     const out = await readPtanFile(new File([text], "a.ptan"));
     assert(out.ok, out.error);

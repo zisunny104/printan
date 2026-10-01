@@ -164,7 +164,7 @@ export async function renderPageThumbs({ data, mode, profile }) {
     }
 }
 
-/** 字體載入狀態改變時快取全部作廢：舊縮圖可能是用替代字體畫的。 */
+/** 字型載入狀態改變時快取全部作廢：舊縮圖可能是用替代字型畫的。 */
 export function invalidatePageThumbs() {
     thumbCache.clear();
 }

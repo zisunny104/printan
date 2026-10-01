@@ -1,10 +1,10 @@
-// 字體：本機字體（Local Font Access API，Chrome／Edge，需使用者授權）與字體名稱解析。
-// .ptan 只記 font-family 字串、不含字體檔，所以本機字體一律接在預設字體堆疊前面：
-// 沒有安裝該字體的電腦會自動落到預設字體，而不是變成瀏覽器隨便挑的字。
+// 字型：本機字型（Local Font Access API，Chrome／Edge，需使用者授權）與字型名稱解析。
+// .ptan 只記 font-family 字串、不含字型檔，所以本機字型一律接在預設字型堆疊前面：
+// 沒有安裝該字型的電腦會自動落到預設字型，而不是變成瀏覽器隨便挑的字。
 
 import { DEFAULT_FONT_FAMILY } from "./renderer.js";
 
-let localFamilies = []; // 授權後查到的本機字體家族名（去重、已排序）
+let localFamilies = []; // 授權後查到的本機字型家族名（去重、已排序）
 
 export function isLocalFontAccessSupported() {
     return typeof window.queryLocalFonts === "function";
@@ -14,7 +14,7 @@ export function getLocalFontFamilies() {
     return localFamilies;
 }
 
-/** 向瀏覽器要求本機字體清單（第一次會跳出權限提示，須在使用者點擊等手勢中呼叫）；使用者拒絕時丟出例外。 */
+/** 向瀏覽器要求本機字型清單（第一次會跳出權限提示，須在使用者點擊等手勢中呼叫）；使用者拒絕時丟出例外。 */
 export async function loadLocalFonts() {
     const fonts = await window.queryLocalFonts();
     localFamilies = [...new Set(fonts.map((f) => f.family))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
@@ -34,12 +34,12 @@ export async function restoreLocalFontsIfGranted() {
     }
 }
 
-/** 本機字體寫進文件的 font-family 值：該字體在前，預設字體堆疊墊底。 */
+/** 本機字型寫進文件的 font-family 值：該字型在前，預設字型堆疊墊底。 */
 export function localFontStack(family) {
     return `"${family.replace(/["\\]/g, "")}", ${DEFAULT_FONT_FAMILY}`;
 }
 
-/** 取 font-family 字串裡第一個字體名稱（去掉引號），給選單顯示用。 */
+/** 取 font-family 字串裡第一個字型名稱（去掉引號），給選單顯示用。 */
 export function primaryFamilyName(stack) {
     const first = String(stack || "").split(",")[0].trim();
     return first.replace(/^["']|["']$/g, "");
@@ -47,10 +47,10 @@ export function primaryFamilyName(stack) {
 
 let probeCtx = null;
 
-/** 用 canvas 量字寬判斷這台電腦有沒有該字體（與三種基準字體都量得出差異才算有）；只能確認「有」，不保證「沒有」。 */
+/** 用 canvas 量字寬判斷這台電腦有沒有該字型（與三種基準字型都量得出差異才算有）；只能確認「有」，不保證「沒有」。 */
 export function isFontInstalled(family) {
     probeCtx ||= document.createElement("canvas").getContext("2d");
-    const sample = "mmmmmmmmmmlli中文測試字體0123";
+    const sample = "mmmmmmmmmmlli中文測試字型0123";
     return ["monospace", "serif", "sans-serif"].some((base) => {
         probeCtx.font = `72px ${base}`;
         const baseWidth = probeCtx.measureText(sample).width;

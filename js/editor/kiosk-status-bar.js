@@ -122,7 +122,7 @@ export function setKioskTemplateNames(names, empty = "未命名範本") {
 /**
  * 更新狀態列。印表機欄位每次都直接讀 state 的連線旗標（不是靠事件推算），
  * 所以失敗後連線被釋放、之後重連成功，下一次更新就會自己修正。
- * job：JOB_LABELS 的 key（省略＝只刷新印表機指示燈）；message：狀態文字下方的補充說明（例如失敗原因）；
+ * job：JOB_LABELS 的 key（省略＝只更新印表機指示燈）；message：狀態文字下方的補充說明（例如失敗原因）；
  * jobId：目前列印工作的識別碼。
  */
 export function updateKioskStatus({ job, message = "", jobId } = {}) {

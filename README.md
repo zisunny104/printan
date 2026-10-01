@@ -18,7 +18,7 @@
 - **印表機規格檔（Printer Profile）**：目前內建 Epson TM-T82II（203 DPI，80mm／58mm 雙紙寬），規格資料與版面邏輯完全分離，之後新增機型不需要更動核心程式
 - **點（dot）為單位的內部座標系統**：對應印表機 DPI，紙寬切換不需要重建專案；欄寬採相對比例，同一份版型可以直接套用到不同紙寬
 - **多頁（Frame）**：一份版型可以有多個頁面，依序印出；每頁各自控制「列印完要不要切紙」（關閉＝跟下一頁接續印在同一段連續紙上），可合併兩頁、也可從選取的元素處把後面內容分割成新頁；左側「頁面」清單新增／刪除／改名／排序
-- **`.ptan` 專案檔**：版本化 JSON 格式（單頁且沒特別設定時維持 v1／v2 讓舊版也能開；有群組、圖文段落、直書或內嵌字體時為 v2；用到多頁功能時為 v3），可匯出／匯入，格式升級有 migration 機制；匯出可選擇內嵌用到的等寬開源字體
+- **`.ptan` 專案檔**：版本化 JSON 格式（單頁且沒特別設定時維持 v1／v2 讓舊版也能開；有群組、圖文段落、直書或內嵌字型時為 v2；用到多頁功能時為 v3），可匯出／匯入，格式升級有 migration 機制；匯出可選擇內嵌用到的等寬開源字型
 - **本機自動儲存**：編輯中的草稿存在瀏覽器 IndexedDB，不會佔用 `.ptan` 正式匯出的角色；未被引用的圖片不會寫進檔案，匯入的大圖（寬度超過 1600 px）會自動縮小
 - **PDF 匯出**：依熱感紙實際寬度與內容高度產生頁面尺寸，不會被硬塞進 A4
 - **列印**：可透過瀏覽器原生列印對話框（`window.print()`）走系統已安裝的印表機驅動，也可用 WebUSB 直接連線印表機送出 ESC/POS 點陣指令（Chrome/Edge），依環境自動偵測可用連線方式；印表機倒裝時可勾選「旋轉 180° 列印」（PDF 匯出不旋轉）
@@ -112,7 +112,7 @@ cd printan
 - [JsBarcode](https://github.com/lindell/JsBarcode) - MIT License
 - [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) - MIT License
 - [libheif-js](https://github.com/catdad-experiments/libheif-js) - LGPL-3.0（自行託管於 `vendor/libheif/`，HEIC 解碼）
-- [Sarasa Mono TC](https://github.com/be5invis/Sarasa-Gothic)、[JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) - SIL OFL 1.1（字體）
+- [Sarasa Mono TC](https://github.com/be5invis/Sarasa-Gothic)、[JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) - SIL OFL 1.1（字型）
 
 版面渲染、熱感模擬（灰階／抖動）、`.ptan` 讀寫等核心邏輯皆為原生實作。
 

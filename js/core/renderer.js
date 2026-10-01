@@ -100,7 +100,7 @@ export async function renderElements(elements, {
     thresholdLevel = 128,
 } = {}) {
     const assetMap = assets instanceof Map ? assets : new Map(Object.entries(assets || {}));
-    const fontFallbacks = await ensureWebFonts(elements, fontFamily); // 網頁字體要先載好才量得準；載入失敗的字體名稱一併回報
+    const fontFallbacks = await ensureWebFonts(elements, fontFamily); // 網頁字型要先載好才量得準；載入失敗的字型名稱一併回報
 
     const measureCanvas = document.createElement("canvas");
     measureCanvas.width = Math.max(widthDots, 1);
@@ -132,7 +132,7 @@ export async function renderElements(elements, {
         heightMm: dotsToMm(canvas.height, dpi),
         truncated: height > MAX_CANVAS_HEIGHT, // 內容超過最大高度、超出部分被截掉
         imageFailures: [...assetCtx.failures], // 被拒絕（非 https）或載入失敗而略過的圖片網址（已去重）
-        fontFallbacks, // 載入失敗、實際改用系統字體的網頁字體名稱（沒有失敗就是空陣列）
+        fontFallbacks, // 載入失敗、實際改用系統字型的網頁字型名稱（沒有失敗就是空陣列）
         items, // 排版結果樹（每個 item 帶 el/y/height/widthDots，row 另有 columns），供編輯器畫面上疊加可拖曳的元素外框使用
     };
 }
@@ -265,7 +265,7 @@ async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, show
     return { items, height: y };
 }
 
-// ---- Rich text：一個文字元素的內容是多個 run，各自可覆寫字體／字級／粗體／
+// ---- Rich text：一個文字元素的內容是多個 run，各自可覆寫字型／字級／粗體／
 // 斜體／底線／刪除線。排版時把 runs 展開成「字元＋樣式」的
 // glyph 串流，用逐字貪婪換行邏輯決定斷行，斷行後再依樣式相同與否
 // 合併成 segment 供繪製，同一行內若有不同字級，行高取該行最大字級換算。
@@ -956,7 +956,7 @@ function paintImage(ctx, item, x, y, mode) {
     const w = Math.max(1, Math.round(drawWidth));
     const h = Math.max(1, Math.round(drawHeight));
 
-    // 亮度／對比／反相一律先在離屏 canvas 用 filter 套用（螢幕、熱感模式都看得到同樣的
+    // 亮度／對比／反相一律先在offscreen canvas 用 filter 套用（螢幕、熱感模式都看得到同樣的
     // 色調調整），熱感模式再多一步灰階＋依 ditherMode 轉成 1-bit 網點；不縮放、原尺寸
     // 貼回主畫布，避免合成時 resample 又產生灰階邊緣。
     const temp = document.createElement("canvas");

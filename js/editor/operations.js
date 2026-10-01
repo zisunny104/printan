@@ -42,7 +42,7 @@ export function bindOperations() {
     els["export-embed-fonts-row"].addEventListener("click", (e) => e.stopPropagation()); // 勾選時不收起匯出選單
     els["btn-save-ptan"].addEventListener("click", async () => {
         const failed = await downloadPtan(state.project, state.project.meta.name || "printan", { embedFonts: els["export-embed-fonts"].checked });
-        if (failed.length) showSnackbar(`已匯出，但這些字體沒能內嵌（可能離線）：${failed.join("、")}`, { error: true });
+        if (failed.length) showSnackbar(`已匯出，但這些字型沒能內嵌（可能離線）：${failed.join("、")}`, { error: true });
     });
 
     els["btn-export-pdf"].addEventListener("click", exportSinglePdf);

@@ -6,7 +6,7 @@ const MAX_PTAN_BYTES = 128 * 1024 * 1024; // 超過就不讀，避免一次把�
 
 /**
  * 觸發瀏覽器下載 .ptan 檔案。檔名會自動補上 .ptan 副檔名。
- * embedFonts：把用到的開源網頁字體（限用到字元的分片）一併寫進檔案；回傳沒能內嵌的字體名稱。
+ * embedFonts：把用到的開源網頁字型（限用到字元的分片）一併寫進檔案；回傳沒能內嵌的字型名稱。
  */
 export async function downloadPtan(project, fileName = "untitled", { embedFonts = false, defaultFamily } = {}) {
     const safeName = fileName.replace(/\.ptan$/i, "");
@@ -40,7 +40,7 @@ export function readPtanFile(file) {
             try {
                 const result = loadProject(reader.result);
                 if (result.ok && result.project.embeddedFonts) {
-                    // 字體資料只用來註冊 FontFace，不留在專案裡（避免草稿與下次匯出膨脹）
+                    // 字型資料只用來註冊 FontFace，不留在專案裡（避免草稿與下次匯出膨脹）
                     const { embeddedFonts, ...rest } = result.project;
                     await registerEmbeddedFonts(embeddedFonts);
                     result.project = rest;

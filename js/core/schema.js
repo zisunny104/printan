@@ -300,7 +300,7 @@ function pruneUnusedAssets(assets, pages) {
 
 export function serializeProject(project) {
     const pages = (project.template && Array.isArray(project.template.pages)) ? project.template.pages : [];
-    // 沒用到群組、圖文段落、直書就仍寫 v1，舊版 Printan 也能開；有群組才寫 v2（內嵌字體同理）
+    // 沒用到群組、圖文段落、直書就仍寫 v1，舊版 Printan 也能開；有群組才寫 v2（內嵌字型同理）
     let usesGroup = Array.isArray(project.embeddedFonts) && project.embeddedFonts.length > 0;
     for (const page of pages) {
         walkElements(page.elements || [], (el) => { if (el.type === "group" || el.type === "float-block" || el.writingMode === "vertical") usesGroup = true; });

@@ -1,4 +1,4 @@
-// 自動儲存並把結果顯示在標題列的狀態文字：成功維持安靜（不朗讀），失敗改成錯誤樣式並以 role=alert 通知讀屏軟體。
+// 自動儲存並把結果顯示在標題列的狀態文字：成功維持安靜（不朗讀），失敗改成錯誤樣式並以 role=alert 通知螢幕閱讀器。
 
 /** 執行 save()，回傳它的結果；失敗時回傳 null 並顯示「儲存失敗」。 */
 export async function runAutosave(statusEl, save) {
