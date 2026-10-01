@@ -1897,9 +1897,16 @@ body {
     margin-left: 4px;
 }
 
-.footer-github-badge svg {
+.footer-github-badge svg,
+.footer-github-badge .ts-icon {
     vertical-align: text-bottom;
     margin-right: 4px;
+}
+
+.footer-github-badge:where(button) {
+    border: 0;
+    font: inherit;
+    cursor: pointer;
 }
 
 /* ==== 觸控裝置（深色模式一律以 light-dark() 寫在各規則內） ==== */

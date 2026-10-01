@@ -117,3 +117,6 @@ export function createInfoIcon(text) {
 
 // 「使用說明」modal 的內文與分頁載入見 js/help/help-dialog.js（內文寫在 help/help.md）
 export { wireHelpDialog } from "../help/help-dialog.js";
+
+// 「授權」modal 的內文與分頁載入見 js/help/license-dialog.js（內文讀根目錄 LICENSE）
+export { wireLicenseDialog } from "../help/license-dialog.js";

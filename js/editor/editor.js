@@ -13,7 +13,7 @@ import { onWebFontStatusChange } from "../core/web-fonts.js";
 import { wireResizableColumns } from "./resizable-columns.js";
 import { createInlineTextEditor } from "./inline-text-editor.js";
 import { createWorkspaceView } from "./workspace-view.js";
-import { hideStageNotice, showStageNotice, wireHelpDialog } from "./ui-helpers.js";
+import { hideStageNotice, showStageNotice, wireHelpDialog, wireLicenseDialog } from "./ui-helpers.js";
 import { currentElements, currentPage, els, rt, state } from "./context.js";
 import { attemptSilentPrinterReconnect, bindPrinterSettings, loadPrintPrefs, updateFeedLinesHint } from "./printer-settings.js";
 import { textInput } from "./inspector-widgets.js";
@@ -55,6 +55,7 @@ async function init() {
     workspace.mount();
     wireZoomRevealsActivePage();
     wireHelpDialog();
+    wireLicenseDialog();
     initMobileDrawers();
     onModelChange({ skipInspector: false });
     // 到這裡大綱／畫布／檢視器都已經是真的內容，骨架畫面可以淡出了；下面印表機重連、

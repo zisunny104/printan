@@ -16,6 +16,10 @@
                             </svg>
                             View on GitHub<span class="sr-only"> (在新視窗開啟)</span>
                         </a>
+                        <button type="button" id="btn-license" class="footer-github-badge">
+                            <span class="ts-icon is-copyright-icon" aria-hidden="true"></span>
+                            License
+                        </button>
                     </div>
                 </div>
                 <div class="column is-end-aligned">

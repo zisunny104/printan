@@ -51,6 +51,8 @@ $appVersion = $appConfig['version'] ?? '0.0.0';
 
     <?php require __DIR__ . '/partials/modal-help.php'; ?>
 
+    <?php require __DIR__ . '/partials/modal-license.php'; ?>
+
     <?php require __DIR__ . '/partials/footer.php'; ?>
 
     <?php require __DIR__ . '/partials/theme-script.php'; ?>
