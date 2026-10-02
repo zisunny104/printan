@@ -28,6 +28,8 @@
 
 ## 使用方式
 
+直接使用：[網頁工具](https://toka.dev/koilisu/printan)。
+
 1. 選擇紙寬（工具列）；要直連印表機（USB／序列埠）時，到「列印設定」連線印表機並調整走紙／切紙／可列印點數
 2. 從工具列新增文字／圖片／圖文／間隔／分隔線／條碼／多欄，點選左側「版面結構」項目可選取或指定插入位置
 3. 於右側「元素設定」編輯選取元素的內容與樣式；文字或圖片來源可輸入 `{{變數名稱}}`
@@ -45,33 +47,9 @@
 - **本機儲存**：IndexedDB（草稿／圖片），localStorage 只存「最近使用」等輕量 metadata
 - **專案檔格式**：`.ptan`，版本化 JSON
 
-## 安裝
+## 維護
 
-### 獨立使用
-
-1. Clone repo：
-```bash
-git clone https://github.com/zisunny104/printan.git
-cd printan
-```
-
-2. 設定網頁伺服器（需支援 PHP）
-
-3. 直接造訪 `index.php`
-
-### 更新部署
-
-在伺服器上的專案目錄執行 `./deploy.sh`：先確認沒有未 commit 的修改，fetch remote `main`，**merge 前**用 `php -l` 檢查新增／修改的 PHP 檔語法（有錯就中止，線上檔案不動），再 fast-forward 更新並列出這次的 commit。純 PHP 頁面殼加瀏覽器端 JS，沒有資料庫或需要 PHP 寫入的目錄，所以不需要額外擴充套件或修正權限。
-
-- `DEPLOY_BRANCH`：要部署的 branch，預設 `main`
-- `DEPLOY_RELOAD_CMD`：更新後要執行的指令，給 opcache 不檢查檔案時間戳的伺服器用，例如 `DEPLOY_RELOAD_CMD="systemctl reload php8.3-fpm" ./deploy.sh`
-
-伺服器上沒有 `php` 指令時會略過語法檢查（會提示），其餘流程照常。
-
-### 與 KoiLiSu 開利手整合
-
-1. 將此 repo 放置在 `koilisu/apps/printan/` 目錄
-2. 透過 `https://toka.dev/koilisu/printan` 造訪
+由作者維運；既有環境的更新工具為 `./deploy.sh`，請先審閱變更並完成驗證。
 
 ## 已知限制
 
