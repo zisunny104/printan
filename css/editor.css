@@ -2012,7 +2012,7 @@ body {
 /* 小螢幕（<768px）版面結構／元素設定改抽屜，畫布置頂佔主要位置：
    - 版面結構＝dialog.ts-app-drawer.is-bottom（modal，Tocas 提供貼底、遮罩、捲動鎖），只在開啟時顯示；
    - 元素設定＝#inspectorDock 自訂的非 modal 底部面板（Tocas 沒有非 modal 版本），加 .is-open 才顯示，
-     最高半個螢幕，其上的畫布仍可點選。開關由 JS 控制（見 TODO／給 b3 的介面清單）。 */
+     最高半個螢幕，其上的畫布仍可點選。開關由 JS 控制（見 js/editor/mobile-drawers.js）。 */
 @media (width < 768px) {
     /* 面板開啟時畫布下緣不被蓋住：--printan-sheet-height 由 JS 設成面板高度，未設定為 0 */
     .main-content {
