@@ -117,6 +117,22 @@ test("文字框外框：heightMode fixed 時外框貼著框高（不是內容高
     assert(bottom[0] < 60, `文字框底部應該有外框描邊，實際 ${bottom}`);
 });
 
+test("同一行混用字級：小字與大字的字基線對齊（小字不掛在行頂）", async () => {
+    const el = createTextElement({ id: "t2", runs: [{ text: "HHH", fontSize: 48 }, { text: "HHH", fontSize: 16 }], fontSize: 32 });
+    const { canvas } = await renderElements([el], { widthDots: 576, dpi: 203, assets: new Map(), mode: "screen" });
+    const { data } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+    const inkBottom = (x0, x1) => {
+        let last = -1;
+        for (let y = 0; y < canvas.height; y++) {
+            for (let x = x0; x < x1; x++) if (data[(y * canvas.width + x) * 4] < 128) { last = y; break; }
+        }
+        return last;
+    };
+    const big = inkBottom(0, 80), small = inkBottom(100, 200);
+    assert(big > 0 && small > 0, "兩段文字都應有墨跡");
+    assert(Math.abs(big - small) <= 1, `基線應對齊，大字底 ${big}、小字底 ${small}`);
+});
+
 // ---- 執行 ----
 const list = document.getElementById("list");
 let failed = 0;
