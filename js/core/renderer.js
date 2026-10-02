@@ -655,6 +655,12 @@ function paintFloatBlock(ctx, item, x, y, mode) {
     paintText(ctx, item, x, y);
 }
 
+// textBaseline "top" 下，字頂到字母基線的距離（px）；瀏覽器沒提供 alphabeticBaseline 時回傳 0（不調整）
+function baselineOffsetFromTop(ctx) {
+    const m = ctx.measureText("Hg");
+    return Number.isFinite(m.alphabeticBaseline) ? Math.max(0, -m.alphabeticBaseline) : 0;
+}
+
 function paintText(ctx, item, x, y) {
     const { el, widthDots, boxWidth, clipHeight, height } = item;
     // widthMode "fixed" 時 boxWidth < widthDots（欄寬）：align 兼作框在欄內的水平位置（同圖片 align 雙重用途），
@@ -693,9 +699,17 @@ function paintText(ctx, item, x, y) {
         if (el.align === "center" || el.align === "right") {
             cursorX = el.align === "center" ? lineX + (lineW - line.width) / 2 : lineX + (lineW - line.width);
         }
-        for (const seg of line.segments) {
+        // 同一行混用不同字級／字型時以字基線對齊：算出每段「字頂到基線」的距離，
+        // 最大的那段貼 textY，其餘往下補差距，小字才會坐在大字的基線上而不是掛在行頂
+        const baselineOffsets = line.segments.map((seg) => {
+            ctx.font = fontString(seg.style);
+            return baselineOffsetFromTop(ctx);
+        });
+        const maxBaselineOffset = Math.max(0, ...baselineOffsets);
+        for (const [segIndex, seg] of line.segments.entries()) {
             ctx.font = fontString(seg.style);
             const segWidth = ctx.measureText(seg.text).width;
+            const segY = textY + Math.round(maxBaselineOffset - baselineOffsets[segIndex]);
             // 局部反白疊加在整行反白之上（不相抵）：容器底色已經畫在下層，局部反白只是
             // 再疊一塊實心黑底上去，兩者同時開啟時效果加成而不是互相抵銷回白底黑字
             const segInverse = !!el.inverse || seg.style.inverse;
@@ -707,10 +721,10 @@ function paintText(ctx, item, x, y) {
             // 文字顏色花紋（網點／漸層）現在反白區塊也會套用，只是黑白對調（invert）跟反白背景疊在一起
             // 才看得出對比，而不是像以前一樣反白就整個退回純色——這樣容器底色跟文字顏色才能真的疊加。
             if (inkFill.mode !== "solid" && seg.text) {
-                paintPatternText(ctx, seg.text, cursorX, textY, segWidth, seg.style.fontSize, inkFill, segInverse);
+                paintPatternText(ctx, seg.text, cursorX, segY, segWidth, seg.style.fontSize, inkFill, segInverse);
             } else {
                 ctx.fillStyle = inkColor;
-                ctx.fillText(seg.text, cursorX, textY);
+                ctx.fillText(seg.text, cursorX, segY);
             }
             if (seg.style.underline || seg.style.strikethrough) {
                 ctx.save();
@@ -718,12 +732,12 @@ function paintText(ctx, item, x, y) {
                 ctx.lineWidth = Math.max(1, Math.round(seg.style.fontSize / 16));
                 ctx.beginPath();
                 if (seg.style.underline) {
-                    const underlineY = textY + seg.style.fontSize * 0.92;
+                    const underlineY = segY + seg.style.fontSize * 0.92;
                     ctx.moveTo(cursorX, underlineY);
                     ctx.lineTo(cursorX + segWidth, underlineY);
                 }
                 if (seg.style.strikethrough) {
-                    const strikeY = textY + seg.style.fontSize * 0.55;
+                    const strikeY = segY + seg.style.fontSize * 0.55;
                     ctx.moveTo(cursorX, strikeY);
                     ctx.lineTo(cursorX + segWidth, strikeY);
                 }
