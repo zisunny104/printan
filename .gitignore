@@ -51,3 +51,20 @@ yarn-error.log
 
 # Claude Code 背景 agent 的獨立 worktree（內含自己的 .git，不進版本紀錄）
 .claude/
+
+# 本機機密與開發產物（字型授權、固定 vendor 與測試程式仍應版控）
+.env.*
+!.env.example
+!.env.sample
+*.local.php
+.claude/
+.codex/
+__pycache__/
+*.py[cod]
+*.swp
+*.orig
+*.key
+*.pem
+*.p12
+*.pfx
+/secrets/
