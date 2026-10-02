@@ -1,3 +1,5 @@
+import { FONT_LICENSES } from "./font-licenses.js";
+
 // 隨選載入的網頁字型（等寬）：首頁不預載，文件裡真的用到才載入。
 // 預覽、列印、PDF 都經過 renderer.renderElements，所以載入與失敗判斷集中在 ensureWebFonts()，
 // 畫布繪製前一定先等字型載好（沒等到只會量成備用字型的寬度，版面就錯了）。
@@ -183,7 +185,7 @@ export async function buildEmbeddedFonts(elements, defaultFamily) {
                     if (!codes.some((c) => ranges.some(([a, b]) => c >= a && c <= b))) continue;
                     const res = await fetch(new URL(url, sheetUrl).href);
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    fonts.push({ family: font.family, weight, unicodeRange: rangeText.trim(), data: bytesToBase64(new Uint8Array(await res.arrayBuffer())) });
+                    fonts.push({ family: font.family, weight, unicodeRange: rangeText.trim(), data: bytesToBase64(new Uint8Array(await res.arrayBuffer())), license: { ...FONT_LICENSES[font.family] } });
                 }
             }
         } catch (err) {

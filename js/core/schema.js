@@ -75,7 +75,7 @@ export const PTAN_VERSION = 3;
  * border（共用結構，見 createBorder／resolveBorder）：{ visible?, style?, thicknessDots? }，沒有這個欄位
  * 或 visible 不是 true 都當作沒有外框；純附加欄位，不影響 PTAN_VERSION（舊檔照樣直接讀，不用 migrate）。
  * cornerRadiusDots：圓角半徑，0 或未設＝直角；渲染時會依當下框寬高夾住上限，見 renderer.js clampCornerRadius。
- * 專案層級選用欄位 embeddedFonts?: [{ family, weight, unicodeRange, data }]（version 2；匯出時勾選才有）
+ * 專案層級選用欄位 embeddedFonts?: [{ family, weight, unicodeRange, data, license?: { license, source, text } }]（version 2；匯出時勾選才有）
  *
  * 容錯範圍要注意：migrate()／migrateElements() 只針對 text（normalizeTextElement）與 row（normalizeRow）
  * 兩種 type 補齊缺漏欄位／收斂壞值；image／float-block／spacer／divider／barcode／group 的欄位不會被
