@@ -3,6 +3,7 @@
 
 import { normalizeTextElement, walkElements } from "./document-model.js";
 import { normalizeRowGap } from "./units.js";
+import { dedupeFontLicenses } from "./font-licenses.js";
 
 export const PTAN_FORMAT = "ptan";
 export const PTAN_VERSION = 3;
@@ -75,7 +76,7 @@ export const PTAN_VERSION = 3;
  * border（共用結構，見 createBorder／resolveBorder）：{ visible?, style?, thicknessDots? }，沒有這個欄位
  * 或 visible 不是 true 都當作沒有外框；純附加欄位，不影響 PTAN_VERSION（舊檔照樣直接讀，不用 migrate）。
  * cornerRadiusDots：圓角半徑，0 或未設＝直角；渲染時會依當下框寬高夾住上限，見 renderer.js clampCornerRadius。
- * 專案層級選用欄位 embeddedFonts?: [{ family, weight, unicodeRange, data, license?: { license, source, text } }]（version 2；匯出時勾選才有）
+ * 專案層級選用欄位 embeddedFonts?: [{ family, weight, unicodeRange, data, license?: { license, source, text, upstream } }]（version 2；匯出時勾選才有；license 每個字型家族只在第一個分片出現，其餘分片不帶，未知家族也不帶）
  *
  * 容錯範圍要注意：migrate()／migrateElements() 只針對 text（normalizeTextElement）與 row（normalizeRow）
  * 兩種 type 補齊缺漏欄位／收斂壞值；image／float-block／spacer／divider／barcode／group 的欄位不會被
@@ -298,7 +299,9 @@ function pruneUnusedAssets(assets, pages) {
     return dynamic ? assets : assets.filter((a) => used.has(a.id));
 }
 
-export function serializeProject(project) {
+export function serializeProject(input) {
+    // 內嵌字型的授權每個家族只留一份（舊檔每片都帶時，再存檔就收斂）
+    const project = Array.isArray(input.embeddedFonts) ? { ...input, embeddedFonts: dedupeFontLicenses(input.embeddedFonts) } : input;
     const pages = (project.template && Array.isArray(project.template.pages)) ? project.template.pages : [];
     // 沒用到群組、圖文段落、直書就仍寫 v1，舊版 Printan 也能開；有群組才寫 v2（內嵌字型同理）
     let usesGroup = Array.isArray(project.embeddedFonts) && project.embeddedFonts.length > 0;

@@ -1,4 +1,4 @@
-import { FONT_LICENSES } from "./font-licenses.js";
+import { FONT_LICENSES, dedupeFontLicenses } from "./font-licenses.js";
 
 // 隨選載入的網頁字型（等寬）：首頁不預載，文件裡真的用到才載入。
 // 預覽、列印、PDF 都經過 renderer.renderElements，所以載入與失敗判斷集中在 ensureWebFonts()，
@@ -185,7 +185,7 @@ export async function buildEmbeddedFonts(elements, defaultFamily) {
                     if (!codes.some((c) => ranges.some(([a, b]) => c >= a && c <= b))) continue;
                     const res = await fetch(new URL(url, sheetUrl).href);
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    fonts.push({ family: font.family, weight, unicodeRange: rangeText.trim(), data: bytesToBase64(new Uint8Array(await res.arrayBuffer())), license: { ...FONT_LICENSES[font.family] } });
+                    fonts.push({ family: font.family, weight, unicodeRange: rangeText.trim(), data: bytesToBase64(new Uint8Array(await res.arrayBuffer())), ...(FONT_LICENSES[font.family] && { license: { ...FONT_LICENSES[font.family] } }) });
                 }
             }
         } catch (err) {
@@ -193,7 +193,7 @@ export async function buildEmbeddedFonts(elements, defaultFamily) {
             failed.push(font.label);
         }
     }
-    return { fonts, failed };
+    return { fonts: dedupeFontLicenses(fonts), failed };
 }
 
 // 匯入檔內嵌字型的上限（分片字型一片通常不到 200KB）

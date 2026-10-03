@@ -26,4 +26,4 @@ JetBrains Mono 經由 jsDelivr 的 @fontsource 套件載入。
 
 #### 字型匯出與授權傳遞
 
-`.ptan` 選擇內嵌字型時，會隨每片保留 OFL-1.1、完整著作權／授權文字及上游來源。這些分片仍依 OFL，不因專案或程式碼的 MIT 授權而重新授權。JetBrains Mono 全文另見 `licenses/JetBrainsMono-OFL.txt`。系統字型不會被匯出。PDF 或印刷作品不因此改為 OFL。
+`.ptan` 選擇內嵌字型時，會在每個字型家族的第一個分片保留 OFL-1.1、完整著作權／授權文字及上游來源。這些分片仍依 OFL，不因專案或程式碼的 MIT 授權而重新授權。JetBrains Mono 全文另見 `licenses/JetBrainsMono-OFL.txt`。系統字型不會被匯出。PDF 或印刷作品不因此改為 OFL。
