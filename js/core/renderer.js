@@ -19,7 +19,7 @@ import { applyThermalSimulation, toGrayscale, applyDither, orderedDitherGradient
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
 import { ensureWebFonts } from "./web-fonts.js";
 
-export const DEFAULT_FONT_FAMILY = 'sans-serif'; // 收據預設字體：直接用瀏覽器的無襯線字（不指定特定字型，各機器的 sans-serif 由系統決定）
+export const DEFAULT_FONT_FAMILY = 'sans-serif'; // 單據預設字體：直接用瀏覽器的無襯線字（不指定特定字型，各機器的 sans-serif 由系統決定）
 
 /**
  * 對單一 template + 單筆資料做完整渲染，回傳 { canvas, widthDots, heightDots, widthMm, heightMm, dpi }。

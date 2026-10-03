@@ -7,7 +7,7 @@
 //   tpl=<.ptan 網址>[,<.ptan 網址>...]   指定範本，限同源（不接受任意第三方網址，也不是 IndexedDB
 //                      草稿 id，這樣才能跨裝置／跨部署使用同一份範本檔）。可以用逗號分隔給多個
 //                      網址——多份範本各自套用同一份 data 後由上而下拼成一張畫布再送印（見
-//                      compose.js renderProjects），給「收據由後台排序的多個獨立範本組成」這種
+//                      compose.js renderProjects），給「單據由後台排序的多個獨立範本組成」這種
 //                      用法用；單一網址時行為跟以前完全一樣（走單一專案，會載入畫面預覽）。
 //   kiosk=1            切 <html class="is-kiosk">，給 CSS 隱藏工具列／大綱／檢視器等編輯介面用
 //                      （實際隱藏規則不在這裡，這裡只掛 class）
@@ -464,7 +464,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
             }
             // 每筆 submit-job 都是獨立列印工作，先清空再套用新資料：同一個 iframe 連續處理第二筆列印工作時，
             // 如果這筆沒帶到跟上一筆一樣的變數名稱（例如少了 photoB），不能讓上一位客人的舊值殘留、
-            // 印到這一份收據上。
+            // 印到這一份單據上。
             state.previewData = {};
             applyVariablesFromData(data, projects[0]);
             schedulePreview();

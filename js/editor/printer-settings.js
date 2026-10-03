@@ -168,7 +168,7 @@ export async function printSilently() {
  * kiosk.js 多範本模式用：跟 printSilently 一樣靜默送印，但吃的是呼叫端已經用 compose.js
  * renderProjects()／composeResults() 合成好的單一畫布（見 kiosk.js runMultiAutoprintFlow），
  * 不是 state.project——多範本合成不經過單一專案的編輯器 state，沒有「頁」的概念，永遠當成一頁、
- * 一定切紙（cutAfter 恆真，多範本合成本來就是一張完整收據，沒有「這一頁先不切給下一頁接著印」的情境）。
+ * 一定切紙（cutAfter 恆真，多範本合成本來就是一張完整單據，沒有「這一頁先不切給下一頁接著印」的情境）。
  * profile 參數：多範本模式沒有 state.project 可用來算列印頭寬度／邊距補白，呼叫端傳第一份範本的
  * project 進來（見 getEscposPrintOptions 的 project 參數）。
  * 回傳格式跟 printSilently 一致，呼叫端（kiosk.js）不用分兩套處理。
