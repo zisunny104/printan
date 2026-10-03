@@ -182,7 +182,7 @@ export function mountPrinterCardAction(element) {
     else mountStageElement(element);
 }
 
-/** 範本卡的名稱清單（一行一個）；載入完成或失敗後由 kiosk.js 呼叫，empty 是沒有名稱時顯示的字。 */
+/** 範本區塊的名稱清單（一行一個）；載入完成或失敗後由 kiosk.js 呼叫，empty 是沒有名稱時顯示的字。 */
 export function setKioskTemplateNames(names, empty = "未命名範本") {
     if (!fields) return;
     const list = names.filter(Boolean);
