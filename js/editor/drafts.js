@@ -1,4 +1,4 @@
-// IndexedDB 草稿存取：還原上次編輯、切換／新增版型、「最近編輯」清單、自動存檔。
+// IndexedDB 草稿存取：還原上次編輯、切換／新增專案、「最近編輯」清單、自動存檔。
 
 import { createEmptyProject, loadProject } from "../core/schema.js";
 import { getDefaultPrinterProfileId, getPrinterProfile } from "../core/printer-profiles.js";
@@ -32,8 +32,8 @@ export async function restoreOrCreateProject() {
     });
 }
 
-// 「新增」不會刪除目前版型：目前版型早就被 scheduleSave 自動存進 IndexedDB 了，
-// 換成空白版型後舊的還在，可以從「開啟」下拉選單的「最近編輯」清單找回來。
+// 「新增」不會刪除目前專案：目前專案早就被 scheduleSave 自動存進 IndexedDB 了，
+// 換成空白專案後舊的還在，可以從「開啟」下拉選單的「最近編輯」清單找回來。
 export function loadProjectIntoEditor(project) {
     state.project = project;
     state.currentPageIndex = 0;
@@ -66,7 +66,7 @@ export function populateRecentDrafts() {
     if (recent.length === 0) {
         const empty = document.createElement("div");
         empty.className = "ts-text is-description is-small recent-draft-empty";
-        empty.textContent = "尚無其他最近編輯的版型";
+        empty.textContent = "尚無其他最近編輯的專案";
         list.appendChild(empty);
         return;
     }
@@ -78,7 +78,7 @@ export function populateRecentDrafts() {
         info.className = "recent-draft-info";
         const name = document.createElement("span");
         name.className = "recent-draft-name";
-        name.textContent = r.name || "未命名版型";
+        name.textContent = r.name || "未命名專案";
         const time = document.createElement("span");
         time.className = "ts-text is-description is-small recent-draft-time";
         time.textContent = new Date(r.updatedAt).toLocaleString("zh-TW", { hour12: false });

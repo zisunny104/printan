@@ -171,14 +171,14 @@ test("downloadPtan：實際產生的檔案內容能被 readPtanFile 讀回，檔
     URL.revokeObjectURL = () => {};
     HTMLAnchorElement.prototype.click = function () { fileName = this.download; };
     try {
-        const failed = await downloadPtan(p, "我的版型.ptan");
+        const failed = await downloadPtan(p, "我的專案.ptan");
         eq(failed, []);
     } finally {
         URL.createObjectURL = realCreate;
         URL.revokeObjectURL = realRevoke;
         HTMLAnchorElement.prototype.click = realClick;
     }
-    eq(fileName, "我的版型.ptan");
+    eq(fileName, "我的專案.ptan");
     assert(blob, "沒有產生 Blob");
     const back = await readPtanFile(new File([blob], fileName));
     assert(back.ok, back.error);

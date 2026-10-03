@@ -1879,7 +1879,7 @@ body {
     font-size: .8em;
 }
 
-/* Tocas 的 .ts-selection 無直向堆疊版型，手機寬度下改垂直排列並重設高度/圓角 */
+/* Tocas 的 .ts-selection 無直向堆疊版面，手機寬度下改垂直排列並重設高度/圓角 */
 .ts-selection.theme-switcher-stacked {
     flex-direction: column;
     height: auto;
@@ -2262,7 +2262,7 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
 }
 
 /* ==== Kiosk 模式（網址帶 kiosk=1，js/editor/kiosk.js 同步在 <html> 加 .is-kiosk） ====
-   外部系統（測驗機、配對後的售票機等）用網址直接指定版型＋自動列印，畫面不能看出是
+   外部系統（測驗機、配對後的售票機等）用網址直接指定範本＋自動列印，畫面不能看出是
    printan 編輯器：工具列、版面結構、元素設定、頁首頁尾全部藏起來，只留畫布／預覽區，
    並讓它填滿整個視窗（不分斷點，kiosk 螢幕尺寸不定，直接比照桌面版三欄的滿版高度作法）。
    隱藏用的選擇器盡量抓既有 id（#app-header／#operations／#outlineSidebar／#inspectorDock／

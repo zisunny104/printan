@@ -212,7 +212,7 @@ export function updateFeedLinesHint() {
 }
 
 // 連線狀態、走紙／切紙偏好都是「這台瀏覽器、這台印表機」的本機操作習慣，不寫進 .ptan，
-// 同一份版型換人、換印表機開啟時不應該被綁死。
+// 同一份專案換人、換印表機開啟時不應該被綁死。
 export function loadPrintPrefs() {
     try {
         const saved = JSON.parse(safeGetItem(PRINT_PREFS_KEY) || "{}");
@@ -299,7 +299,7 @@ async function reconnectAuthorizedPrinter() {
     await identifyConnectedPrinter({ query: false });
 }
 
-// 設定 modal 的連線區塊只有一組連線／中斷按鈕，「目前選哪種連線方式」跟「實際連上哪一種」
+// 設定 modal 的連線區段只有一組連線／中斷按鈕，「目前選哪種連線方式」跟「實際連上哪一種」
 // 要分開看：已連線時以實際連上的為準（方式選項鎖住，要換得先中斷）；未連線時才用使用者選的方式。
 function currentConnectMethod() {
     if (state.usbConnected) return "usb";

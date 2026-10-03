@@ -1,6 +1,6 @@
-// 測試列印：內建一份收據風版型，走專案自己的排版管線（renderTemplate），
+// 測試列印：內建一份收據風專案，走專案自己的排版管線（renderTemplate），
 // 並接一段直接畫在 canvas 上的量測用刻度（邊緣色條＋尺規）。
-// 尺規、色塊沒有對應的元素類型，用小 canvas 轉成圖片元素放進版型。
+// 尺規、色塊沒有對應的元素類型，用小 canvas 轉成圖片元素放進專案。
 
 import { createEmptyProject } from "../core/schema.js";
 import { renderTemplate, DEFAULT_FONT_FAMILY } from "../core/renderer.js";
@@ -290,9 +290,9 @@ function itemRow(name, qty, amount, style) {
     return row;
 }
 
-// 內容是這個專案自己的「收據」：標題（icon＋名稱）＋副標＋網址 → 品項（含縮排備註行）→ 小計／優惠／合計 →
+// 內容是Printan 自己的「收據」：標題（icon＋名稱）＋副標＋網址 → 品項（含縮排備註行）→ 小計／優惠／合計 →
 // 條碼與 QR → 感謝語與頁尾小字 → 技術資訊（小字級）。
-// 品項是專案的功能與開發過程，金額由程式加總；彩蛋藏在數字與小字裡，純屬玩笑。
+// 品項是 Printan 的功能與開發過程，金額由程式加總；彩蛋藏在數字與小字裡，純屬玩笑。
 const PROJECT_URL = "https://toka.dev/koilisu/printan";
 const TEAPOT_URL = "https://http.cat/418"; // 418 I'm a teapot 的貓圖
 const FALLBACK_MODEL = "TM-T82II";

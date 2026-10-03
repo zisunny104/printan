@@ -1,6 +1,6 @@
-// Printan Renderer Core — 可獨立嵌入其他專案的瀏覽器 ES module。
+// Printan Renderer Core — 可獨立嵌入其他網頁的瀏覽器 ES module。
 //
-// 使用方式（其他網頁專案可直接引入這個檔案，不需要 Printan 的 Editor）：
+// 使用方式（其他網頁可直接引入這個檔案，不需要 Printan 的 Editor）：
 //
 //   import { renderTemplate } from "./printan/js/core/renderer.js";
 //   const result = await renderTemplate(project, data, { mode: "thermal" });
@@ -19,7 +19,7 @@ import { applyThermalSimulation, toGrayscale, applyDither, orderedDitherGradient
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
 import { ensureWebFonts } from "./web-fonts.js";
 
-export const DEFAULT_FONT_FAMILY = 'sans-serif'; // 單據預設字體：直接用瀏覽器的無襯線字（不指定特定字型，各機器的 sans-serif 由系統決定）
+export const DEFAULT_FONT_FAMILY = 'sans-serif'; // 收據預設字體：直接用瀏覽器的無襯線字（不指定特定字型，各機器的 sans-serif 由系統決定）
 
 /**
  * 對單一 template + 單筆資料做完整渲染，回傳 { canvas, widthDots, heightDots, widthMm, heightMm, dpi }。
@@ -30,7 +30,7 @@ export const DEFAULT_FONT_FAMILY = 'sans-serif'; // 單據預設字體：直接�
  * 熱感模式下的網點深淺處理是「按元素類型路由」而非整張畫布套用同一種抖色：相片（image）
  * 元素本身用 Floyd–Steinberg 誤差擴散（較接近真實灰階觀感），其餘一律是純黑向量或已經是
  * 純黑白的條碼／QR，套用同一種抖色反而會讓邊緣模糊、字變糊，所以最後對整張畫布只做單純
- * threshold（把 anti-alias 邊緣二值化），已經 dither 過的相片區塊本身就是 0/255，threshold
+ * threshold（把 anti-alias 邊緣二值化），已經 dither 過的相片區域本身就是 0/255，threshold
  * 對它們是 no-op，不會被二次破壞。
  */
 export async function renderTemplate(project, data = {}, options = {}) {
@@ -59,8 +59,8 @@ export async function renderBatch(project, dataArray = [{}], options = {}) {
 }
 
 /**
- * 多頁版型（project.template.pages）依序渲染，回傳每一頁對應的渲染結果陣列（順序＝列印順序）。
- * renderTemplate() 是既有的公開單頁 API（其他專案可能直接 import 使用），行為與參數維持不變；
+ * 多頁專案（project.template.pages）依序渲染，回傳每一頁對應的渲染結果陣列（順序＝列印順序）。
+ * renderTemplate() 是既有的公開單頁 API（其他程式可能直接 import 使用），行為與參數維持不變；
  * 這個函式是給多頁列印流程（見 printer-settings.js printCurrent／printSilently）用的新入口，
  * 呼叫慣例（data／options）比照 renderTemplate，只是改吃 project.template.pages 而不是
  * project.template.elements。舊檔／只有一頁的專案，schema.js migrate() 已經統一補成
@@ -718,7 +718,7 @@ function paintText(ctx, item, x, y) {
                 ctx.fillStyle = "#000";
                 ctx.fillRect(cursorX, lineY, segWidth, line.lineHeightDots);
             }
-            // 文字顏色花紋（網點／漸層）現在反白區塊也會套用，只是黑白對調（invert）跟反白背景疊在一起
+            // 文字顏色花紋（網點／漸層）現在反白區域也會套用，只是黑白對調（invert）跟反白背景疊在一起
             // 才看得出對比，而不是像以前一樣反白就整個退回純色——這樣容器底色跟文字顏色才能真的疊加。
             if (inkFill.mode !== "solid" && seg.text) {
                 paintPatternText(ctx, seg.text, cursorX, segY, segWidth, seg.style.fontSize, inkFill, segInverse);

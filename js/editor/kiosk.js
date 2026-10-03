@@ -7,7 +7,7 @@
 //   tpl=<.ptan 網址>[,<.ptan 網址>...]   指定範本，限同源（不接受任意第三方網址，也不是 IndexedDB
 //                      草稿 id，這樣才能跨裝置／跨部署使用同一份範本檔）。可以用逗號分隔給多個
 //                      網址——多份範本各自套用同一份 data 後由上而下拼成一張畫布再送印（見
-//                      compose.js renderProjects），給「收據由後台排序的多個獨立區塊組成」這種
+//                      compose.js renderProjects），給「收據由後台排序的多個獨立範本組成」這種
 //                      用法用；單一網址時行為跟以前完全一樣（走單一專案，會載入畫面預覽）。
 //   kiosk=1            切 <html class="is-kiosk">，給 CSS 隱藏工具列／大綱／檢視器等編輯介面用
 //                      （實際隱藏規則不在這裡，這裡只掛 class）
@@ -39,7 +39,7 @@
 //     data 裡的鍵值比照範本 {{var}} 的規則套進 previewData（文字變數直接代換；照片變數是
 //     圖片元素 assetId 用 {{var}} 佔位，值需為 https:// 開頭網址，見 renderer.js resolveImage）。
 //     多範本模式下同一份 data 會分別套到每一份範本，各自只挑自己範本裡實際用到的變數名稱
-//     （見 applyVariablesFromData），所以不同區塊的變數名稱不會互相污染，即使剛好同名也只是
+//     （見 applyVariablesFromData），所以不同範本的變數名稱不會互相污染，即使剛好同名也只是
 //     兩邊都吃到同一個值，不會報錯。套用完立刻觸發一次列印（有已授權印表機就直接印，沒有就
 //     顯示候補配對按鈕）。event.origin 必須等於 parentOrigin 且 event.source 必須是
 //     window.parent，其餘一律忽略。
@@ -342,7 +342,7 @@ async function runAutoprintFlow() {
  * 沒有需要顯示畫面預覽的對象，跟單一範本模式（會把範本載進編輯器、有機會被看到）不一樣。
  * 不套用 applyVariablesFromData／state.previewData 過濾：data 直接整包傳給 renderProjects，
  * merge.js applyDataToElements 本身只會替換範本裡真的用到的 {{var}}，沒用到的鍵值直接忽略，
- * 不需要先篩過（也代表多個區塊剛好同名變數時兩邊會吃到同一個值，不是錯誤，是預期行為）。
+ * 不需要先篩過（也代表多個範本剛好同名變數時兩邊會吃到同一個值，不是錯誤，是預期行為）。
  */
 async function composeAndPrint(projects, data, gapDots) {
     const composed = await renderProjects(
