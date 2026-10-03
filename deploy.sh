@@ -16,14 +16,15 @@ ok()   { echo "  ${GREEN}✓${RESET} $1"; }
 warn() { echo "  ${YELLOW}!${RESET} $1"; }
 fail() { echo "  ${RED}✗${RESET} $1"; }
 
-# ── 網站自我檢查（部署後執行；也可單獨跑：./deploy.sh --check-only）──────────────────
-# 這個專案在伺服器上是 git pull 原地更新：Nginx 沒擋 .git/ 的話，
-# 任何人都能下載 $DEPLOY_CHECK_URL/.git/HEAD 乃至整份原始碼與歷史紀錄。
-# 用環境變數指定網站對外網址，例：DEPLOY_CHECK_URL=https://example.com/project ./deploy.sh
+# ── 網站自我檢查：部署後執行，也可單獨跑 ./deploy.sh --check-only ──────────────────
+# 伺服器是 git pull 原地更新，Nginx 沒擋 .git/ 就能被下載整份原始碼與歷史。
+# 檢查網址優先序：環境變數 DEPLOY_CHECK_URL，其次 .deploy_check_url，後者用 --set-check-url 寫入。
 CRIT=0
+CHECK_URL_FILE=".deploy_check_url"
+EXAMPLE_URL="https://example.com/project"
 
-# 向 $1 發 GET（不跟隨轉址、8 秒逾時），輸出：
-#   exposed＝200 且內容以 ref: 開頭（真的是 git HEAD）；unreach＝連不上；其他為 HTTP 狀態碼
+# 向 $1 發 GET，不跟隨轉址，8 秒逾時。
+# 輸出 exposed 代表 200 且內容以 ref: 開頭，unreach 代表連不上，其他輸出 HTTP 狀態碼。
 probe_git_head() {
   local tmp code
   tmp="$(mktemp)"
@@ -36,37 +37,69 @@ probe_git_head() {
 
 NGINX_SNIPPET='    location ~ /\.git { deny all; return 404; }'
 
+# 讀檢查網址：環境變數優先，其次檔案；都沒有就輸出空字串
+read_check_url() {
+  local u="${DEPLOY_CHECK_URL:-}"
+  if [ -z "$u" ] && [ -f "$CHECK_URL_FILE" ]; then
+    u="$(head -n 1 "$CHECK_URL_FILE" | tr -d '\r')"
+  fi
+  printf '%s' "$u"
+}
+
+set_check_url() {
+  local u="${1:-}"
+  case "$u" in
+    https://?*|http://?*) ;;
+    *) fail "檢查網址要以 http:// 或 https:// 開頭"
+       echo "  ${DIM}例如 ./deploy.sh --set-check-url ${EXAMPLE_URL}${RESET}"
+       return 1 ;;
+  esac
+  while [ "${u%/}" != "$u" ]; do u="${u%/}"; done
+  printf '%s\n' "$u" > "$CHECK_URL_FILE"
+  ok "已儲存  ${DIM}${u}${RESET}"
+  echo "  ${DIM}之後 ./deploy.sh 會自動使用${RESET}"
+}
+
 selfcheck_web() {
   local base url r
-  if [ -z "${DEPLOY_CHECK_URL:-}" ]; then
-    warn "略過「.git/ 可否被網頁下載」檢查：未設定檢查網址，可用 DEPLOY_CHECK_URL=https://example.com/project ./deploy.sh"
+  base="$(read_check_url)"
+  if [ -z "$base" ]; then
+    warn "沒設檢查網址，略過外洩檢查"
+    echo "    ${DIM}只需設一次：./deploy.sh --set-check-url ${EXAMPLE_URL}${RESET}"
     return 0
   fi
   if ! command -v curl >/dev/null 2>&1; then
-    warn "略過「.git/ 可否被網頁下載」檢查：找不到 curl"
+    warn "找不到 curl，略過外洩檢查"
     return 0
   fi
-  base="${DEPLOY_CHECK_URL%/}"
+  while [ "${base%/}" != "$base" ]; do base="${base%/}"; done
   case "$base" in
-    https://*|http://*) ;;
-    *) warn "檢查網址要以 https:// 或 http:// 開頭：$base"; return 0 ;;
+    https://?*|http://?*) ;;
+    *) warn "檢查網址要以 http:// 或 https:// 開頭，略過外洩檢查"
+       echo "    ${DIM}${base}${RESET}"
+       return 0 ;;
   esac
   url="$base/.git/HEAD"
   r="$(probe_git_head "$url")"
   case "$r" in
     exposed)
       CRIT=1
-      fail "${BOLD}${RED}嚴重：.git/ 可被網頁直接下載${RESET}（$url 回 200 並送出 git 內容）"
-      echo "  ${BOLD}${RED}!!! 整份原始碼與歷史紀錄都能被任何人下載 !!!${RESET}"
-      echo "  ${BOLD}修法：${RESET}把下面這條貼進 Nginx 的 server { } 區塊（與 listen／root 同一層），再執行 sudo nginx -t && sudo systemctl reload nginx："
-      echo "${YELLOW}${NGINX_SNIPPET}${RESET}"
-      echo "  ${DIM}完成後重跑 ./deploy.sh --check-only 確認；歷史紀錄裡若曾有機密，請一併更換${RESET}" ;;
+      fail "${BOLD}${RED}.git/ 可被下載${RESET}  ${DIM}回 200，${url}${RESET}"
+      echo
+      echo "  ${BOLD}${RED}整份原始碼與提交歷史都能被任何人取得${RESET}"
+      echo "  ${BOLD}修法${RESET}：貼進 nginx 的 server 區塊，再 reload"
+      echo "${CYAN}${NGINX_SNIPPET}${RESET}"
+      echo "  ${DIM}完成後執行 ./deploy.sh --check-only 重測${RESET}" ;;
     unreach)
-      warn "連不上 $url（逾時或網路不通），略過這一項" ;;
+      warn ".git/ 連不上，略過" ;;
+    200)
+      warn ".git/ 回 200 但不是 git 內容"
+      echo "    ${DIM}請確認檢查網址指向本站${RESET}" ;;
     3??)
-      warn "$url 回 $r 轉址，腳本不跟隨；請把檢查網址改成最終網址（例如直接用 https://）再測" ;;
+      warn ".git/ 回 ${r} 轉址，不跟隨"
+      echo "    ${DIM}請改用最終網址${RESET}" ;;
     *)
-      ok ".git/ 無法被網頁下載（回 $r）" ;;
+      ok ".git/ 已擋住  ${DIM}回 ${r}${RESET}" ;;
   esac
 }
 
@@ -76,16 +109,21 @@ run_selfcheck() {
 }
 
 CHECK_ONLY=0
-for arg in "$@"; do
-  case "$arg" in
+while [ $# -gt 0 ]; do
+  case "$1" in
     --check-only) CHECK_ONLY=1 ;;
-    -h|--help)
-      echo "用法：./deploy.sh [--check-only]"
-      echo "  --check-only  不更新程式碼，只跑「網站自我檢查」"
-      echo "環境變數：DEPLOY_BRANCH、DEPLOY_RELOAD_CMD、DEPLOY_CHECK_URL（網站對外網址，例：https://example.com/project）"
+    --set-check-url)
+      set_check_url "${2:-}" || exit 2
       exit 0 ;;
-    *) fail "未知參數：$arg"; exit 2 ;;
+    -h|--help)
+      echo "用法：./deploy.sh [--check-only] [--set-check-url URL]"
+      echo "  --check-only          不更新程式碼，只跑網站自我檢查"
+      echo "  --set-check-url URL   儲存檢查網址，例如 ${EXAMPLE_URL}"
+      echo "環境變數：DEPLOY_BRANCH、DEPLOY_RELOAD_CMD、DEPLOY_CHECK_URL"
+      exit 0 ;;
+    *) fail "未知參數：$1"; exit 2 ;;
   esac
+  shift
 done
 
 if [ "$CHECK_ONLY" -eq 1 ]; then
@@ -196,4 +234,4 @@ if [ "$HAS_PHP" -eq 1 ]; then
 fi
 echo "  目前 commit：${BOLD}$(git rev-parse --short HEAD)${RESET}"
 echo "  完成時間：${DIM}$(date '+%Y-%m-%d %H:%M:%S')${RESET}"
-[ "$CRIT" -eq 0 ] || { echo; fail "自我檢查有嚴重問題（見上方 ✗），請先處理"; exit 1; }
+[ "$CRIT" -eq 0 ] || { echo; fail "自我驗證發現外洩，請依上面修法處理"; exit 1; }
