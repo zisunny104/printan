@@ -2398,8 +2398,16 @@ body:has(#export-dropdown.is-visible) #btn-export-menu > .dropdown-caret {
 .kiosk-status-dot[data-tone="warn"] { color: var(--ts-warning-600); }
 .kiosk-status-dot[data-tone="error"] { color: var(--ts-negative-600); }
 
-.kiosk-status-detail:empty {
-    display: none;
+/* 範本：summary 當標題列，點開才看；原生三角形留著當展開提示 */
+.kiosk-status-summary {
+    cursor: pointer;
+    justify-content: space-between;
+}
+
+/* 列印工作清單：歷史很長時只在卡片內捲動，不把下面的預覽紙張推出畫面 */
+.kiosk-status-jobs {
+    max-height: 12rem;
+    overflow-y: auto;
 }
 
 /* 短暫通知容器（js/editor/ui-helpers.js showSnackbar）：畫面下緣置中、由下往上堆疊。popover 預設的
