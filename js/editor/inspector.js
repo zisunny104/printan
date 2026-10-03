@@ -617,6 +617,7 @@ function buildTextInspector(panel, el) {
         ]));
         body.appendChild(field("最多行數", textInput(el.maxLines || "", (v) => { el.maxLines = v; onModelChange({ skipInspector: true }); }, "number", "不限")));
         body.appendChild(field(null, checkboxInput(el.wrap, (v) => { el.wrap = v; onModelChange({ skipInspector: true }); }, "自動換行")));
+        if (el.type === "text") body.appendChild(field(null, checkboxInput(!!el.collapseWhenEmpty, (v) => { el.collapseWhenEmpty = v; onModelChange({ skipInspector: true }); }, "沒有內容時不占高度")));
         if (el.type === "float-block") return; // 圖文段落只支援橫書
         const modeRow = document.createElement("div");
         modeRow.className = "ts-wrap is-compact has-top-spaced-small";

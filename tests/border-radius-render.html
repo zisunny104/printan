@@ -133,6 +133,22 @@ test("同一行混用字級：小字與大字的字基線對齊（小字不掛�
     assert(Math.abs(big - small) <= 1, `基線應對齊，大字底 ${big}、小字底 ${small}`);
 });
 
+test("文字元素 collapseWhenEmpty：全空白（含全形空白）時不占高度，預設仍佔一行", async () => {
+    const heightOf = async (collapse, text) => {
+        const els = [
+            createTextElement({ id: "a", runs: [{ text: "上" }], fontSize: 20 }),
+            createTextElement({ id: "b", runs: [{ text }], fontSize: 20, collapseWhenEmpty: collapse }),
+            createTextElement({ id: "c", runs: [{ text: "下" }], fontSize: 20 }),
+        ];
+        return (await renderElements(els, { widthDots: 150, dpi: 203, assets: new Map(), mode: "screen" })).canvas.height;
+    };
+    const kept = await heightOf(false, "\u3000 ");
+    const collapsed = await heightOf(true, "\u3000 ");
+    const withText = await heightOf(true, "有字");
+    assert(collapsed < kept, `空白且開啟時應更矮：${collapsed} vs ${kept}`);
+    assert(withText === kept, `有內容時不受影響：${withText} vs ${kept}`);
+});
+
 // ---- 執行 ----
 const list = document.getElementById("list");
 let failed = 0;

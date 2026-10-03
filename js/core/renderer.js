@@ -190,12 +190,20 @@ function withFiniteLayoutNumbers(el) {
     return fixed || el;
 }
 
+/** 文字元素的所有 run 都只有空白（半形、全形空白、換行）＝沒有內容。 */
+function isBlankText(el) {
+    return !(el.runs || []).some((run) => String(run.text ?? "").trim() !== "");
+}
+
 async function layoutColumn(elements, widthDots, ctx, fontFamily, assetCtx, showBarcodeErrors) {
     const items = [];
     let y = 0;
     for (const rawEl of elements) {
         const el = withFiniteLayoutNumbers(rawEl);
-        if (el.type === "text") {
+        if (el.type === "text" && el.collapseWhenEmpty && isBlankText(el)) {
+            // 套用資料後整段都是空白：完全不占高度（清單型版面資料不足時，空格子不留白）；lines 是空的，paintText 什麼都不畫
+            items.push({ el, y, height: 0, widthDots, boxWidth: widthDots, contentHeight: 0, clipHeight: null, clipped: false, vAlignOffset: 0, lines: [], vertical: undefined });
+        } else if (el.type === "text") {
             // widthMode "fixed"：文字框寬度可小於欄寬（比照圖片 widthPercent／widthDots 覆寫繪製寬度），
             // 換行、置中/靠右錨點都改用這個框寬；align 同時兼作「框在欄內的水平位置」（同圖片 align 的雙重用途）。
             const boxWidth = resolveTextWidthMode(el) === "fixed" ? Math.max(1, Math.min(widthDots, el.widthDots)) : widthDots;
