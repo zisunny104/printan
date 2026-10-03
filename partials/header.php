@@ -11,7 +11,7 @@
                             </div>
                             <span class="ts-text is-description app-version">v<?= htmlspecialchars($appVersion) ?></span>
                         </div>
-                        <div class="ts-text is-description mobile:has-hidden">熱感紙收據／標籤設計與預覽工具，所見即所印。</div>
+                        <div class="ts-text is-description mobile:has-hidden">熱感紙單據／標籤設計與預覽工具，所見即所印。</div>
                     </div>
                     <div class="column mobile:is-16-wide app-header-save">
                         <span id="save-status" class="ts-text is-description is-small"></span>

@@ -261,7 +261,7 @@ function applyHeightDots(realEl, newHeight) {
 }
 
 /** 高度拖曳把手：目前只有 spacer／image 的高度是可以直接調整的數值。
- * box.el 來自 renderer 排版結果，是套用 mail merge 資料時深拷貝出來的節點（見 core/merge.js
+ * box.el 來自 renderer 排版結果，是套用 mail merge 資料時深拷貝出來的元素（見 core/merge.js
  * 的 applyDataToElements），跟 currentElements() 不是同一個物件，
  * 所以要修改的話必須用 id 找回真正的 element，直接改 box.el 不會反映到實際專案資料上。
  * 鍵盤替代：方向鍵（Shift 加大步幅）微調高度，供鍵盤／螢幕報讀器使用者操作，不用只能滑鼠拖曳。 */
@@ -505,7 +505,7 @@ function applyColumnBoundaryDelta(realRow, startWidths, colIndex, deltaDots) {
 }
 
 /** 欄寬拖曳把手：把兩欄的目前點寬直接當比例使用，拖曳時即時換算成新的 ratio。
- * rowEl 同樣是排版結果裡的深拷貝節點（理由同 buildHeightResizeHandle 的註解），
+ * rowEl 同樣是排版結果裡的深拷貝元素（理由同 buildHeightResizeHandle 的註解），
  * 要修改 ratio 必須用 id 找回 currentElements() 裡真正的 row。
  * 鍵盤替代：左右鍵調整這條分隔線（Shift 加大步幅）；另外檢視器的「欄位比例」文字欄位本來就能直接輸入
  * 整組比例，這裡補的是不切去檢視器、直接在把手上微調的等效操作。 */

@@ -1,6 +1,6 @@
-// 測試列印：內建一份收據風版型，走專案自己的排版管線（renderTemplate），
+// 測試列印：內建一份單據風專案，走專案自己的排版管線（renderTemplate），
 // 並接一段直接畫在 canvas 上的量測用刻度（邊緣色條＋尺規）。
-// 尺規、色塊沒有對應的元素類型，用小 canvas 轉成圖片元素放進版型。
+// 尺規、色塊沒有對應的元素類型，用小 canvas 轉成圖片元素放進專案。
 
 import { createEmptyProject } from "../core/schema.js";
 import { renderTemplate, DEFAULT_FONT_FAMILY } from "../core/renderer.js";
@@ -27,7 +27,7 @@ function makeCanvas(width, height, { willReadFrequently = false } = {}) {
     return { canvas, ctx };
 }
 
-// 邊緣量尺（測試收據用）：貼齊範圍左右的粗黑條、每 1 mm 刻度、每 5 mm 標數字、中心線。
+// 邊緣量尺（測試單據用）：貼齊範圍左右的粗黑條、每 1 mm 刻度、每 5 mm 標數字、中心線。
 // 回傳佔用高度。
 const EDGE_GAUGE_HEIGHT = 58;
 function drawEdgeGauge(ctx, x0, y0, widthDots, dpi) {
@@ -72,7 +72,7 @@ const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
 // 切割線：左邊向右張開的向量剪刀（不靠字型，不會變成缺字方框）＋一路到右邊的虛線（線寬 2 點）。
 // 虛線的空白會微調，讓左右兩端都剛好是完整線段；線畫在圖的上緣附近，圖下方只留一小段，
-// 這條線是整份收據最後印出的東西，走紙後刀口落在它的下方。
+// 這條線是整份單據最後印出的東西，走紙後刀口落在它的下方。
 const CUT_LINE_HEIGHT = 34;
 function buildCutLine(widthDots) {
     const { canvas, ctx } = makeCanvas(widthDots, CUT_LINE_HEIGHT);
@@ -229,7 +229,7 @@ function buildDitherSwatch(widthDots) {
     return canvas.toDataURL("image/png");
 }
 
-// 品牌 icon：頁首用的是 Tocas 的收據圖示，這裡用畫布畫同樣意象（鋸齒下緣的收據紙＋幾行字），
+// 品牌 icon：頁首用的是 Tocas 的單據圖示，這裡用畫布畫同樣意象（鋸齒下緣的單據紙＋幾行字），
 // 避免依賴圖示字型；正方形，貼在標題左邊。
 const BRAND_ICON_DRAW = 72; // 下面的座標都以 72 點方格設計，實際大小依標題字級縮放
 const brandIconSize = (brandSize) => brandSize + 10; // 圖形本體約占方格 8 成，視覺高度約與標題字高相當
@@ -290,9 +290,9 @@ function itemRow(name, qty, amount, style) {
     return row;
 }
 
-// 內容是這個專案自己的「收據」：標題（icon＋名稱）＋副標＋網址 → 品項（含縮排備註行）→ 小計／優惠／合計 →
+// 內容是Printan 自己的「單據」：標題（icon＋名稱）＋副標＋網址 → 品項（含縮排備註行）→ 小計／優惠／合計 →
 // 條碼與 QR → 感謝語與頁尾小字 → 技術資訊（小字級）。
-// 品項是專案的功能與開發過程，金額由程式加總；彩蛋藏在數字與小字裡，純屬玩笑。
+// 品項是 Printan 的功能與開發過程，金額由程式加總；彩蛋藏在數字與小字裡，純屬玩笑。
 const PROJECT_URL = "https://toka.dev/koilisu/printan";
 const TEAPOT_URL = "https://http.cat/418"; // 418 I'm a teapot 的貓圖
 const FALLBACK_MODEL = "TM-T82II";

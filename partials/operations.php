@@ -1,11 +1,11 @@
 <?php defined('PRINTAN_VIEW') || exit; ?>
             <div id="operations" class="pane-toolbar" role="toolbar" aria-label="編輯工具">
-                <!-- 左：檔案／版型操作（新增、開啟、匯出）；右：紙張與印表機輸出操作（紙寬、
-                     列印設定、列印）。兩組用途不同（前者管版型檔案，後者管實體輸出），分兩側
+                <!-- 左：檔案／專案操作（新增、開啟、匯出）；右：紙張與印表機輸出操作（紙寬、
+                     列印設定、列印）。兩組用途不同（前者管專案檔案，後者管實體輸出），分兩側
                      排列比全部擠在一起好找。 -->
                 <div class="ts-buttons">
                     <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-new-ptan"
-                        data-tooltip="新增空白版型（目前版型會留在「最近編輯」清單，不會遺失）" aria-label="新增">
+                        data-tooltip="新增空白專案（目前專案會留在「最近編輯」清單，不會遺失）" aria-label="新增">
                         <span class="ts-icon is-file-circle-plus-icon" aria-hidden="true"></span>
                         <span>新增</span>
                     </button>
@@ -53,9 +53,9 @@
                 </button>
             </div>
 
-            <!-- 開啟：本機 .ptan 檔案，或最近編輯過、還沒手動匯出的版型（存在瀏覽器 IndexedDB
+            <!-- 開啟：本機 .ptan 檔案，或最近編輯過、還沒手動匯出的專案（存在瀏覽器 IndexedDB
                  草稿裡）。清單由 populateRecentDrafts() 動態產生，見「新增」按鈕的說明：
-                 新增空白版型不會刪掉舊的，舊版型會留在這份清單裡可以再打開。 -->
+                 新增空白專案不會刪掉舊的，舊專案會留在這份清單裡可以再打開。 -->
             <div class="ts-dropdown" id="open-project-dropdown">
                 <a class="item" id="open-project-from-file">
                     <span class="ts-icon is-folder-open-icon" aria-hidden="true"></span> 從電腦開啟 .ptan 檔…

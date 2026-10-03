@@ -40,7 +40,7 @@ export async function saveDraft(project) {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
     });
-    touchRecent(project.id, project.meta?.name || "未命名版型");
+    touchRecent(project.id, project.meta?.name || "未命名專案");
     return project.id;
 }
 

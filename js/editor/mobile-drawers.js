@@ -164,7 +164,7 @@ export function initMobileDrawers() {
         if (height) document.documentElement.style.setProperty("--printan-sheet-height", `${height}px`);
         else document.documentElement.style.removeProperty("--printan-sheet-height");
     }
-    // 面板內容變動（換元素、展開收合區塊）高度會變，跟著更新
+    // 面板內容變動（換元素、展開收合區段）高度會變，跟著更新
     const resizeObserver = new ResizeObserver(syncSheetHeight);
     resizeObserver.observe(dock);
 

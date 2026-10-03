@@ -16,7 +16,7 @@ export const state = {
     previewGeneration: 0,
     batchPreview: { active: false, records: [], index: 0 }, // 逐筆預覽批次資料時取代 previewData
     usbConnected: false, // WebUSB 印表機是否已連線；true 時「列印」按鈕直接送 ESC/POS，不走系統對話框
-    serialConnected: false, // WebSerial 印表機是否已連線；設定 modal 的連線區塊同一時間只允許連一種方式，見 updatePrinterConnectionUi
+    serialConnected: false, // WebSerial 印表機是否已連線；設定 modal 的連線區段同一時間只允許連一種方式，見 updatePrinterConnectionUi
     // 列印／測試列印／查詢狀態三個操作共用同一個 usbAdapter／serialAdapter（同一個 USB 裝置或
     // 序列埠），沒有各自獨立的通道；同時觸發兩個會讓 transferOut／write 的位元組流疊在一起，
     // 印表機收到的可能是兩份 ESC/POS 指令交錯後的亂碼，或狀態查詢讀到不相干的回應。

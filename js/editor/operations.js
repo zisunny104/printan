@@ -1,4 +1,4 @@
-// 頂部工具列（#operations，partials/operations.php）：新增／開啟版型、專案名稱、
+// 頂部工具列（#operations，partials/operations.php）：新增／開啟專案、專案名稱、
 // 匯出 .ptan／PDF、列印、紙寬分頁。跟 toolbar.js（懸浮的 .canvas-floating-toolbar，
 // 畫布上的新增元素工具）是兩個不同的 UI，各自對齊自己的 DOM id／class。
 

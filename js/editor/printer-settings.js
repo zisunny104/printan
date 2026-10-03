@@ -168,7 +168,7 @@ export async function printSilently() {
  * kiosk.js 多範本模式用：跟 printSilently 一樣靜默送印，但吃的是呼叫端已經用 compose.js
  * renderProjects()／composeResults() 合成好的單一畫布（見 kiosk.js runMultiAutoprintFlow），
  * 不是 state.project——多範本合成不經過單一專案的編輯器 state，沒有「頁」的概念，永遠當成一頁、
- * 一定切紙（cutAfter 恆真，多範本合成本來就是一張完整收據，沒有「這一頁先不切給下一頁接著印」的情境）。
+ * 一定切紙（cutAfter 恆真，多範本合成本來就是一張完整單據，沒有「這一頁先不切給下一頁接著印」的情境）。
  * profile 參數：多範本模式沒有 state.project 可用來算列印頭寬度／邊距補白，呼叫端傳第一份範本的
  * project 進來（見 getEscposPrintOptions 的 project 參數）。
  * 回傳格式跟 printSilently 一致，呼叫端（kiosk.js）不用分兩套處理。
@@ -212,7 +212,7 @@ export function updateFeedLinesHint() {
 }
 
 // 連線狀態、走紙／切紙偏好都是「這台瀏覽器、這台印表機」的本機操作習慣，不寫進 .ptan，
-// 同一份版型換人、換印表機開啟時不應該被綁死。
+// 同一份專案換人、換印表機開啟時不應該被綁死。
 export function loadPrintPrefs() {
     try {
         const saved = JSON.parse(safeGetItem(PRINT_PREFS_KEY) || "{}");
@@ -299,7 +299,7 @@ async function reconnectAuthorizedPrinter() {
     await identifyConnectedPrinter({ query: false });
 }
 
-// 設定 modal 的連線區塊只有一組連線／中斷按鈕，「目前選哪種連線方式」跟「實際連上哪一種」
+// 設定 modal 的連線區段只有一組連線／中斷按鈕，「目前選哪種連線方式」跟「實際連上哪一種」
 // 要分開看：已連線時以實際連上的為準（方式選項鎖住，要換得先中斷）；未連線時才用使用者選的方式。
 function currentConnectMethod() {
     if (state.usbConnected) return "usb";

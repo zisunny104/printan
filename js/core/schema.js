@@ -137,7 +137,7 @@ function attachElementsCompat(template) {
     return template;
 }
 
-export function createEmptyProject({ name = "未命名版型", printerProfileId, paperWidthId } = {}) {
+export function createEmptyProject({ name = "未命名專案", printerProfileId, paperWidthId } = {}) {
     const now = new Date().toISOString();
     return {
         format: PTAN_FORMAT,
@@ -255,7 +255,7 @@ export function sanitizeAssets(assets) {
 
 /**
  * 整理元素樹：文字元素舊版扁平 text 欄位 → runs 陣列（見 document-model.js normalizeTextElement）；
- * 壞檔防護：丟掉非物件／沒有 type 的節點，row 的 columns／ratio 與 group 的 children 缺了或型別不對就補預設，
+ * 壞檔防護：丟掉非物件／沒有 type 的元素，row 的 columns／ratio 與 group 的 children 缺了或型別不對就補預設，
  * 讓後面的排版、walkElements、序列化不會因為壞資料丟例外。
  */
 function migrateElements(elements) {

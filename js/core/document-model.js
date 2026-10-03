@@ -1,4 +1,4 @@
-// Document Model：版型元素的資料結構與工廠函式。
+// Document Model：版面元素的資料結構與工廠函式。
 // 尺寸單位一律是「點（dot）」，對應目前 Printer Profile 的 DPI（見 units.js）。
 // 欄寬（row 的 ratio）是相對比例，不是絕對點數，才能讓紙寬切換不用重建專案。
 

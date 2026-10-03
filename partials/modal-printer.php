@@ -14,7 +14,7 @@
                     <!-- 寬版分左右兩欄：左＝連線／印表機資訊，右＝列印設定／測試與診斷；窄螢幕堆疊 -->
                     <div class="ts-grid mobile:is-stacked printer-dialog-body">
                         <div class="column is-8-wide">
-                        <!-- 連線區塊：連線印表機是這個 modal 的主要動作。總狀態 badge 放大，未連線時用紅底最醒目，
+                        <!-- 連線區段：連線印表機是這個 modal 的主要動作。總狀態 badge 放大，未連線時用紅底最醒目，
                              已連線改綠燈；同一時間只會有一條連線（USB／序列埠二選一，已連線時方式選項鎖住）。 -->
                         <div class="ts-content">
                             <div class="ts-wrap is-middle-aligned is-relaxed">
@@ -89,7 +89,7 @@
                             </label>
                             <label class="ts-checkbox has-top-spaced">
                                 <input type="checkbox" id="pref-rotate-180">
-                                <div class="text">上下顛倒安裝：旋轉 180° 列印<span class="info-icon" tabindex="0" role="img" aria-label="印表機倒裝（如壁掛、狹小空間）時開啟，讓拿到收據的人看到的文字是正的；跟上面不同，這項對所有列印方式都套用，包含系統列印" data-tooltip="印表機倒裝（如壁掛、狹小空間）時開啟，讓拿到收據的人看到的文字是正的；跟上面不同，這項對所有列印方式都套用，包含系統列印" data-trigger="hover focus"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span></div>
+                                <div class="text">上下顛倒安裝：旋轉 180° 列印<span class="info-icon" tabindex="0" role="img" aria-label="印表機倒裝（如壁掛、狹小空間）時開啟，讓拿到單據的人看到的文字是正的；跟上面不同，這項對所有列印方式都套用，包含系統列印" data-tooltip="印表機倒裝（如壁掛、狹小空間）時開啟，讓拿到單據的人看到的文字是正的；跟上面不同，這項對所有列印方式都套用，包含系統列印" data-trigger="hover focus"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span></div>
                             </label>
                             <div class="has-top-spaced"></div>
                             <div class="ts-text is-label">可列印點數（依紙寬）<span class="info-icon" tabindex="0" role="img" aria-label="預設用內建規格；別牌印表機可能不同（58 mm 常見 384 點），依規格書填寫，範圍 64–1024，留空＝預設" data-tooltip="預設用內建規格；別牌印表機可能不同（58 mm 常見 384 點），依規格書填寫，範圍 64–1024，留空＝預設" data-trigger="hover focus"><span class="ts-icon is-circle-info-icon" aria-hidden="true"></span></span></div>
@@ -102,7 +102,7 @@
                             </button>
                         </div>
                         <div class="ts-divider"></div>
-                        <!-- 測試列印：套用目前走紙／切紙偏好印一小段測試圖樣，不用印整張收據就能校正
+                        <!-- 測試列印：套用目前走紙／切紙偏好印一小段測試圖樣，不用印整張單據就能校正
                              走紙行數／切紙位置；查詢狀態：即時查詢連線／紙張感應器（DLE EOT），兩者都
                              需要 USB 或序列埠其中一個已連線，走系統列印對話框時無法使用。
                              忘記已授權裝置：清掉瀏覽器記住的授權，換印表機或想重新選擇裝置時用。 -->

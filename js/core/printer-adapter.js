@@ -71,8 +71,8 @@ export class SystemDialogAdapter {
 }
 
 const ESCPOS_CHUNK_SIZE = 4096; // 分段傳輸，避免單次 transferOut 過大
-// 單一 GS v 0 指令帶的最大列數。整張圖用一個指令、一次帶完整高度送出時，太高的圖（多區塊合成的
-// 長收據很容易上千甚至幾千列）可能超過印表機對單一 raster 指令的高度上限，印表機會拒絕這個
+// 單一 GS v 0 指令帶的最大列數。整張圖用一個指令、一次帶完整高度送出時，太高的圖（多範本合成的
+// 長單據很容易上千甚至幾千列）可能超過印表機對單一 raster 指令的高度上限，印表機會拒絕這個
 // 指令、把後面的點陣資料當文字印成亂碼，結尾的切紙指令也跟著沒生效。所以切成多個帶狀，
 // 每個帶狀各自一個 GS v 0，依序連續送出，印出來仍是同一張連續的圖。
 // 上限的確切數值沒有查到可信來源，這裡取一個保守值（遠低於常見上限），不是規格書給的數字。
@@ -145,8 +145,8 @@ export function canvasToEscposRaster(canvas) {
 
 /**
  * 印表機倒裝（壁掛、狹小空間等）時，紙從機器出來的方向跟正常安裝相反，印出來的內容
- * 對拿到收據的人來說是上下顛倒的；把送印的 canvas 整張先轉 180°，印表機那端還是照
- * 原本方向出紙，顛倒兩次剛好抵銷，收據到使用者手上就是正的。純畫布轉換，不影響
+ * 對拿到單據的人來說是上下顛倒的；把送印的 canvas 整張先轉 180°，印表機那端還是照
+ * 原本方向出紙，顛倒兩次剛好抵銷，單據到使用者手上就是正的。純畫布轉換，不影響
  * 排版本身，呼叫端自行決定要不要套用（見 state.printPrefs.rotate180）。
  */
 export function rotateCanvas180(canvas) {
@@ -205,7 +205,7 @@ export function buildEscposJob(renderResult, { feedLines = 0, cutPaper = false }
 
 // 即時狀態查詢（DLE EOT n）回應位元組解讀，2026-09 查證：
 // - n=1（印表機狀態）bit3＝離線狀態（0=online／1=offline）：這個位元在各家 ESC/POS
-//   相容機型的實作幾乎一致（python-escpos RT_MASK_ONLINE=8 對應同一個 bit，該專案的
+//   相容機型的實作幾乎一致（python-escpos RT_MASK_ONLINE=8 對應同一個 bit，該函式庫的
 //   DLE EOT 查詢功能實際在 Epson TM-T20II 上測過，跟 TM-T82II 同屬 Epson TM 系列）：
 //   https://github.com/python-escpos/python-escpos/pull/242
 // - n=4（紙張感應器）bit5+6 同時為 1＝缺紙、bit2+3 同時為 1＝紙快用完，這組是 TM-T82

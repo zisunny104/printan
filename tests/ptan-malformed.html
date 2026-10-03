@@ -163,9 +163,9 @@ test("readPtanFile：UTF-8 BOM 開頭的檔案能正常讀取", async () => {
     assert(out.ok, out.error);
 });
 test("readPtanFile：內容是合法 .ptan 但夾雜中文、emoji 與換行也能來回", async () => {
-    const out = await withTimeout(readPtanFile(file(JSON.stringify(withElements([{ type: "text", text: "收據 🧾\n第二行" }])))));
+    const out = await withTimeout(readPtanFile(file(JSON.stringify(withElements([{ type: "text", text: "單據 🧾\n第二行" }])))));
     assert(out.ok, out.error);
-    eq(pageEls(out.project)[0].runs[0].text, "收據 🧾\n第二行");
+    eq(pageEls(out.project)[0].runs[0].text, "單據 🧾\n第二行");
 });
 
 // ---- 已知的 core 問題（回報給 site-e8／b3，此頁不修 core）----
