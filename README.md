@@ -50,6 +50,7 @@
 ## 維護
 
 由作者維運；既有環境的更新工具為 `./deploy.sh`，請先審閱變更並完成驗證。
+部署完成後會自動檢查 `.git/` 是否能被網頁下載：用 `DEPLOY_CHECK_URL=https://example.com/project ./deploy.sh` 指定網站網址（沒設就只提醒），`./deploy.sh --check-only` 則不更新程式碼、只做這項檢查；發現外洩時印出可貼的 Nginx 設定並以非 0 結束。
 
 ## 已知限制
 
