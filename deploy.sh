@@ -16,6 +16,122 @@ ok()   { echo "  ${GREEN}✓${RESET} $1"; }
 warn() { echo "  ${YELLOW}!${RESET} $1"; }
 fail() { echo "  ${RED}✗${RESET} $1"; }
 
+# ── 網站自我檢查：部署後執行，也可單獨跑 ./deploy.sh --check-only ──────────────────
+# 伺服器是 git pull 原地更新，Nginx 沒擋 .git/ 就能被下載整份原始碼與歷史。
+# 檢查網址優先序：環境變數 DEPLOY_CHECK_URL，其次 .deploy_check_url，後者用 --set-check-url 寫入。
+CRIT=0
+CHECK_URL_FILE=".deploy_check_url"
+EXAMPLE_URL="https://example.com/project"
+
+# 向 $1 發 GET，不跟隨轉址，8 秒逾時。
+# 輸出 exposed 代表 200 且內容以 ref: 開頭，unreach 代表連不上，其他輸出 HTTP 狀態碼。
+probe_git_head() {
+  local tmp code
+  tmp="$(mktemp)"
+  code="$(curl -sS --max-time 8 --max-redirs 0 -o "$tmp" -w '%{http_code}' "$1" 2>/dev/null)" || code="000"
+  if [ "$code" = "000" ]; then echo "unreach"
+  elif [ "$code" = "200" ] && head -c 4 "$tmp" 2>/dev/null | grep -q '^ref:'; then echo "exposed"
+  else echo "$code"; fi
+  rm -f "$tmp"
+}
+
+NGINX_SNIPPET='    location ~ /\.git { deny all; return 404; }'
+
+# 讀檢查網址：環境變數優先，其次檔案；都沒有就輸出空字串
+read_check_url() {
+  local u="${DEPLOY_CHECK_URL:-}"
+  if [ -z "$u" ] && [ -f "$CHECK_URL_FILE" ]; then
+    u="$(head -n 1 "$CHECK_URL_FILE" | tr -d '\r')"
+  fi
+  printf '%s' "$u"
+}
+
+set_check_url() {
+  local u="${1:-}"
+  case "$u" in
+    https://?*|http://?*) ;;
+    *) fail "檢查網址要以 http:// 或 https:// 開頭"
+       echo "  ${DIM}例如 ./deploy.sh --set-check-url ${EXAMPLE_URL}${RESET}"
+       return 1 ;;
+  esac
+  while [ "${u%/}" != "$u" ]; do u="${u%/}"; done
+  printf '%s\n' "$u" > "$CHECK_URL_FILE"
+  ok "已儲存  ${DIM}${u}${RESET}"
+  echo "  ${DIM}之後 ./deploy.sh 會自動使用${RESET}"
+}
+
+selfcheck_web() {
+  local base url r
+  base="$(read_check_url)"
+  if [ -z "$base" ]; then
+    warn "沒設檢查網址，略過外洩檢查"
+    echo "    ${DIM}只需設一次：./deploy.sh --set-check-url ${EXAMPLE_URL}${RESET}"
+    return 0
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    warn "找不到 curl，略過外洩檢查"
+    return 0
+  fi
+  while [ "${base%/}" != "$base" ]; do base="${base%/}"; done
+  case "$base" in
+    https://?*|http://?*) ;;
+    *) warn "檢查網址要以 http:// 或 https:// 開頭，略過外洩檢查"
+       echo "    ${DIM}${base}${RESET}"
+       return 0 ;;
+  esac
+  url="$base/.git/HEAD"
+  r="$(probe_git_head "$url")"
+  case "$r" in
+    exposed)
+      CRIT=1
+      fail "${BOLD}${RED}.git/ 可被下載${RESET}  ${DIM}回 200，${url}${RESET}"
+      echo
+      echo "  ${BOLD}${RED}整份原始碼與提交歷史都能被任何人取得${RESET}"
+      echo "  ${BOLD}修法${RESET}：貼進 nginx 的 server 區塊，再 reload"
+      echo "${CYAN}${NGINX_SNIPPET}${RESET}"
+      echo "  ${DIM}完成後執行 ./deploy.sh --check-only 重測${RESET}" ;;
+    unreach)
+      warn ".git/ 連不上，略過" ;;
+    200)
+      warn ".git/ 回 200 但不是 git 內容"
+      echo "    ${DIM}請確認檢查網址指向本站${RESET}" ;;
+    3??)
+      warn ".git/ 回 ${r} 轉址，不跟隨"
+      echo "    ${DIM}請改用最終網址${RESET}" ;;
+    *)
+      ok ".git/ 已擋住  ${DIM}回 ${r}${RESET}" ;;
+  esac
+}
+
+run_selfcheck() {
+  step "網站自我檢查"
+  selfcheck_web
+}
+
+CHECK_ONLY=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --check-only) CHECK_ONLY=1 ;;
+    --set-check-url)
+      set_check_url "${2:-}" || exit 2
+      exit 0 ;;
+    -h|--help)
+      echo "用法：./deploy.sh [--check-only] [--set-check-url URL]"
+      echo "  --check-only          不更新程式碼，只跑網站自我檢查"
+      echo "  --set-check-url URL   儲存檢查網址，例如 ${EXAMPLE_URL}"
+      echo "環境變數：DEPLOY_BRANCH、DEPLOY_RELOAD_CMD、DEPLOY_CHECK_URL"
+      exit 0 ;;
+    *) fail "未知參數：$1"; exit 2 ;;
+  esac
+  shift
+done
+
+if [ "$CHECK_ONLY" -eq 1 ]; then
+  run_selfcheck
+  [ "$CRIT" -eq 0 ]
+  exit $?
+fi
+
 BRANCH="${DEPLOY_BRANCH:-main}"
 
 # printan 是純 PHP 頁面殼＋瀏覽器端 JS：沒有資料庫、沒有必要的 PHP 擴充套件、
@@ -109,6 +225,8 @@ if [ -n "${DEPLOY_RELOAD_CMD:-}" ] && [ "$BEFORE" != "$AFTER" ]; then
 fi
 
 echo
+run_selfcheck
+echo
 step "部署完成"
 if [ "$HAS_PHP" -eq 1 ]; then
   VERSION="$(php -r '$c = require "config.php"; echo $c["version"] ?? "?";' 2>/dev/null || echo '?')"
@@ -116,3 +234,4 @@ if [ "$HAS_PHP" -eq 1 ]; then
 fi
 echo "  目前 commit：${BOLD}$(git rev-parse --short HEAD)${RESET}"
 echo "  完成時間：${DIM}$(date '+%Y-%m-%d %H:%M:%S')${RESET}"
+[ "$CRIT" -eq 0 ] || { echo; fail "自我驗證發現外洩，請依上面修法處理"; exit 1; }

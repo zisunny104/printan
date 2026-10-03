@@ -68,3 +68,6 @@ __pycache__/
 *.p12
 *.pfx
 /secrets/
+
+# 部署網址檢查網址，用 ./deploy.sh --set-check-url 寫入
+/.deploy_check_url
