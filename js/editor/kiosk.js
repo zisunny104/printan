@@ -52,6 +52,7 @@ import { loadProject } from "../core/schema.js";
 import { registerEmbeddedFonts } from "../core/web-fonts.js";
 import { describePrinterError } from "../core/printer-adapter.js";
 import { renderProjects } from "../core/compose.js";
+import { applyImagePrintSettings } from "../core/image-print-settings.js";
 import { getBaseProfile } from "./editor.js";
 import { els, state } from "./context.js";
 import { attemptSilentPrinterReconnect, connectPrinter, pollPrinterStatusIfIdle, printComposedSilently, printSilently } from "./printer-settings.js";
@@ -320,17 +321,17 @@ function applyVariablesFromData(data, project) {
 
 // 收到 submit-job 就觸發一次（單一範本模式）：已授權裝置就直接印，沒有就顯示候補配對按鈕；
 // 不論哪種結果都回報。
-async function runAutoprintFlow() {
+async function runAutoprintFlow(printFn = printSilently) {
     await startupPrinterCheck;
     await attemptSilentPrinterReconnect();
     if (state.usbConnected || state.serialConnected) {
-        const outcome = await printRetryingBusy(printSilently);
+        const outcome = await printRetryingBusy(printFn);
         reportPrintOutcome(outcome);
     } else {
         // 沒有已授權裝置：WebUSB／Serial 規格要求跳選擇窗一定要使用者手勢，做不到全自動，
         // 顯示候補配對按鈕讓人點一次；工具列被 .is-kiosk 隱藏，原本的列印鍵點不到。
         reportJobStatus("needs_connect");
-        showKioskConnectButton(printSilently);
+        showKioskConnectButton(printFn);
     }
 }
 
@@ -353,16 +354,7 @@ async function composeAndPrint(projects, data, gapDots) {
 }
 
 async function runMultiAutoprintFlow(projects, data, gapDots) {
-    const printFn = () => composeAndPrint(projects, data, gapDots);
-    await startupPrinterCheck;
-    await attemptSilentPrinterReconnect();
-    if (state.usbConnected || state.serialConnected) {
-        const outcome = await printRetryingBusy(printFn);
-        reportPrintOutcome(outcome);
-    } else {
-        reportJobStatus("needs_connect");
-        showKioskConnectButton(printFn);
-    }
+    return runAutoprintFlow(() => composeAndPrint(projects, data, gapDots));
 }
 
 /**
@@ -458,6 +450,24 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
             await startupPrinterCheck;
             if (jobId) currentJobId = jobId;
             updateKioskStatus({ job: "printing", jobId: currentJobId });
+            if (msg.project !== undefined) {
+                const result = loadProject(msg.project);
+                if (!result.ok) { reportJobStatus("print_failed", { message: result.error }); return; }
+                let project = result.project;
+                if (project.embeddedFonts) {
+                    await registerEmbeddedFonts(project.embeddedFonts);
+                    const { embeddedFonts, ...rest } = project;
+                    project = rest;
+                }
+                await runAutoprintFlow(() => printSilently(project, data, { requireImages: true, continuous: true }));
+                return;
+            }
+            if (msg.imageSettings && typeof msg.imageSettings === "object" && Object.keys(msg.imageSettings).length) {
+                const adjusted = projects.map(project => applyImagePrintSettings(project, msg.imageSettings));
+                if (isMulti) await runMultiAutoprintFlow(adjusted, data, gapDots);
+                else await runAutoprintFlow(() => printSilently(adjusted[0], data));
+                return;
+            }
             if (isMulti) {
                 await runMultiAutoprintFlow(projects, data, gapDots);
                 return;
@@ -472,7 +482,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
         });
     });
     startPrinterStatusReporting();
-    reportJobStatus("ready");
+    reportJobStatus("ready", { capabilities: ["job-project", "image-settings"] });
     // 不 await：editor.js 等這個函式跑完才收起骨架畫面，印表機重連（可能卡在裝置 open）不該拖住畫面顯示。
     startupPrinterCheck = checkPrinterOnStartup().catch(() => {});
     startupPrinterCheck.then(() => pollAndReportPrinterStatus()).catch(() => {}); // 啟動檢查完先讀一次，不用等第一輪定時

@@ -39,11 +39,13 @@ function applyRotationPref(results) {
 // 依序印出多頁：任何一頁失敗就整個中止（不跳過繼續印剩下的頁），因為列印順序有意義
 // （同一段連續紙、或後面頁面內容承接前面），跳過中間一頁會印出不完整、順序錯亂的結果，
 // 比整個失敗更難察覺、更難補救。回傳 { ok, failedPageIndex, error } 或 { ok: true }。
-async function printPagesInOrder(adapter, results) {
+async function printPagesInOrder(adapter, results, options = {}) {
     for (let i = 0; i < results.length; i++) {
         const cutAfter = results[i].page?.cutAfter !== false;
         try {
-            await adapter.print(results[i], getEscposPrintOptions(cutAfter));
+            const prefs = getEscposPrintOptions(cutAfter);
+            if (options.continuous && i < results.length - 1 && !cutAfter) prefs.feedLines = 0;
+            await adapter.print(results[i], prefs);
         } catch (err) {
             return { ok: false, failedPageIndex: i, error: err };
         }
@@ -131,17 +133,20 @@ export async function printCurrent() {
  * 中途某一頁失敗就中止，不跳過繼續印剩下的頁（理由同 printPagesInOrder）。
  * 回傳 { ok, issues } 或 { ok:false, reason, error?, failedPageIndex?, pageName? }，不在這裡動畫面。
  */
-export async function printSilently() {
+export async function printSilently(project = state.project, data = state.previewData, options = {}) {
     if (state.printerBusy) return { ok: false, reason: "busy" };
     if (!state.usbConnected && !state.serialConnected) return { ok: false, reason: "not-connected" };
     state.printerBusy = true;
     try {
-        const results = applyRotationPref(await renderPages(state.project, state.previewData, { mode: "thermal", profile: getBaseProfile() }));
+        const results = applyRotationPref(await renderPages(project, data, { mode: "thermal", profile: getBaseProfile(project) }));
+        if (options.requireImages && results.some((r) => r.imageFailures?.length || r.truncated)) {
+            return { ok: false, reason: "print-failed", error: new Error("圖片載入失敗或內容超出頁面，未送印") };
+        }
         const issues = describeFontFallbackIssues(results);
         const adapter = state.usbConnected ? usbAdapter : serialAdapter;
         const notReady = await describeNotReady(adapter);
         if (notReady) return { ok: false, reason: "printer-not-ready", error: new Error(notReady) };
-        const outcome = await printPagesInOrder(adapter, results);
+        const outcome = await printPagesInOrder(adapter, results, options);
         if (!outcome.ok) {
             releaseFailedConnection();
             updatePrinterConnectionUi();

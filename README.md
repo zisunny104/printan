@@ -105,7 +105,7 @@
 
 ---
 
-**版本**：0.3.3
+**版本**：0.3.4
 **作者**：Tokas (Xiang-zi Xie)
 **專案**：KoiLiSu 開利手
 **網址**：https://toka.dev/koilisu/printan
