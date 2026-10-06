@@ -105,7 +105,9 @@
 
 ---
 
-**版本**：0.3.2
+**版本**：0.3.3
 **作者**：Tokas (Xiang-zi Xie)
 **專案**：KoiLiSu 開利手
 **網址**：https://toka.dev/koilisu/printan
+
+照片熱感階調可選擇提亮暗部並保留亮部，詳見 [照片階調設定](docs/photo-tone.md)。

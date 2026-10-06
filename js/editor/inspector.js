@@ -890,6 +890,11 @@ function buildImageInspector(panel, el) {
         body.appendChild(sliderField("亮度", el.brightness ?? 0, -100, 100, (v) => { el.brightness = v; onModelChange({ skipInspector: true }); }));
         body.appendChild(sliderField("對比", el.contrast ?? 0, -100, 100, (v) => { el.contrast = v; onModelChange({ skipInspector: true }); }));
         body.appendChild(field(null, checkboxInput(!!el.invert, (v) => { el.invert = v; onModelChange({ skipInspector: true }); }, "反相")));
+        body.appendChild(field("熱感照片階調", selectInput(
+            [["none", "原始"], ["photo-readable", "易辨識（提亮暗部）"]],
+            el.toneCurve || "none",
+            (v) => { el.toneCurve = v; onModelChange(); },
+        )));
         body.appendChild(field("取樣方式", selectInput(
             [["floyd-steinberg", "誤差擴散"], ["ordered", "網點"], ["threshold", "純黑白"]],
             el.ditherMode || "floyd-steinberg",

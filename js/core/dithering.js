@@ -11,6 +11,17 @@ export function toGrayscale(imageData) {
     return imageData;
 }
 
+/** 照片用階調：提亮陰影，保留純白，降低暗部墨點結塊。舊圖未指定時不轉換。 */
+export function applyPhotoToneCurve(imageData, curve = "none") {
+    if (curve !== "photo-readable") return imageData;
+    const d = imageData.data;
+    for (let i = 0; i < d.length; i += 4) {
+        const gray = 16 + 239 * Math.pow(d[i] / 255, 0.72);
+        d[i] = d[i + 1] = d[i + 2] = gray;
+    }
+    return imageData;
+}
+
 /** 簡單閾值二值化，level 0-255，預設 128。 */
 export function threshold(imageData, level = 128) {
     const d = imageData.data;

@@ -18,8 +18,9 @@ pre { margin: 0 0 0 24px; white-space: pre-wrap; }
 import {
     createTextElement, createSpacerElement, createDividerElement, createRowElement, createGroupElement,
     createBarcodeElement, createElement, cloneElementWithNewIds, walkElements, extractPlaceholders,
-    normalizeTextElement,
+    normalizeTextElement, createImageElement,
 } from "../js/core/document-model.js";
+import { applyPhotoToneCurve } from "../js/core/dithering.js";
 import * as tree from "../js/core/element-tree.js";
 import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
 import { renderElements, floatLineBox, MAX_CANVAS_HEIGHT } from "../js/core/renderer.js";
@@ -47,6 +48,30 @@ function sampleProject(elements) {
 // 單頁專案的頁面 elements 捷徑，跟 sampleProject 對稱，測試斷言用起來比每處都寫
 // out.project.template.pages[0].elements 精簡。
 const pageEls = (project) => project.template.pages[0].elements;
+test("照片階調保白、提亮陰影，未指定與未知值維持原樣", () => {
+    const levels = [0, 32, 64, 128, 192, 255];
+    const make = () => new ImageData(new Uint8ClampedArray(levels.flatMap(v => [v, v, v, 255])), levels.length, 1);
+    const old = make();
+    const before = Array.from(old.data);
+    applyPhotoToneCurve(old);
+    eq(Array.from(old.data), before);
+    applyPhotoToneCurve(old, "unknown");
+    eq(Array.from(old.data), before);
+    const adjusted = applyPhotoToneCurve(make(), "photo-readable");
+    eq(adjusted.data[20], 255, "純白保持白色");
+    assert(adjusted.data[4] > levels[1], "陰影提亮");
+    for (let i = 4; i < adjusted.data.length; i += 4) assert(adjusted.data[i] > adjusted.data[i - 4], "階調保持順序");
+});
+
+test("照片階調存檔後保留，獨立亮度與對比不被覆寫", () => {
+    const photo = createImageElement({ toneCurve: "photo-readable", brightness: 13, contrast: -7 });
+    const out = loadProject(serializeProject(sampleProject([photo])));
+    assert(out.ok);
+    const restored = pageEls(out.project)[0];
+    eq([restored.toneCurve, restored.brightness, restored.contrast], ["photo-readable", 13, -7]);
+    eq(createImageElement().toneCurve, "none", "一般圖片維持原始預設");
+});
+
 function plainElements() {
     const row = createRowElement([1, 2]);
     row.columns[0].push(createTextElement());

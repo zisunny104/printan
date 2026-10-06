@@ -15,7 +15,7 @@ import { getPrinterProfile, getPaperWidth } from "./printer-profiles.js";
 import { applyDataToElements } from "./merge.js";
 import { FLOAT_GAP_DOTS, resolveImageFit, resolveTextWidthMode, resolveTextHeightMode, resolveTextOverflow, resolveTextVAlign, resolveDividerDrawMode, resolveFill, resolveBorder } from "./document-model.js";
 import { dotsToMm, splitRowColumns } from "./units.js";
-import { applyThermalSimulation, toGrayscale, applyDither, orderedDitherGradient } from "./dithering.js";
+import { applyThermalSimulation, toGrayscale, applyPhotoToneCurve, applyDither, orderedDitherGradient } from "./dithering.js";
 import { renderBarcodeResult, renderBarcodeErrorCanvas } from "./barcode.js";
 import { ensureWebFonts } from "./web-fonts.js";
 
@@ -992,6 +992,7 @@ function paintImage(ctx, item, x, y, mode) {
     if (mode === "thermal") {
         const imageData = tctx.getImageData(0, 0, w, h);
         toGrayscale(imageData);
+        applyPhotoToneCurve(imageData, el.toneCurve);
         applyDither(imageData, el.ditherMode || "floyd-steinberg", el.thresholdLevel ?? 128);
         tctx.putImageData(imageData, 0, 0);
     }

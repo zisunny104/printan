@@ -46,7 +46,7 @@ export const PTAN_VERSION = 3;
  *   align?, wrap?, writingMode?, maxLines?, widthMode?, widthDots?, heightMode?, heightDots?, overflow?, vAlign?, border?, cornerRadiusDots?, collapseWhenEmpty?,
  *
  *   // type==="image"：見 createImageElement
- *   assetId?, heightDots?, align?, widthPercent?, fit?, rotation?, cropRect?, brightness?, contrast?, invert?, ditherMode?, thresholdLevel?, border?, cornerRadiusDots?,
+ *   assetId?, heightDots?, align?, widthPercent?, fit?, rotation?, cropRect?, brightness?, contrast?, invert?, toneCurve?, ditherMode?, thresholdLevel?, border?, cornerRadiusDots?,
  *
  *   // type==="float-block"：text 與 image 兩組欄位都有（見 createFloatBlockElement），額外多 imageSide；
  *   // border／cornerRadiusDots 欄位雖然存在（繼承自 text／image），但渲染時不使用（圖文段落沒有單一
