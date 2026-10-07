@@ -110,7 +110,6 @@ selfcheck_web() {
     exposed)
       CRIT=1
       fail "${BOLD}${RED}.git/ 可被下載${RESET}  ${DIM}回 200，${url}${RESET}"
-      echo
       echo "  ${BOLD}${RED}整份原始碼與提交歷史都能被任何人取得${RESET}"
       echo "  ${BOLD}修法${RESET}：貼進 nginx 的 server 區塊再 reload，或用 sudo ./deploy.sh --configure-nginx <設定檔> 自動處理"
       echo "${CYAN}${NGINX_SNIPPET}${RESET}"
@@ -202,7 +201,6 @@ if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ] && ! git merge-b
 fi
 
 if [ "$BEFORE" = "$AFTER" ]; then
-  echo
   ok "已是最新版本（${AFTER}）"
 else
   step "檢查程式"
@@ -223,7 +221,6 @@ else
         fail "$file（語法錯誤）"
         git show "FETCH_HEAD:${file}" | php -l 2>&1 | sed -n '1p' | sed 's/^/      /' || true
       done
-      echo
       fail "${#BAD[@]} 個 PHP 檔有語法錯誤，部署已中止，線上檔案沒有變動"
       exit 1
     fi
