@@ -241,7 +241,7 @@ function showStatusOnBar(status, extra) {
 function reportPrintOutcome(outcome) {
     setTimeout(() => pollAndReportPrinterStatus().catch(() => {}), 1500); // 每筆印完再讀一次：缺紙、切刀錯誤常常是這一筆才發生
     if (outcome.ok) {
-        reportJobStatus("printed", { issues: outcome.issues });
+        reportJobStatus("printed", { issues: outcome.issues, pageCount: outcome.pageCount });
         return;
     }
     if (outcome.reason === "print-failed") {
@@ -449,19 +449,43 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
             // 不該掛上這筆列印工作的 jobId。
             await startupPrinterCheck;
             if (jobId) currentJobId = jobId;
+            if (msg.requireProject === true && (!msg.project || typeof msg.project !== 'object')) {
+                reportJobStatus('print_failed', {message:'這筆工作需要指定列印專案，未送印'});
+                return;
+            }
             updateKioskStatus({ job: "printing", jobId: currentJobId });
             if (msg.project !== undefined) {
                 const result = loadProject(msg.project);
                 if (!result.ok) { reportJobStatus("print_failed", { message: result.error }); return; }
                 let project = result.project;
+                if (msg.requireProject === true) {
+                    const pages = project.template.pages;
+                    const missingImage = pages.some(page => !page.elements.some(el => {
+                        if (el.type !== 'image') return false;
+                        const variable = /^\{\{\s*([^{}]+?)\s*\}\}$/.exec(el.assetId || '')?.[1];
+                        return variable && typeof data[variable] === 'string' && data[variable].trim();
+                    }));
+                    if (!pages.length || pages.length !== msg.expectedPageCount || missingImage) {
+                        reportJobStatus('print_failed', {message:'照片檢查的圖片資料或頁數不完整，未送印'});
+                        return;
+                    }
+                }
                 if (project.embeddedFonts) {
                     await registerEmbeddedFonts(project.embeddedFonts);
                     const { embeddedFonts, ...rest } = project;
                     project = rest;
                 }
+                loadProjectIntoEditor(project);
+                state.previewData = {};
+                applyVariablesFromData(data, project);
+                schedulePreview();
+                if (document.documentElement.classList.contains(KIOSK_CLASS)) document.documentElement.classList.add(KIOSK_PREVIEW_CLASS);
                 await runAutoprintFlow(() => printSilently(project, data, { requireImages: true, continuous: true }));
                 return;
             }
+            // 自訂照片檢查不應變成下一筆正常工作的預設範本。
+            loadProjectIntoEditor(projects[0]);
+            if (isMulti) document.documentElement.classList.remove(KIOSK_PREVIEW_CLASS);
             if (msg.imageSettings && typeof msg.imageSettings === "object" && Object.keys(msg.imageSettings).length) {
                 const adjusted = projects.map(project => applyImagePrintSettings(project, msg.imageSettings));
                 if (isMulti) await runMultiAutoprintFlow(adjusted, data, gapDots);
@@ -482,7 +506,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
         });
     });
     startPrinterStatusReporting();
-    reportJobStatus("ready", { capabilities: ["job-project", "image-settings"] });
+    reportJobStatus("ready", { capabilities: ["job-project", "job-project-required", "image-settings"] });
     // 不 await：editor.js 等這個函式跑完才收起骨架畫面，印表機重連（可能卡在裝置 open）不該拖住畫面顯示。
     startupPrinterCheck = checkPrinterOnStartup().catch(() => {});
     startupPrinterCheck.then(() => pollAndReportPrinterStatus()).catch(() => {}); // 啟動檢查完先讀一次，不用等第一輪定時

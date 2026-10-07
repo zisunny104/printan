@@ -125,8 +125,10 @@ window.addEventListener("message", (event) => {
 
 ## 單次工作專案與圖片轉換（0.3.4）
 
-`ready` 另帶 `capabilities: ["job-project", "image-settings"]`。呼叫端先確認能力，避免舊版忽略新欄位而印錯內容。
+`ready` 另帶 `capabilities: ["job-project", "job-project-required", "image-settings"]`。呼叫端先確認能力，避免舊版忽略新欄位而印錯內容。
 
-`submit-job` 可另帶 `project`（標準 .ptan 物件），只供這筆工作使用；沿用既有多頁列印與每頁 `cutAfter`，不覆寫編輯器專案或常駐範本。圖片載入失敗或頁面截斷會在出紙前中止。原有 `data` 照常套用。
+`submit-job` 可另帶 `project`（標準 .ptan 物件），只供這筆工作使用；沿用既有多頁列印與每頁 `cutAfter`，會暫時顯示該工作預覽，但不更動常駐範本，下一筆正常工作恢復原本專案。圖片載入失敗或頁面截斷會在出紙前中止。原有 `data` 照常套用。
 
 一般常駐範本工作可另帶 `imageSettings`，以圖片變數名稱對應轉換設定，例如 `{ photo_a_landscape: { brightness: 10, contrast: 5, toneCurve: "photo-readable", ditherMode: "ordered", thresholdLevel: 128 } }`。只修改指定圖片元素的轉換，不影響其他圖片、文字、版面與原專案。來源與父視窗檢查維持既有協定。
+
+照片檢查可帶 `requireProject: true` 與 `expectedPageCount`，必須先確認 `job-project-required` 能力。此模式要求非空自訂專案、相符頁數及每頁照片變數；缺少資料直接回報 `print_failed`，不使用常駐範本代替。成功回報 `printed` 包含 `pageCount`。正常的資料列印與舊協定保持原有行為。

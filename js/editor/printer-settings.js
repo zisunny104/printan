@@ -159,7 +159,7 @@ export async function printSilently(project = state.project, data = state.previe
                 totalPages: results.length,
             };
         }
-        return { ok: true, issues };
+        return { ok: true, issues, pageCount: results.length };
     } catch (err) {
         releaseFailedConnection();
         updatePrinterConnectionUi();
