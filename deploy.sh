@@ -43,6 +43,41 @@ probe_git_head() {
 }
 
 NGINX_SNIPPET='    location ~ /\.git { deny all; return 404; }'
+export NGINX_SNIPPET
+
+configure_nginx_git() {
+  local site="$1" temporary previous count
+  [ "$(id -u)" = 0 ] || { fail "需要 root／sudo"; return 1; }
+  [ -n "$site" ] || { fail "用法：./deploy.sh --configure-nginx <Nginx 網站設定檔>"; return 1; }
+  site="$(realpath "$site" 2>/dev/null)" || { fail "找不到檔案：$1"; return 1; }
+  [ -f "$site" ] || { fail "找不到檔案：$site"; return 1; }
+  if grep -q 'BEGIN KoiLiSu managed' "$site"; then
+    ok "已有 KoiLiSu 管理的區塊，略過  ${DIM}${site}${RESET}"
+    return 0
+  fi
+  count="$(grep -cE '^[[:space:]]*server[[:space:]]*\{[[:space:]]*$' "$site" || true)"
+  [ "$count" = 1 ] || { fail "須有唯一的 server { 區塊（找到 ${count} 個），未變更"; return 1; }
+  temporary="$(mktemp "$(dirname "$site")/.koilisu.XXXXXX")"
+  previous="$(mktemp)"
+  cp -p "$site" "$previous"
+  [ -e "$site.koilisu-backup" ] || cp -p "$site" "$site.koilisu-backup"
+  awk '
+    { print }
+    !done && $0 ~ /^[[:space:]]*server[[:space:]]*\{[[:space:]]*$/ { print "    # BEGIN KoiLiSu managed"; print ENVIRON["NGINX_SNIPPET"]; print "    # END KoiLiSu managed"; done=1 }
+  ' "$site" > "$temporary"
+  chmod --reference="$site" "$temporary"
+  chown --reference="$site" "$temporary" 2>/dev/null || true
+  if cmp -s "$temporary" "$site"; then rm -f "$temporary"; else mv -f "$temporary" "$site"; fi
+  if ! nginx -t; then
+    cp -p "$previous" "$site"
+    rm -f "$previous"
+    fail "Nginx 設定檢查失敗，已還原，未重載"
+    return 1
+  fi
+  rm -f "$previous"
+  systemctl reload nginx
+  ok "已寫入 .git 封鎖規則並重載 Nginx"
+}
 
 # 讀檢查網址：環境變數優先，其次檔案；都沒有就輸出空字串
 read_check_url() {
@@ -95,7 +130,7 @@ selfcheck_web() {
       fail "${BOLD}${RED}.git/ 可被下載${RESET}  ${DIM}回 200，${url}${RESET}"
       echo
       echo "  ${BOLD}${RED}整份原始碼與提交歷史都能被任何人取得${RESET}"
-      echo "  ${BOLD}修法${RESET}：貼進 nginx 的 server 區塊，再 reload"
+      echo "  ${BOLD}修法${RESET}：貼進 nginx 的 server 區塊再 reload，或用 sudo ./deploy.sh --configure-nginx <設定檔> 自動處理"
       echo "${CYAN}${NGINX_SNIPPET}${RESET}"
       echo "  ${DIM}完成後執行 ./deploy.sh --check-only 重測${RESET}" ;;
     unreach)
@@ -123,10 +158,14 @@ while [ $# -gt 0 ]; do
     --set-check-url)
       set_check_url "${2:-}" || exit 2
       exit 0 ;;
+    --configure-nginx)
+      configure_nginx_git "${2:-}" || exit 2
+      exit 0 ;;
     help|-h|--help)
-      echo "用法：./deploy.sh [--check-only] [--set-check-url URL]"
+      echo "用法：./deploy.sh [--check-only] [--set-check-url URL] [--configure-nginx FILE]"
       echo "  --check-only          不更新程式碼，只跑網站自我檢查"
       echo "  --set-check-url URL   儲存檢查網址，例如 ${EXAMPLE_URL}"
+      echo "  --configure-nginx FILE 寫入 .git 封鎖規則並 reload Nginx（需 root）"
       echo "環境變數：DEPLOY_BRANCH、DEPLOY_RELOAD_CMD、DEPLOY_CHECK_URL"
       exit 0 ;;
     *) fail "未知參數：$1；請執行 ./deploy.sh help"; exit 2 ;;
