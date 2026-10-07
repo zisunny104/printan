@@ -111,3 +111,5 @@
 **網址**：https://toka.dev/koilisu/printan
 
 照片熱感階調可選擇提亮暗部並保留亮部，詳見 [照片階調設定](docs/photo-tone.md)。
+
+部署腳本不執行語法檢查或完整測試；請在提交前或 CI 執行專案檢查。

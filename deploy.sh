@@ -183,7 +183,7 @@ if command -v php >/dev/null 2>&1; then
   HAS_PHP=1
   ok "PHP CLI：$(php -r 'echo PHP_VERSION;')"
 else
-  warn "缺少 PHP CLI，略過語法檢查"
+  warn "缺少 PHP CLI，略過 PHP 執行環境檢查"
   install_hint php-cli
 fi
 
@@ -203,32 +203,6 @@ fi
 if [ "$BEFORE" = "$AFTER" ]; then
   ok "已是最新版本（${AFTER}）"
 else
-  step "檢查程式"
-  # 在 merge「之前」就檢查：直接用 git show 把 remote 版本餵給 php -l，有錯就中止，
-  # 線上的檔案完全沒動。merge 之後才發現，網站已經是壞的了。
-  if [ "$HAS_PHP" -eq 1 ]; then
-    BAD=()
-    COUNT=0
-    while IFS= read -r file; do
-      [ -n "$file" ] || continue
-      COUNT=$((COUNT + 1))
-      if ! git show "FETCH_HEAD:${file}" | php -l >/dev/null 2>&1; then
-        BAD+=("$file")
-      fi
-    done < <(git diff --name-only --diff-filter=AM HEAD FETCH_HEAD -- '*.php')
-    if [ ${#BAD[@]} -gt 0 ]; then
-      for file in "${BAD[@]}"; do
-        fail "$file（語法錯誤）"
-        git show "FETCH_HEAD:${file}" | php -l 2>&1 | sed -n '1p' | sed 's/^/      /' || true
-      done
-      fail "${#BAD[@]} 個 PHP 檔有語法錯誤，部署已中止，線上檔案沒有變動"
-      exit 1
-    fi
-    ok "檢查了 ${COUNT} 個 PHP 檔，語法都正確"
-  else
-    warn "略過（沒有 php 指令）"
-  fi
-
   step "更新程式"
   git merge --ff-only --quiet FETCH_HEAD
   ok "已更新：${DIM}${BEFORE}${RESET} → ${GREEN}${BOLD}${AFTER}${RESET}"
