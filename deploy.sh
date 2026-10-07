@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 # 有顏色的終端機才上色，避免 log 檔案裡混進一堆 ANSI 逃脫碼
-if [ -t 1 ]; then
+if [ -t 1 ] && [ -z "${NO_COLOR+x}" ] && [ "${TERM:-}" != "dumb" ]; then
   BOLD=$'\033[1m'; DIM=$'\033[2m'
   RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; CYAN=$'\033[36m'
   RESET=$'\033[0m'
@@ -11,10 +11,17 @@ else
   BOLD=''; DIM=''; RED=''; GREEN=''; YELLOW=''; CYAN=''; RESET=''
 fi
 
-step() { echo "${BOLD}${CYAN}==>${RESET} ${BOLD}$1${RESET}"; }
-ok()   { echo "  ${GREEN}✓${RESET} $1"; }
-warn() { echo "  ${YELLOW}!${RESET} $1"; }
-fail() { echo "  ${RED}✗${RESET} $1"; }
+step() { printf '%s%s%s%s\n' "$BOLD" "$CYAN" "$1" "$RESET"; }
+ok()   { printf '  %s✓ %s%s\n' "$GREEN" "$1" "$RESET"; }
+warn() { printf '  %s! %s%s\n' "$YELLOW" "$1" "$RESET"; }
+fail() { printf '  %s✗ %s%s\n' "$RED" "$1" "$RESET"; }
+install_hint() { printf '  %sUbuntu/Debian 安裝：sudo apt install %s%s\n' "$CYAN" "$1" "$RESET"; }
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 && return 0
+  fail "缺少 $1，部署已中止"
+  install_hint "$2"
+  return 1
+}
 
 # ── 網站自我檢查：部署後執行，也可單獨跑 ./deploy.sh --check-only ──────────────────
 # 伺服器是 git pull 原地更新，Nginx 沒擋 .git/ 就能被下載整份原始碼與歷史。
@@ -69,7 +76,8 @@ selfcheck_web() {
     return 0
   fi
   if ! command -v curl >/dev/null 2>&1; then
-    warn "找不到 curl，略過外洩檢查"
+    warn "缺少 curl，略過網站檢查"
+    install_hint curl
     return 0
   fi
   while [ "${base%/}" != "$base" ]; do base="${base%/}"; done
@@ -115,13 +123,13 @@ while [ $# -gt 0 ]; do
     --set-check-url)
       set_check_url "${2:-}" || exit 2
       exit 0 ;;
-    -h|--help)
+    help|-h|--help)
       echo "用法：./deploy.sh [--check-only] [--set-check-url URL]"
       echo "  --check-only          不更新程式碼，只跑網站自我檢查"
       echo "  --set-check-url URL   儲存檢查網址，例如 ${EXAMPLE_URL}"
       echo "環境變數：DEPLOY_BRANCH、DEPLOY_RELOAD_CMD、DEPLOY_CHECK_URL"
       exit 0 ;;
-    *) fail "未知參數：$1"; exit 2 ;;
+    *) fail "未知參數：$1；請執行 ./deploy.sh help"; exit 2 ;;
   esac
   shift
 done
@@ -137,27 +145,30 @@ BRANCH="${DEPLOY_BRANCH:-main}"
 # printan 是純 PHP 頁面殼＋瀏覽器端 JS：沒有資料庫、沒有必要的 PHP 擴充套件、
 # 也沒有需要 PHP 寫入的目錄，所以不需要檢查擴充套件或修正目錄權限。
 
-step "檢查 working tree"
+require_cmd git git
+
+step "檢查本機變更"
 # 伺服器上的檔案被手動改過時，git fast-forward merge 會中途失敗；先擋下來，講清楚是哪些檔案。
 DIRTY="$(git status --porcelain --untracked-files=no)"
 if [ -n "$DIRTY" ]; then
-  fail "有尚未 commit 的修改，部署已中止（怕蓋掉伺服器上的手動修改）："
+  fail "有未提交的修改，部署已中止："
   sed 's/^/    /' <<< "$DIRTY"
-  echo "  ${DIM}確認不需要之後，用 git checkout -- <檔案> 還原，再重新執行 ./deploy.sh${RESET}"
+  echo "  ${DIM}請先提交或備份上述修改，再執行 ./deploy.sh${RESET}"
   exit 1
 fi
-ok "沒有未 commit 的修改"
+ok "沒有未提交的修改"
 
 HAS_PHP=0
 if command -v php >/dev/null 2>&1; then
   HAS_PHP=1
   ok "PHP CLI：$(php -r 'echo PHP_VERSION;')"
 else
-  warn "找不到 php 指令，會略過語法檢查：有語法錯誤的 PHP 檔不會被擋在部署之前（網頁的 PHP-FPM 不受影響）"
+  warn "缺少 PHP CLI，略過語法檢查"
+  install_hint php-cli
 fi
 
 echo
-step "Fetch 最新程式碼"
+step "取得最新程式碼"
 BEFORE=$(git rev-parse --short HEAD)
 git fetch --quiet origin "$BRANCH"
 AFTER=$(git rev-parse --short FETCH_HEAD)
@@ -232,6 +243,6 @@ if [ "$HAS_PHP" -eq 1 ]; then
   VERSION="$(php -r '$c = require "config.php"; echo $c["version"] ?? "?";' 2>/dev/null || echo '?')"
   echo "  應用版本：${BOLD}v${VERSION}${RESET}"
 fi
-echo "  目前 commit：${BOLD}$(git rev-parse --short HEAD)${RESET}"
+echo "  目前提交：${BOLD}$(git rev-parse --short HEAD)${RESET}"
 echo "  完成時間：${DIM}$(date '+%Y-%m-%d %H:%M:%S')${RESET}"
 [ "$CRIT" -eq 0 ] || { echo; fail "自我驗證發現外洩，請依上面修法處理"; exit 1; }
