@@ -372,8 +372,8 @@ export function createImageElement(overrides = {}) {
         brightness: 0, // -100..100
         contrast: 0, // -100..100
         invert: false,
-        toneCurve: "none", // none | photo-readable，僅套用熱感照片階調
-        ditherMode: "floyd-steinberg", // floyd-steinberg | ordered | threshold，決定熱感模式下怎麼轉成網點
+        toneCurve: "none", // none | photo-readable | photo-detail，僅套用熱感照片階調
+        ditherMode: "floyd-steinberg", // floyd-steinberg | serpentine | blue-noise | ordered | threshold，決定熱感模式下怎麼轉成網點
         thresholdLevel: 128, // 僅 ditherMode === "threshold" 時使用，0-255
         border: createBorder(), // 圖片外框，見 createBorder
         cornerRadiusDots: 0, // 圓角半徑：>0 時圖片本身也會被裁成圓角（不只是外框轉角），見 renderer.js paintImage

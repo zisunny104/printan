@@ -205,7 +205,7 @@ function buildFineDetailStrip(widthDots) {
 // 並排比較密度過渡的效果與網點紋理差異（熱感紙沒有真正的灰階，看的就是這個）。
 const DITHER_SWATCH_H = { grad: 56, label: 18 };
 function buildDitherSwatch(widthDots) {
-    const modes = [["floyd-steinberg", "誤差擴散"], ["ordered", "網點"], ["threshold", "閾值"]];
+    const modes = [["floyd-steinberg", "誤差擴散"], ["serpentine", "來回掃描"], ["blue-noise", "藍噪聲"], ["ordered", "網點"], ["threshold", "閾值"]];
     const { grad: gradH, label: labelH } = DITHER_SWATCH_H;
     const { canvas, ctx } = makeCanvas(widthDots, gradH + labelH, { willReadFrequently: true });
     const cellW = Math.floor(widthDots / modes.length);
