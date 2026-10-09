@@ -137,4 +137,12 @@ window.addEventListener("message", (event) => {
 
 一般常駐範本工作可另帶 `imageSettings`，以圖片變數名稱對應轉換設定，例如 `{ photo_a_landscape: { brightness: 10, contrast: 5, toneCurve: "photo-readable", ditherMode: "ordered", thresholdLevel: 128 } }`。只修改指定圖片元素的轉換，不影響其他圖片、文字、版面與原專案。來源與父視窗檢查維持既有協定。
 
+### 照片處理組合（`imagePreset`）
+
+`ready` 的 `capabilities` 含 `image-presets` 時，另帶 `imagePresets: [{ id, label }]`（可選的組合，直接拿來做下拉選單）與 `defaultImagePreset`（目前的預設組合 id）。
+
+`submit-job` 可帶 `imagePreset: "<id>"`，對範本（或這筆 `project`）裡所有綁變數的圖片套用該組合的階調與取樣方式；亮度、對比與沒綁變數的圖片（Logo 等）不動。沒帶、帶 `"default"` 或不認得的值，都套用 printan 的預設組合，所以呼叫端的下拉選單只要有一個「預設」選項（送 `"default"` 或不送），之後 printan 換預設時呼叫端不必改。預設組合為 `classic` 時完全不改範本裡各圖片自己的設定。`imageSettings` 仍可同時帶，會在組合之後套用，所以逐一變數的設定優先。
+
+目前的組合：`classic`（原始＋誤差擴散）、`detail-blue-noise`（細節階調＋藍噪聲）、`detail-serpentine`（細節階調＋來回掃描）。
+
 照片檢查可帶 `requireProject: true` 與 `expectedPageCount`，必須先確認 `job-project-required` 能力。此模式要求非空自訂專案、相符頁數及每頁照片變數；缺少資料直接回報 `print_failed`，不使用常駐範本代替。成功回報 `printed` 包含 `pageCount`。正常的資料列印與舊協定保持原有行為。
