@@ -11,20 +11,40 @@ export function toGrayscale(imageData) {
     return imageData;
 }
 
-const PHOTO_DETAIL_CLIP = 0.01; // 自動色階：最暗、最亮各 1% 的像素拉到端點
-const PHOTO_DETAIL_RANGE = [10, 245]; // 輸出灰階範圍：暗部不糊成純黑、亮部保留一點墨點不全白
+const PHOTO_DETAIL_GAMMA = 1.7; // 抖色前的線性化指數：網點覆蓋率對應的是線性亮度，灰階值直接當覆蓋率會讓中間調與亮部偏白
+const PHOTO_DETAIL_CLARITY = 0.8; // 局部對比強度：把大範圍的亮暗差拉開，主體才不會融進背景
+const PHOTO_DETAIL_CLARITY_RADIUS = 11; // 局部對比的模糊半徑（點）
 const PHOTO_DETAIL_SHARPEN = 0.8;
 
-function percentileGray(d, fraction) {
-    const hist = new Uint32Array(256);
-    for (let i = 0; i < d.length; i += 4) hist[Math.round(d[i])] += 1;
-    const target = (d.length / 4) * fraction;
-    let sum = 0;
-    for (let v = 0; v < 256; v++) {
-        sum += hist[v];
-        if (sum >= target) return v;
+/** 單通道三次方塊模糊（近似高斯），邊緣沿用最近的像素。 */
+function blurGray(src, width, height, radius) {
+    const size = 2 * radius + 1;
+    let from = src;
+    let to = new Float32Array(src.length);
+    for (let pass = 0; pass < 3; pass++) {
+        for (let y = 0; y < height; y++) {
+            const row = y * width;
+            let sum = 0;
+            for (let k = -radius; k <= radius; k++) sum += from[row + Math.min(width - 1, Math.max(0, k))];
+            for (let x = 0; x < width; x++) {
+                to[row + x] = sum / size;
+                sum += from[row + Math.min(width - 1, x + radius + 1)] - from[row + Math.max(0, x - radius)];
+            }
+        }
+        from = to;
+        to = new Float32Array(src.length);
+        for (let x = 0; x < width; x++) {
+            let sum = 0;
+            for (let k = -radius; k <= radius; k++) sum += from[Math.min(height - 1, Math.max(0, k)) * width + x];
+            for (let y = 0; y < height; y++) {
+                to[y * width + x] = sum / size;
+                sum += from[Math.min(height - 1, y + radius + 1) * width + x] - from[Math.max(0, y - radius) * width + x];
+            }
+        }
+        from = to;
+        to = new Float32Array(src.length);
     }
-    return 255;
+    return from;
 }
 
 /** 3×3 反銳化遮罩（輸入已是灰階）：在縮到列印點數之後做，轉成黑白前先把邊緣拉開，細節才留得住。 */
@@ -47,19 +67,17 @@ function sharpenGray(imageData, amount) {
     }
 }
 
-/** 照片用階調：photo-readable＝提亮陰影、保留純白；photo-detail＝自動色階＋壓縮到 10–245＋銳化。舊圖未指定時不轉換。 */
+/** 照片用階調：photo-readable＝提亮陰影、保留純白；photo-detail＝局部對比＋線性化（抖色前）＋銳化。舊圖未指定時不轉換。 */
 export function applyPhotoToneCurve(imageData, curve = "none") {
     const d = imageData.data;
     if (curve === "photo-detail") {
-        const lo = percentileGray(d, PHOTO_DETAIL_CLIP);
-        const hi = percentileGray(d, 1 - PHOTO_DETAIL_CLIP);
-        const [outLo, outHi] = PHOTO_DETAIL_RANGE;
-        // 整張幾乎一色（空白、純色）時拉伸只會放大雜訊，直接跳過
-        const span = hi - lo >= 32 ? hi - lo : 0;
-        for (let i = 0; i < d.length; i += 4) {
-            const s = span ? Math.max(0, Math.min(1, (d[i] - lo) / span)) : d[i] / 255;
-            const gray = outLo + (outHi - outLo) * Math.pow(s, 0.8);
-            d[i] = d[i + 1] = d[i + 2] = gray;
+        const { width, height } = imageData;
+        const gray = new Float32Array(width * height);
+        for (let p = 0, i = 0; p < gray.length; p++, i += 4) gray[p] = d[i];
+        const base = blurGray(gray, width, height, PHOTO_DETAIL_CLARITY_RADIUS);
+        for (let p = 0, i = 0; p < gray.length; p++, i += 4) {
+            const local = Math.max(0, Math.min(255, gray[p] + PHOTO_DETAIL_CLARITY * (gray[p] - base[p])));
+            d[i] = d[i + 1] = d[i + 2] = 255 * Math.pow(local / 255, PHOTO_DETAIL_GAMMA);
         }
         sharpenGray(imageData, PHOTO_DETAIL_SHARPEN);
         return imageData;

@@ -64,15 +64,21 @@ test("照片階調保白、提亮陰影，未指定與未知值維持原樣", ()
     for (let i = 4; i < adjusted.data.length; i += 4) assert(adjusted.data[i] > adjusted.data[i - 4], "階調保持順序");
 });
 
-test("photo-detail 階調：自動色階拉開暗亮、輸出落在 10–245、空白圖不被放大雜訊", () => {
-    const ramp = Array.from({ length: 64 }, (_, i) => 80 + i); // 只佔中間一小段灰階的低對比照片
-    const img = new ImageData(new Uint8ClampedArray(ramp.flatMap((v) => [v, v, v, 255])), ramp.length, 1);
-    applyPhotoToneCurve(img, "photo-detail");
-    const out = Array.from({ length: ramp.length }, (_, i) => img.data[i * 4]);
-    assert(out[out.length - 2] - out[1] > 140, `對比被拉開：${out[1]} → ${out[out.length - 2]}`);
-    const flat = new ImageData(new Uint8ClampedArray(Array.from({ length: 16 }, () => [200, 200, 200, 255]).flat()), 16, 1);
+test("photo-detail 階調：線性化讓中間調變暗、純白維持、整張同色維持同色、局部邊緣被拉開", () => {
+    const flat = new ImageData(new Uint8ClampedArray(Array.from({ length: 64 }, () => [128, 128, 128, 255]).flat()), 8, 8);
     applyPhotoToneCurve(flat, "photo-detail");
-    assert(new Set(Array.from({ length: 16 }, (_, i) => flat.data[i * 4])).size === 1, "整張同色仍是同一個灰階");
+    const mid = flat.data[0];
+    assert(mid < 100 && mid > 60, `中灰線性化後變暗：${mid}`);
+    assert(new Set(Array.from({ length: 64 }, (_, i) => flat.data[i * 4])).size === 1, "整張同色仍是同一個灰階");
+    const white = new ImageData(new Uint8ClampedArray(Array.from({ length: 64 }, () => [255, 255, 255, 255]).flat()), 8, 8);
+    applyPhotoToneCurve(white, "photo-detail");
+    eq(white.data[0], 255, "純白保持白色");
+    const edge = new ImageData(new Uint8ClampedArray(Array.from({ length: 32 * 8 }, (_, i) => (i % 32 < 16 ? [100, 100, 100, 255] : [160, 160, 160, 255])).flat()), 32, 8);
+    const before = [100, 160];
+    applyPhotoToneCurve(edge, "photo-detail");
+    const darkSide = edge.data[(3 * 32 + 12) * 4], lightSide = edge.data[(3 * 32 + 19) * 4];
+    const expectedGap = 255 * (Math.pow(160 / 255, 1.7) - Math.pow(100 / 255, 1.7));
+    assert(lightSide - darkSide > expectedGap, `邊緣兩側差距被拉開：${lightSide - darkSide} > ${expectedGap.toFixed(1)} (${before})`);
 });
 
 test("藍噪聲與來回掃描抖色：墨點密度貼近灰階、結果固定、輸出只有黑白", () => {

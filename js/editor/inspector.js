@@ -891,7 +891,7 @@ function buildImageInspector(panel, el) {
         body.appendChild(sliderField("對比", el.contrast ?? 0, -100, 100, (v) => { el.contrast = v; onModelChange({ skipInspector: true }); }));
         body.appendChild(field(null, checkboxInput(!!el.invert, (v) => { el.invert = v; onModelChange({ skipInspector: true }); }, "反相")));
         body.appendChild(field("熱感照片階調", selectInput(
-            [["none", "原始"], ["photo-readable", "易辨識（提亮暗部）"], ["photo-detail", "細節（自動色階＋銳化）"]],
+            [["none", "原始"], ["photo-readable", "易辨識（提亮暗部）"], ["photo-detail", "細節（局部對比＋線性化＋銳化）"]],
             el.toneCurve || "none",
             (v) => { el.toneCurve = v; onModelChange(); },
         )));
