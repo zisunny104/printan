@@ -21,6 +21,7 @@ import {
     normalizeTextElement, createImageElement,
 } from "../js/core/document-model.js";
 import { applyDither, applyPhotoToneCurve } from "../js/core/dithering.js";
+import { applyImagePreset, resolveImagePreset, DEFAULT_IMAGE_PRESET } from "../js/core/image-print-settings.js";
 import * as tree from "../js/core/element-tree.js";
 import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
 import { renderElements, floatLineBox, MAX_CANVAS_HEIGHT } from "../js/core/renderer.js";
@@ -93,6 +94,22 @@ test("藍噪聲與來回掃描抖色：墨點密度貼近灰階、結果固定�
     applyDither(a, "blue-noise");
     applyDither(b, "blue-noise");
     eq(Array.from(a.data), Array.from(b.data), "同一張圖每次抖色結果相同");
+});
+
+test("照片處理組合：只改綁變數的圖片，default／不認得的值落到預設組合", () => {
+    const photo = createImageElement({ assetId: "{{photo}}", brightness: 9 });
+    const logo = createImageElement({ assetId: "asset-logo" });
+    const project = sampleProject([photo, logo]);
+    eq(resolveImagePreset("default"), DEFAULT_IMAGE_PRESET);
+    eq(resolveImagePreset("nope"), DEFAULT_IMAGE_PRESET);
+    eq(resolveImagePreset(undefined), DEFAULT_IMAGE_PRESET);
+    eq(resolveImagePreset("__proto__"), DEFAULT_IMAGE_PRESET);
+    const out = applyImagePreset(project, "detail-blue-noise");
+    const [p, l] = pageEls(out);
+    eq([p.toneCurve, p.ditherMode, p.brightness], ["photo-detail", "blue-noise", 9]);
+    eq([l.toneCurve, l.ditherMode], ["none", "floyd-steinberg"], "沒綁變數的圖片不動");
+    eq(pageEls(project)[0].toneCurve, "none", "不修改原專案");
+    assert(applyImagePreset(project, "classic") === project, "classic 不改範本，原物件回傳");
 });
 
 test("照片階調存檔後保留，獨立亮度與對比不被覆寫", () => {

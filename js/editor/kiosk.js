@@ -55,7 +55,7 @@ import { loadProject } from "../core/schema.js";
 import { registerEmbeddedFonts } from "../core/web-fonts.js";
 import { describePrinterError } from "../core/printer-adapter.js";
 import { renderProjects } from "../core/compose.js";
-import { applyImagePrintSettings } from "../core/image-print-settings.js";
+import { applyImagePreset, applyImagePrintSettings, DEFAULT_IMAGE_PRESET, IMAGE_PRESETS } from "../core/image-print-settings.js";
 import { getBaseProfile } from "./editor.js";
 import { els, state } from "./context.js";
 import { attemptSilentPrinterReconnect, connectPrinter, pollPrinterStatusIfIdle, printComposedSilently, printSilently } from "./printer-settings.js";
@@ -480,6 +480,10 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
                     const { embeddedFonts, ...rest } = project;
                     project = rest;
                 }
+                project = applyImagePreset(project, msg.imagePreset);
+                if (msg.imageSettings && typeof msg.imageSettings === "object" && Object.keys(msg.imageSettings).length) {
+                    project = applyImagePrintSettings(project, msg.imageSettings);
+                }
                 loadProjectIntoEditor(project);
                 state.previewData = {};
                 applyVariablesFromData(data, project);
@@ -491,8 +495,10 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
             // 自訂照片檢查不應變成下一筆正常工作的預設範本。
             loadProjectIntoEditor(projects[0]);
             if (isMulti) document.documentElement.classList.remove(KIOSK_PREVIEW_CLASS);
-            if (msg.imageSettings && typeof msg.imageSettings === "object" && Object.keys(msg.imageSettings).length) {
-                const adjusted = projects.map(project => applyImagePrintSettings(project, msg.imageSettings));
+            const hasImageSettings = msg.imageSettings && typeof msg.imageSettings === "object" && Object.keys(msg.imageSettings).length;
+            const presetProjects = projects.map(project => applyImagePreset(project, msg.imagePreset));
+            if (hasImageSettings || presetProjects.some((project, i) => project !== projects[i])) {
+                const adjusted = hasImageSettings ? presetProjects.map(project => applyImagePrintSettings(project, msg.imageSettings)) : presetProjects;
                 if (isMulti) await runMultiAutoprintFlow(adjusted, data, gapDots);
                 else await runAutoprintFlow(() => printSilently(adjusted[0], data));
                 return;
@@ -511,7 +517,11 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
         });
     });
     startPrinterStatusReporting();
-    reportJobStatus("ready", { capabilities: ["job-project", "job-project-required", "image-settings"] });
+    reportJobStatus("ready", {
+        capabilities: ["job-project", "job-project-required", "image-settings", "image-presets"],
+        imagePresets: Object.entries(IMAGE_PRESETS).map(([id, preset]) => ({ id, label: preset.label })),
+        defaultImagePreset: DEFAULT_IMAGE_PRESET,
+    });
     // 不 await：editor.js 等這個函式跑完才收起骨架畫面，印表機重連（可能卡在裝置 open）不該拖住畫面顯示。
     startupPrinterCheck = checkPrinterOnStartup().catch(() => {});
     startupPrinterCheck.then(() => pollAndReportPrinterStatus()).catch(() => {}); // 啟動檢查完先讀一次，不用等第一輪定時
