@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>照片取樣方式對照</title>
+<style>
+body { font-family: sans-serif; margin: 1rem; }
+.row { display: flex; flex-wrap: wrap; gap: 1rem; }
+figure { margin: 0; }
+canvas { border: 1px solid #ccc; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<h1>照片取樣方式對照</h1>
+<p>選一張照片，同一寬度（點數）並排呈現五種處理，放大看網點。手動測試用，不屬於自動測試。</p>
+<p><input type="file" id="file" accept="image/*"> 寬度 <input type="number" id="width" value="576" min="64" max="1024"> 點</p>
+<div class="row" id="out"></div>
+<script type="module">
+import { applyDither, applyPhotoToneCurve, toGrayscale } from "../js/core/dithering.js";
+
+const VARIANTS = [
+    ["目前（原始＋誤差擴散）", "none", "floyd-steinberg"],
+    ["來回掃描誤差擴散", "none", "serpentine"],
+    ["藍噪聲", "none", "blue-noise"],
+    ["細節階調＋藍噪聲", "photo-detail", "blue-noise"],
+    ["細節階調＋來回掃描", "photo-detail", "serpentine"],
+];
+
+async function render(file) {
+    const width = Number(document.getElementById("width").value) || 576;
+    const bitmap = await createImageBitmap(file);
+    const height = Math.round((bitmap.height * width) / bitmap.width);
+    const out = document.getElementById("out");
+    out.replaceChildren();
+    for (const [label, tone, dither] of VARIANTS) {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, width, height);
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        const imageData = ctx.getImageData(0, 0, width, height);
+        toGrayscale(imageData);
+        applyPhotoToneCurve(imageData, tone);
+        applyDither(imageData, dither, 128);
+        ctx.putImageData(imageData, 0, 0);
+        const figure = document.createElement("figure");
+        const caption = document.createElement("figcaption");
+        caption.textContent = label;
+        figure.append(canvas, caption);
+        out.append(figure);
+    }
+}
+
+document.getElementById("file").addEventListener("change", (e) => e.target.files[0] && render(e.target.files[0]));
+</script>
+</body>
+</html>

@@ -20,7 +20,7 @@ import {
     createBarcodeElement, createElement, cloneElementWithNewIds, walkElements, extractPlaceholders,
     normalizeTextElement, createImageElement,
 } from "../js/core/document-model.js";
-import { applyPhotoToneCurve } from "../js/core/dithering.js";
+import { applyDither, applyPhotoToneCurve } from "../js/core/dithering.js";
 import * as tree from "../js/core/element-tree.js";
 import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
 import { renderElements, floatLineBox, MAX_CANVAS_HEIGHT } from "../js/core/renderer.js";
@@ -61,6 +61,38 @@ test("照片階調保白、提亮陰影，未指定與未知值維持原樣", ()
     eq(adjusted.data[20], 255, "純白保持白色");
     assert(adjusted.data[4] > levels[1], "陰影提亮");
     for (let i = 4; i < adjusted.data.length; i += 4) assert(adjusted.data[i] > adjusted.data[i - 4], "階調保持順序");
+});
+
+test("photo-detail 階調：自動色階拉開暗亮、輸出落在 10–245、空白圖不被放大雜訊", () => {
+    const ramp = Array.from({ length: 64 }, (_, i) => 80 + i); // 只佔中間一小段灰階的低對比照片
+    const img = new ImageData(new Uint8ClampedArray(ramp.flatMap((v) => [v, v, v, 255])), ramp.length, 1);
+    applyPhotoToneCurve(img, "photo-detail");
+    const out = Array.from({ length: ramp.length }, (_, i) => img.data[i * 4]);
+    assert(out[out.length - 2] - out[1] > 140, `對比被拉開：${out[1]} → ${out[out.length - 2]}`);
+    const flat = new ImageData(new Uint8ClampedArray(Array.from({ length: 16 }, () => [200, 200, 200, 255]).flat()), 16, 1);
+    applyPhotoToneCurve(flat, "photo-detail");
+    assert(new Set(Array.from({ length: 16 }, (_, i) => flat.data[i * 4])).size === 1, "整張同色仍是同一個灰階");
+});
+
+test("藍噪聲與來回掃描抖色：墨點密度貼近灰階、結果固定、輸出只有黑白", () => {
+    for (const mode of ["blue-noise", "serpentine"]) {
+        for (const gray of [32, 128, 224]) {
+            const img = new ImageData(new Uint8ClampedArray(Array.from({ length: 128 * 128 }, () => [gray, gray, gray, 255]).flat()), 128, 128);
+            applyDither(img, mode, 128);
+            let black = 0;
+            for (let i = 0; i < img.data.length; i += 4) {
+                assert(img.data[i] === 0 || img.data[i] === 255, "只有純黑或純白");
+                if (img.data[i] === 0) black += 1;
+            }
+            const ratio = black / (128 * 128);
+            assert(Math.abs(ratio - (1 - gray / 255)) < 0.02, `${mode} 灰階 ${gray} 墨點比例 ${ratio.toFixed(3)}`);
+        }
+    }
+    const make = () => new ImageData(new Uint8ClampedArray(Array.from({ length: 80 * 80 }, (_, i) => { const v = 40 + (i % 80); return [v, v, v, 255]; }).flat()), 80, 80);
+    const a = make(), b = make();
+    applyDither(a, "blue-noise");
+    applyDither(b, "blue-noise");
+    eq(Array.from(a.data), Array.from(b.data), "同一張圖每次抖色結果相同");
 });
 
 test("照片階調存檔後保留，獨立亮度與對比不被覆寫", () => {

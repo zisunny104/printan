@@ -13,8 +13,8 @@ export function applyImagePrintSettings(project, byVariable = {}) {
                     const min = key === "thresholdLevel" ? 0 : -100, max = key === "thresholdLevel" ? 255 : 100;
                     if (Number.isInteger(settings[key]) && settings[key] >= min && settings[key] <= max) el[key] = settings[key];
                 }
-                if (["none", "photo-readable"].includes(settings.toneCurve)) el.toneCurve = settings.toneCurve;
-                if (["floyd-steinberg", "ordered", "threshold"].includes(settings.ditherMode)) el.ditherMode = settings.ditherMode;
+                if (["none", "photo-readable", "photo-detail"].includes(settings.toneCurve)) el.toneCurve = settings.toneCurve;
+                if (["floyd-steinberg", "serpentine", "blue-noise", "ordered", "threshold"].includes(settings.ditherMode)) el.ditherMode = settings.ditherMode;
             }
             for (const children of childArrays(el)) apply(children);
         }
