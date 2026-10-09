@@ -63,6 +63,12 @@ iframeEl.contentWindow.postMessage(
   圖片變數（如 `photoA`）是圖片元素的 assetId 用 `{{var}}` 佔位，值要填一個**`https://` 開頭**
   的圖片網址（`http://`、`data:` 以外的其他 scheme 都不會被接受，見 `renderer.js` 的
   `resolveImage`）；跟你的網站要同源或有正確的 CORS 設定，不然圖片載入會失敗被略過。
+- 文字變數的值也可以是 run 陣列，讓同一個變數內混用粗體、斜體、刪除線：
+  `note: [{ text: "Total ", bold: true }, { text: "12", italic: true }, { text: " (old)", strikethrough: true }]`。
+  每項只能有 `text`（字串）與選填的布林 `bold`／`italic`／`strikethrough`，格式不符的陣列會被忽略。
+  範本裡該 run 的文字必須剛好是單一 `{{note}}` 才會展開成多個 run，並沿用原 run 的字型、字級、底線等屬性
+  （粗體／斜體／刪除線取項目值或原 run 值）；`text` 為空字串的項目會略過。若 `{{note}}` 夾在其他文字中，
+  則只把各項 `text` 串接成純文字，不套用樣式。
 - `data` 裡沒對到範本變數名稱的鍵會被忽略，不會報錯。
 - printan 只接受 `event.origin` 等於 `parentOrigin`、`event.source` 是自己的父視窗的訊息，其餘
   一律忽略——不用擔心其他分頁或第三方腳本亂塞資料進來。

@@ -38,6 +38,8 @@
 //     { type: "printan:submit-job", jobId, data: { 變數名: 值 } }
 //     data 裡的鍵值比照範本 {{var}} 的規則套進 previewData（文字變數直接代換；照片變數是
 //     圖片元素 assetId 用 {{var}} 佔位，值需為 https:// 開頭網址，見 renderer.js resolveImage）。
+//     文字變數的值也可以是 run 陣列 [{ text, bold?, italic?, strikethrough? }]，見 merge.js applyDataToElements；
+//     不合格式的陣列會被忽略。
 //     多範本模式下同一份 data 會分別套到每一份範本，各自只挑自己範本裡實際用到的變數名稱
 //     （見 applyVariablesFromData），所以不同範本的變數名稱不會互相污染，即使剛好同名也只是
 //     兩邊都吃到同一個值，不會報錯。套用完立刻觸發一次列印（有已授權印表機就直接印，沒有就
@@ -48,6 +50,7 @@
 // 進不了 previewData，這種邊角案例不特別處理。
 
 import { extractPlaceholders } from "../core/document-model.js";
+import { isRunArray } from "../core/merge.js";
 import { loadProject } from "../core/schema.js";
 import { registerEmbeddedFonts } from "../core/web-fonts.js";
 import { describePrinterError } from "../core/printer-adapter.js";
@@ -315,6 +318,8 @@ function applyVariablesFromData(data, project) {
     const names = new Set(extractPlaceholders(project.template.pages.flatMap((p) => p.elements)));
     for (const [key, value] of Object.entries(data)) {
         if (RESERVED_PARAMS.has(key) || !names.has(key)) continue;
+        // 陣列值只收合法的 run 陣列（{ text, bold?, italic?, strikethrough? }），其他陣列忽略，避免被轉成 "[object Object]"。
+        if (Array.isArray(value) && !isRunArray(value)) continue;
         state.previewData[key] = value;
     }
 }
