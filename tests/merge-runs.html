@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Printan tests：run 陣列資料套用（merge）</title>
+<style>
+body { font: 14px/1.6 system-ui, sans-serif; margin: 16px; }
+li { list-style: none; }
+.pass { color: #1a7f37; }
+.fail { color: #cf222e; }
+pre { margin: 0 0 0 24px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1 id="summary">執行中…</h1>
+<ul id="list"></ul>
+<script type="module">
+// splitRowColumn／mergeRowColumns 純函式測試，跟 tests/index.html 同一套跑法（標題顯示 PASS／FAIL）。
+import { applyDataToElements, isRunArray } from "../js/core/merge.js";
+
+const cases = [];
+const test = (name, fn) => cases.push({ name, fn });
+function assert(cond, msg = "assert failed") { if (!cond) throw new Error(msg); }
+function eq(actual, expected, msg = "") {
+    const a = JSON.stringify(actual), b = JSON.stringify(expected);
+    if (a !== b) throw new Error(`${msg}\n預期 ${b}\n實際 ${a}`);
+}
+const textEl = (runs) => [{ id: "t", type: "text", runs }];
+const merge = (runs, data) => applyDataToElements(textEl(runs), data)[0].runs;
+
+test("粗體＋一般拆成多個 run，原 run 屬性保留", () => {
+    const out = merge([{ text: "{{v}}", fontSize: 24, underline: true }], { v: [{ text: "A", bold: true }, { text: "B" }] });
+    eq(out, [{ text: "A", fontSize: 24, underline: true, bold: true }, { text: "B", fontSize: 24, underline: true }]);
+    assert(!("bold" in out[1]), "原 run 沒設 bold 時一般項目不該寫入 bold");
+});
+test("斜體", () => {
+    eq(merge([{ text: "{{v}}" }], { v: [{ text: "x", italic: true }] }), [{ text: "x", italic: true }]);
+});
+test("刪除線", () => {
+    eq(merge([{ text: "{{v}}" }], { v: [{ text: "x", strikethrough: true }] }), [{ text: "x", strikethrough: true }]);
+});
+test("繼承 fontSize／underline／fontFamily，並與原 bold 取聯集", () => {
+    const out = merge([{ text: " {{ v }} ", fontFamily: "F", fontSize: 30, underline: true, bold: true }], { v: [{ text: "a" }, { text: "b", italic: true }] });
+    eq(out, [
+        { text: "a", fontFamily: "F", fontSize: 30, underline: true, bold: true },
+        { text: "b", fontFamily: "F", fontSize: 30, underline: true, bold: true, italic: true },
+    ]);
+});
+test("原 run 的 bold:false 在項目沒設時保留", () => {
+    eq(merge([{ text: "{{v}}", bold: false }], { v: [{ text: "a" }] }), [{ text: "a", bold: false }]);
+});
+test("在前後 run 之間原地展開", () => {
+    const out = merge([{ text: "前" }, { text: "{{v}}" }, { text: "後" }], { v: [{ text: "1", bold: true }, { text: "2" }] });
+    eq(out.map((r) => r.text), ["前", "1", "2", "後"]);
+});
+test("夾雜其他文字的 run：陣列只串接 text，不拆 run", () => {
+    eq(merge([{ text: "Hi {{v}}!", bold: true }], { v: [{ text: "a", italic: true }, { text: "b" }] }), [{ text: "Hi ab!", bold: true }]);
+});
+test("非陣列值行為不變", () => {
+    eq(merge([{ text: "{{v}}", bold: true }], { v: "abc" }), [{ text: "abc", bold: true }]);
+    eq(merge([{ text: "{{v}}" }], { v: 42 }), [{ text: "42" }]);
+    eq(merge([{ text: "{{v}}" }], {}), [{ text: "" }]);
+});
+test("空 text 的項目被略過", () => {
+    eq(merge([{ text: "{{v}}", fontSize: 10 }], { v: [{ text: "" }, { text: "a" }, { text: "", bold: true }] }), [{ text: "a", fontSize: 10 }]);
+});
+test("全部項目為空：run 被移除", () => {
+    eq(merge([{ text: "{{v}}" }], { v: [] }), []);
+});
+test("不修改輸入的 template 與 data", () => {
+    const els = textEl([{ text: "{{v}}", fontSize: 12 }]);
+    const data = { v: [{ text: "a", bold: true }] };
+    const e0 = JSON.stringify(els), d0 = JSON.stringify(data);
+    applyDataToElements(els, data);
+    eq(JSON.stringify(els), e0);
+    eq(JSON.stringify(data), d0);
+});
+test("float-block 的 runs 同樣展開", () => {
+    const out = applyDataToElements([{ id: "f", type: "float-block", assetId: null, runs: [{ text: "{{v}}" }] }], { v: [{ text: "a", bold: true }] });
+    eq(out[0].runs, [{ text: "a", bold: true }]);
+});
+test("isRunArray：只接受合法的 run 物件陣列", () => {
+    assert(isRunArray([{ text: "a" }, { text: "b", bold: true, italic: false, strikethrough: true }]));
+    assert(isRunArray([]));
+    assert(!isRunArray("a"));
+    assert(!isRunArray(["a"]));
+    assert(!isRunArray([{ text: 1 }]));
+    assert(!isRunArray([{ text: "a", bold: "yes" }]));
+    assert(!isRunArray([{ text: "a", fontSize: 99 }]));
+    assert(!isRunArray([null]));
+});
+
+const list = document.getElementById("list");
+let failed = 0;
+for (const c of cases) {
+    const li = document.createElement("li");
+    try {
+        await c.fn();
+        li.className = "pass";
+        li.textContent = "PASS  " + c.name;
+    } catch (err) {
+        failed += 1;
+        li.className = "fail";
+        li.textContent = "FAIL  " + c.name;
+        const pre = document.createElement("pre");
+        pre.textContent = err.message;
+        li.append(pre);
+    }
+    list.append(li);
+}
+const summary = document.getElementById("summary");
+summary.textContent = failed ? `${failed} / ${cases.length} 失敗` : `全部通過（${cases.length}）`;
+summary.className = failed ? "fail" : "pass";
+document.title = (failed ? "FAIL " : "PASS ") + summary.textContent;
+</script>
+</body>
+</html>

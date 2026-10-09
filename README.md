@@ -84,6 +84,7 @@
 - `ptan-roundtrip.html`：`.ptan` 匯入匯出往返與版本遷移
 - `ptan-malformed.html`：壞檔容錯（標 KNOWN 的是已知 core 問題）
 - `element-tree.html`：多欄分割／合併與元素樹操作
+- `merge-runs.html`：資料套用（`applyDataToElements`）的 run 陣列值展開
 - `markdown.html`：說明書 Markdown 轉換與安全
 - `print-pipeline.html`：ESC/POS 位元組、列印錯誤路徑（條碼、QR 來自 CDN，需要能連網）
 - `border-radius-render.html`：容器外框／圓角實際渲染結果（取樣像素確認圖片／條碼真的被裁圓角，row／group 外框畫在正確位置）
