@@ -32,9 +32,9 @@ configure_nginx_git() {
   [ "$(id -u)" = 0 ] || { fail "需要 root／sudo"; return 1; }
   [ -n "$site" ] || { fail "用法：./deploy.sh --configure-nginx <Nginx 網站設定檔>"; return 1; }
   site="$(realpath "$site" 2>/dev/null)" || { fail "找不到檔案：$1"; return 1; }
-  [ -f "$site" ] || { fail "找不到檔案：$site"; return 1; }
+  [ -f "$site" ] || { fail "找不到檔案：$1"; return 1; }
   if grep -q 'BEGIN KoiLiSu managed' "$site"; then
-    ok "已有 KoiLiSu 管理的區塊，略過  ${DIM}${site}${RESET}"
+    ok "已有 KoiLiSu 管理的區塊，略過"
     return 0
   fi
   count="$(grep -cE '^[[:space:]]*server[[:space:]]*\{[[:space:]]*$' "$site" || true)"
@@ -162,13 +162,12 @@ fi
 
 BRANCH="${DEPLOY_BRANCH:-main}"
 
-# printan 是純 PHP 頁面殼＋瀏覽器端 JS：沒有資料庫、沒有必要的 PHP 擴充套件、
-# 也沒有需要 PHP 寫入的目錄，所以不需要檢查擴充套件或修正目錄權限。
+# PHP 頁面殼加瀏覽器端 JS，無資料庫、必要的 PHP 擴充套件與 PHP 寫入目錄。
 
 require_cmd git git
 
 step "檢查本機變更"
-# 伺服器上的檔案被手動改過時，git fast-forward merge 會中途失敗；先擋下來，講清楚是哪些檔案。
+# 手動改過的檔案會讓快轉失敗，先列出並中止。
 DIRTY="$(git status --porcelain --untracked-files=no)"
 if [ -n "$DIRTY" ]; then
   fail "有未提交的修改，部署已中止："
@@ -194,7 +193,7 @@ AFTER=$(git rev-parse --short FETCH_HEAD)
 ok "遠端分支 ${BRANCH}：${AFTER}"
 
 if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ] && ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
-  # local 有 remote 沒有的 commit（或兩邊 diverge）：fast-forward 做不到，硬 merge 會在伺服器上產生 merge commit，都不是預期的部署結果
+  # 本機與遠端分歧時無法快轉，不在伺服器上產生 merge commit。
   fail "本機與遠端版本已分歧，無法快轉更新，部署已中止"
   echo "  ${DIM}請先保留並確認本機提交：git log ${AFTER}..HEAD${RESET}"
   exit 1
@@ -210,15 +209,14 @@ else
   git log --oneline "${BEFORE}..${AFTER}" | sed 's/^/    /'
 fi
 
-# 選用：PHP 開了 opcache 且不檢查檔案時間戳（validate_timestamps=0）的伺服器，
-# 換了檔案要重載服務-FPM 才會生效；用環境變數帶進來，例如
+# 選用：opcache 不檢查檔案時間戳（validate_timestamps=0）時，更新後需重載 PHP-FPM，例如
 #   DEPLOY_RELOAD_CMD="systemctl reload php8.3-fpm" ./deploy.sh
 if [ -n "${DEPLOY_RELOAD_CMD:-}" ] && [ "$BEFORE" != "$AFTER" ]; then
   step "重載服務"
   if bash -c "$DEPLOY_RELOAD_CMD"; then
     ok "${DEPLOY_RELOAD_CMD}"
   else
-    fail "重載失敗：${DEPLOY_RELOAD_CMD}（程式碼已更新，請手動重載服務-FPM）"
+    fail "重載失敗：${DEPLOY_RELOAD_CMD}（程式碼已更新，請手動重載 PHP-FPM）"
     exit 1
   fi
 fi

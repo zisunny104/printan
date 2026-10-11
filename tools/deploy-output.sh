@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 各專案保留同一份輸出 helper，可獨立部署，不依賴母專案路徑。
+# 各專案保留同一份輸出 helper，可獨立部署。
 if [ -t 1 ] && [ -z "${NO_COLOR+x}" ] && [ "${TERM:-}" != dumb ]; then
     BOLD=$'\033[1m'; DIM=$'\033[2m'
     RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; CYAN=$'\033[36m'
