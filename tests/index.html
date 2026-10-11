@@ -21,7 +21,7 @@ import {
     normalizeTextElement, createImageElement,
 } from "../js/core/document-model.js";
 import { applyDither, applyPhotoToneCurve } from "../js/core/dithering.js";
-import { applyImagePreset, resolveImagePreset, DEFAULT_IMAGE_PRESET, IMAGE_PRESETS, PHOTO_EFFECTS, photoEffectOf, newImageEffectSettings } from "../js/core/image-print-settings.js";
+import { applyImagePreset, applyImagePrintSettings, resolveImagePreset, DEFAULT_IMAGE_PRESET, IMAGE_PRESETS, PHOTO_EFFECTS, photoEffectOf, newImageEffectSettings } from "../js/core/image-print-settings.js";
 import * as tree from "../js/core/element-tree.js";
 import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
 import { renderElements, floatLineBox, MAX_CANVAS_HEIGHT } from "../js/core/renderer.js";
@@ -133,6 +133,16 @@ test("照片處理組合：只改綁變數的圖片，default／不認得的值�
     eq(applyImagePreset(project, "detail-serpentine") !== project, true, "舊的 detail-serpentine 仍可用");
     const byDefault = pageEls(applyImagePreset(project, "default"))[0];
     eq([byDefault.toneCurve, byDefault.ditherMode], ["photo-detail", "blue-noise"], "沒指定時套預設組合");
+});
+
+test("imageSettings 可用 effect 指定照片效果，toneCurve／ditherMode 逐項值優先，不認得的值忽略", () => {
+    const project = sampleProject([createImageElement({ assetId: "{{photo}}" })]);
+    const byEffect = pageEls(applyImagePrintSettings(project, { photo: { effect: "mono" } }))[0];
+    eq([byEffect.toneCurve, byEffect.ditherMode], ["none", "threshold"]);
+    const mixed = pageEls(applyImagePrintSettings(project, { photo: { effect: "clear", ditherMode: "serpentine" } }))[0];
+    eq([mixed.toneCurve, mixed.ditherMode], ["photo-detail", "serpentine"], "逐項值蓋過 effect");
+    const bogus = pageEls(applyImagePrintSettings(project, { photo: { effect: "nope", toneCurve: "x", ditherMode: "y" } }))[0];
+    eq([bogus.toneCurve, bogus.ditherMode], ["none", "floyd-steinberg"], "不認得的值不改");
 });
 
 test("照片效果：選項互不重複、能從圖片設定反查、新增圖片預設清晰、舊組合回傳 null", () => {

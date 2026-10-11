@@ -1,6 +1,10 @@
 import { childArrays } from "./element-tree.js";
 import { loadProject } from "./schema.js";
 
+// imageSettings 逐項接受的階調與取樣方式（含舊檔用過、已不列在選單裡的值）；對外只公開 PHOTO_EFFECTS。
+const ACCEPTED_TONE_CURVES = ["none", "photo-readable", "photo-detail"];
+const ACCEPTED_DITHER_MODES = ["floyd-steinberg", "serpentine", "blue-noise", "ordered", "threshold"];
+
 // 只覆寫指定圖片變數的轉換設定，不更動原專案及版面。
 export function applyImagePrintSettings(project, byVariable = {}) {
     const copy = structuredClone(project);
@@ -13,8 +17,13 @@ export function applyImagePrintSettings(project, byVariable = {}) {
                     const min = key === "thresholdLevel" ? 0 : -100, max = key === "thresholdLevel" ? 255 : 100;
                     if (Number.isInteger(settings[key]) && settings[key] >= min && settings[key] <= max) el[key] = settings[key];
                 }
-                if (["none", "photo-readable", "photo-detail"].includes(settings.toneCurve)) el.toneCurve = settings.toneCurve;
-                if (["floyd-steinberg", "serpentine", "blue-noise", "ordered", "threshold"].includes(settings.ditherMode)) el.ditherMode = settings.ditherMode;
+                const effect = PHOTO_EFFECTS.find((item) => item.id === settings.effect);
+                if (effect) {
+                    el.toneCurve = effect.toneCurve;
+                    el.ditherMode = effect.ditherMode;
+                }
+                if (ACCEPTED_TONE_CURVES.includes(settings.toneCurve)) el.toneCurve = settings.toneCurve;
+                if (ACCEPTED_DITHER_MODES.includes(settings.ditherMode)) el.ditherMode = settings.ditherMode;
             }
             for (const children of childArrays(el)) apply(children);
         }

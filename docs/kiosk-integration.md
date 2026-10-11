@@ -135,7 +135,7 @@ window.addEventListener("message", (event) => {
 
 `submit-job` 可另帶 `project`（標準 .ptan 物件），只供這筆工作使用；沿用既有多頁列印與每頁 `cutAfter`，會暫時顯示該工作預覽，但不更動常駐範本，下一筆正常工作恢復原本專案。圖片載入失敗或頁面截斷會在出紙前中止。原有 `data` 照常套用。
 
-一般常駐範本工作可另帶 `imageSettings`，以圖片變數名稱對應轉換設定，例如 `{ photo_a_landscape: { brightness: 10, contrast: 5, toneCurve: "photo-readable", ditherMode: "ordered", thresholdLevel: 128 } }`。只修改指定圖片元素的轉換，不影響其他圖片、文字、版面與原專案。來源與父視窗檢查維持既有協定。
+一般常駐範本工作可另帶 `imageSettings`，以圖片變數名稱對應轉換設定，例如 `{ photo_a_landscape: { brightness: 10, contrast: 5, toneCurve: "photo-readable", ditherMode: "ordered", thresholdLevel: 128 } }`。每個變數另可用 `effect: "clear" | "soft" | "halftone" | "mono"`（清晰／柔和／網點／黑白）一次指定階調與取樣方式，與 `toneCurve`、`ditherMode` 並用時後者優先；不認得的值忽略。只修改指定圖片元素的轉換，不影響其他圖片、文字、版面與原專案。來源與父視窗檢查維持既有協定。
 
 ### 照片處理組合（`imagePreset`）
 
