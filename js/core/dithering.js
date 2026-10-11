@@ -1,4 +1,4 @@
-// 灰階 / 二值化 / 誤差擴散抖色，把畫面轉成熱感紙真正輸出的 1-bit 黑白。
+// 灰階 / 二值化 / 誤差擴散仿色，把畫面轉成熱感紙真正輸出的 1-bit 黑白。
 // 只操作 ImageData，不碰 DOM，符合 core 可嵌入的原則。
 
 export function toGrayscale(imageData) {
@@ -11,14 +11,14 @@ export function toGrayscale(imageData) {
     return imageData;
 }
 
-const PHOTO_DETAIL_GAMMA = 1.7; // 抖色前的線性化指數（亮部端）：網點覆蓋率對應的是線性亮度，灰階值直接當覆蓋率會讓中間調與亮部偏白
+const PHOTO_DETAIL_GAMMA = 1.7; // 仿色前的線性化指數（亮部端）：網點覆蓋率對應的是線性亮度，灰階值直接當覆蓋率會讓中間調與亮部偏白
 const PHOTO_DETAIL_GAMMA_KNEE = 0.6; // 指數從 1（暗部，近似不轉換）漸進到 GAMMA 的亮度位置（0–1）：暗部不跟著線性化往下壓，否則會糊成黑塊
 const PHOTO_DETAIL_BLACK_FLOOR = 0.15; // 輸出亮度下限（0–1）：最暗約 85% 墨點，熱感點會擴大，再黑就連成一片、暗部細節消失
 const PHOTO_DETAIL_CLARITY = 0.8; // 局部對比強度：把大範圍的亮暗差拉開，主體才不會融進背景
 const PHOTO_DETAIL_CLARITY_RADIUS = 11; // 局部對比的模糊半徑（點）
 const PHOTO_DETAIL_SHARPEN = 0.8;
 
-/** 亮度 x（0–1）→ 抖色前的亮度：指數由暗到亮從 1 漸進到 GAMMA，再墊上黑色下限。 */
+/** 亮度 x（0–1）→ 仿色前的亮度：指數由暗到亮從 1 漸進到 GAMMA，再墊上黑色下限。 */
 function photoDetailLevel(x) {
     const t = Math.min(1, x / PHOTO_DETAIL_GAMMA_KNEE);
     const gamma = 1 + (PHOTO_DETAIL_GAMMA - 1) * t * t * (3 - 2 * t);
@@ -76,7 +76,7 @@ function sharpenGray(imageData, amount, minGray = 0) {
     }
 }
 
-/** 照片用階調：photo-readable＝提亮陰影、保留純白；photo-detail＝局部對比＋線性化（抖色前）＋銳化。舊圖未指定時不轉換。 */
+/** 照片用階調：photo-readable＝提亮陰影、保留純白；photo-detail＝局部對比＋線性化（仿色前）＋銳化。舊圖未指定時不轉換。 */
 export function applyPhotoToneCurve(imageData, curve = "none") {
     const d = imageData.data;
     if (curve === "photo-detail") {
@@ -109,7 +109,7 @@ export function threshold(imageData, level = 128) {
     return imageData;
 }
 
-/** Floyd–Steinberg 誤差擴散抖色，畫質比單純閾值更接近真實熱感紙效果。 */
+/** Floyd–Steinberg 誤差擴散仿色，畫質比單純閾值更接近真實熱感紙效果。 */
 export function floydSteinberg(imageData, level = 128) {
     const { width, height, data } = imageData;
     const gray = new Float32Array(width * height);
@@ -180,7 +180,7 @@ export function floydSteinbergSerpentine(imageData, level = 128) {
 const BLUE_NOISE_SIZE = 64;
 let blueNoiseMask = null;
 
-/** 用固定種子的 void-and-cluster 演算法產生 64×64 的藍噪聲門檻矩陣（排名 0..4095），只算一次。 */
+/** 用固定種子的 void-and-cluster 演算法產生 64×64 的藍雜訊門檻矩陣（排名 0..4095），只算一次。 */
 function getBlueNoiseMask() {
     if (blueNoiseMask) return blueNoiseMask;
     const size = BLUE_NOISE_SIZE;
@@ -256,7 +256,7 @@ function getBlueNoiseMask() {
     return blueNoiseMask;
 }
 
-/** 藍噪聲有序抖色：沒有規則格紋也沒有誤差擴散的蟲紋，亮部暗部的墨點密度穩定；level 不參與計算。 */
+/** 藍雜訊有序仿色：沒有規則格紋也沒有誤差擴散的蟲紋，亮部暗部的墨點密度穩定；level 不參與計算。 */
 export function blueNoiseDither(imageData) {
     const { width, height, data } = imageData;
     const mask = getBlueNoiseMask();
@@ -298,7 +298,7 @@ const CROSS_4X4 = [
 ];
 export const HALFTONE_PATTERNS = { dot: BAYER_4X4, line: LINE_4X4, cross: CROSS_4X4 };
 
-/** 排序抖色，呈現規則網點（印刷網屏）效果，跟誤差擴散比起來邊緣較銳利、噪點較規律。
+/** 排序仿色，呈現規則網點（印刷網屏）效果，跟誤差擴散比起來邊緣較銳利、噪點較規律。
  *  pattern 決定門檻矩陣的花紋：dot＝散開網點（預設）｜line＝橫線網屏｜cross＝菱形網點。 */
 export function orderedDither(imageData, level = 128, pattern = "dot") {
     const matrix = HALFTONE_PATTERNS[pattern] || BAYER_4X4;
@@ -339,7 +339,7 @@ export function orderedDitherGradient(imageData, w, h, tOf, fromPattern, toPatte
     return imageData;
 }
 
-/** 依「取樣方式」名稱分派抖色演算法，圖片元素的網點設定統一從這裡進入。 */
+/** 依「取樣方式」名稱分派仿色演算法，圖片元素的網點設定統一從這裡進入。 */
 export function applyDither(imageData, mode = "floyd-steinberg", level = 128, pattern = "dot") {
     if (mode === "ordered") return orderedDither(imageData, level, pattern);
     if (mode === "blue-noise") return blueNoiseDither(imageData);

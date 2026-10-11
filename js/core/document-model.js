@@ -6,7 +6,7 @@ import { ptToDots } from "./units.js";
 
 /**
  * 共用的「填色」模型：分隔線色塊、文字反白背景、文字本身墨色都用同一組欄位，交給
- * renderer.js 同一套排序抖色演算法畫（見 renderer.js renderFillCanvas），不用各自維護
+ * renderer.js 同一套排序仿色演算法畫（見 renderer.js renderFillCanvas），不用各自維護
  * 一套網點／漸層邏輯。mode "solid" 是純黑，等同還沒套用這個功能之前的舊行為。
  */
 export const FILL_MODES = ["solid", "halftone", "gradient"];

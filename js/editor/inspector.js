@@ -896,7 +896,7 @@ function buildImageInspector(panel, el) {
             (v) => { el.toneCurve = v; onModelChange(); },
         )));
         body.appendChild(field("取樣方式", selectInput(
-            [["floyd-steinberg", "誤差擴散"], ["serpentine", "誤差擴散（來回掃描）"], ["blue-noise", "藍噪聲"], ["ordered", "網點"], ["threshold", "純黑白"]],
+            [["floyd-steinberg", "誤差擴散"], ["serpentine", "誤差擴散（來回掃描）"], ["blue-noise", "藍雜訊"], ["ordered", "網點"], ["threshold", "純黑白"]],
             el.ditherMode || "floyd-steinberg",
             (v) => { el.ditherMode = v; onModelChange(); },
         )));

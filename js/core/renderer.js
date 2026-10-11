@@ -27,9 +27,9 @@ export const DEFAULT_FONT_FAMILY = 'sans-serif'; // 單據預設字體：直接�
  * profile：選填，有值時用它取代依 project.printerProfile.id 查註冊表的結果，
  * 給呼叫端套用「可列印點數」覆寫過的 profile（見 printer-profiles.js withPrintableDotsOverrides）。
  *
- * 熱感模式下的網點深淺處理是「按元素類型路由」而非整張畫布套用同一種抖色：相片（image）
+ * 熱感模式下的網點深淺處理是「按元素類型路由」而非整張畫布套用同一種仿色：相片（image）
  * 元素本身用 Floyd–Steinberg 誤差擴散（較接近真實灰階觀感），其餘一律是純黑向量或已經是
- * 純黑白的條碼／QR，套用同一種抖色反而會讓邊緣模糊、字變糊，所以最後對整張畫布只做單純
+ * 純黑白的條碼／QR，套用同一種仿色反而會讓邊緣模糊、字變糊，所以最後對整張畫布只做單純
  * threshold（把 anti-alias 邊緣二值化），已經 dither 過的相片區域本身就是 0/255，threshold
  * 對它們是 no-op，不會被二次破壞。
  */
@@ -825,12 +825,12 @@ function paintBoxBorder(ctx, x, y, w, h, el) {
 
 // ---- 共用填色（分隔線色塊／文字反白背景／文字本身墨色都靠這幾個函式） ----
 //
-// 網點／漸層：跟 paintImage 熱感模式一樣借用 dithering.js 的排序抖色（orderedDither），差別是
+// 網點／漸層：跟 paintImage 熱感模式一樣借用 dithering.js 的排序仿色（orderedDither），差別是
 // 來源不是照片而是自己合成的灰階（halftone＝均勻灰階、依 level 控制網點濃淡，gradient＝沿方向
 // 線性漸層），直接餵給同一顆演算法即可長出規則網點／由淺到深的網點漸層。不分螢幕／熱感模式：
 // 這個花紋本身就是使用者選的視覺效果，兩種預覽都該長一樣（跟 divider 原本的虛線／點線同一邏輯）。
 
-/** 產生一塊 w×h 的填色畫布：solid 是純黑矩形，halftone／gradient 是排序抖色網點。
+/** 產生一塊 w×h 的填色畫布：solid 是純黑矩形，halftone／gradient 是排序仿色網點。
  *  invert：黑白全部對調（同一個花紋的負片），用在「反白」場合底色跟花紋文字要疊在一起時，
  *  維持看得出對比——不是重新算一次花紋，是同一張畫布用 canvas 的 difference 混合模式整張反相，
  *  保證跟原本花紋是同一套點位/漸層，只是深淺對調。 */
@@ -838,7 +838,7 @@ function renderFillCanvas(w, h, fill, invert = false) {
     w = Math.max(1, Math.round(w));
     h = Math.max(1, Math.round(h));
     if (fill.mode === "solid" || w * h > FILL_CACHE_MAX_PIXELS) return drawFillCanvas(w, h, fill, invert);
-    // 呼叫端只把結果當 drawImage 來源；同樣的花紋（編輯時每次重繪都一樣）直接重用，省掉逐點抖色。
+    // 呼叫端只把結果當 drawImage 來源；同樣的花紋（編輯時每次重繪都一樣）直接重用，省掉逐點仿色。
     const key = `${w}x${h}|${invert ? 1 : 0}|${JSON.stringify(fill)}`;
     let canvas = fillCanvasCache.get(key);
     if (canvas) {
