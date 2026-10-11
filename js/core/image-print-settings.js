@@ -1,6 +1,12 @@
 import { childArrays } from "./element-tree.js";
 import { loadProject } from "./schema.js";
 
+// 熱感照片可選的階調與取樣方式：編輯器的下拉選單、外部設定的檢查、chunghsingshashin 後台的選單都讀這裡，
+// 新增或改名只改這兩份清單（[代號, 顯示名稱]）。
+export const PHOTO_TONE_CURVES = [["none", "原始"], ["photo-readable", "易辨識（提亮暗部）"], ["photo-detail", "細節（局部對比＋線性化＋銳化）"]];
+export const PHOTO_DITHER_MODES = [["floyd-steinberg", "誤差擴散"], ["serpentine", "誤差擴散（來回掃描）"], ["blue-noise", "藍雜訊"], ["ordered", "網點"], ["threshold", "純黑白"]];
+const hasOption = (list, id) => list.some(([value]) => value === id);
+
 // 只覆寫指定圖片變數的轉換設定，不更動原專案及版面。
 export function applyImagePrintSettings(project, byVariable = {}) {
     const copy = structuredClone(project);
@@ -13,8 +19,8 @@ export function applyImagePrintSettings(project, byVariable = {}) {
                     const min = key === "thresholdLevel" ? 0 : -100, max = key === "thresholdLevel" ? 255 : 100;
                     if (Number.isInteger(settings[key]) && settings[key] >= min && settings[key] <= max) el[key] = settings[key];
                 }
-                if (["none", "photo-readable", "photo-detail"].includes(settings.toneCurve)) el.toneCurve = settings.toneCurve;
-                if (["floyd-steinberg", "serpentine", "blue-noise", "ordered", "threshold"].includes(settings.ditherMode)) el.ditherMode = settings.ditherMode;
+                if (hasOption(PHOTO_TONE_CURVES, settings.toneCurve)) el.toneCurve = settings.toneCurve;
+                if (hasOption(PHOTO_DITHER_MODES, settings.ditherMode)) el.ditherMode = settings.ditherMode;
             }
             for (const children of childArrays(el)) apply(children);
         }

@@ -10,6 +10,7 @@ import { MAX_ROW_GAP, normalizeRowGap, dotsToPt as dotsToPtRaw, ptToDots as ptTo
 import { WEB_FONTS, findWebFont, isWebFontFailed } from "../core/web-fonts.js";
 import { applyFieldToElements, findElementById, setRowRatio, splitRowColumn, mergeRowColumns, MAX_ROW_COLUMNS } from "../core/element-tree.js";
 import { createInfoIcon } from "./ui-helpers.js";
+import { PHOTO_DITHER_MODES, PHOTO_TONE_CURVES } from "../core/image-print-settings.js";
 import {
     getLocalFontFamilies, isFontInstalled, isLocalFontAccessSupported, loadLocalFonts, localFontStack,
     primaryFamilyName,
@@ -891,12 +892,12 @@ function buildImageInspector(panel, el) {
         body.appendChild(sliderField("對比", el.contrast ?? 0, -100, 100, (v) => { el.contrast = v; onModelChange({ skipInspector: true }); }));
         body.appendChild(field(null, checkboxInput(!!el.invert, (v) => { el.invert = v; onModelChange({ skipInspector: true }); }, "反相")));
         body.appendChild(field("熱感照片階調", selectInput(
-            [["none", "原始"], ["photo-readable", "易辨識（提亮暗部）"], ["photo-detail", "細節（局部對比＋線性化＋銳化）"]],
+            PHOTO_TONE_CURVES,
             el.toneCurve || "none",
             (v) => { el.toneCurve = v; onModelChange(); },
         )));
         body.appendChild(field("取樣方式", selectInput(
-            [["floyd-steinberg", "誤差擴散"], ["serpentine", "誤差擴散（來回掃描）"], ["blue-noise", "藍雜訊"], ["ordered", "網點"], ["threshold", "純黑白"]],
+            PHOTO_DITHER_MODES,
             el.ditherMode || "floyd-steinberg",
             (v) => { el.ditherMode = v; onModelChange(); },
         )));
