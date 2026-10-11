@@ -92,7 +92,7 @@ test("photo-detail 階調：暗部不被壓成黑塊（有黑色下限、暗部�
     assert(out[out.length - 2] - out[1] > 20, `暗部內部的層次仍分得出：${out[1]} → ${out[out.length - 2]}`);
 });
 
-test("藍噪聲與來回掃描抖色：墨點密度貼近灰階、結果固定、輸出只有黑白", () => {
+test("藍雜訊與來回掃描仿色：墨點密度貼近灰階、結果固定、輸出只有黑白", () => {
     for (const mode of ["blue-noise", "serpentine"]) {
         for (const gray of [32, 128, 224]) {
             const img = new ImageData(new Uint8ClampedArray(Array.from({ length: 128 * 128 }, () => [gray, gray, gray, 255]).flat()), 128, 128);
@@ -110,7 +110,7 @@ test("藍噪聲與來回掃描抖色：墨點密度貼近灰階、結果固定�
     const a = make(), b = make();
     applyDither(a, "blue-noise");
     applyDither(b, "blue-noise");
-    eq(Array.from(a.data), Array.from(b.data), "同一張圖每次抖色結果相同");
+    eq(Array.from(a.data), Array.from(b.data), "同一張圖每次仿色結果相同");
 });
 
 test("照片處理組合：只改綁變數的圖片，default／不認得的值落到預設組合", () => {
@@ -127,6 +127,9 @@ test("照片處理組合：只改綁變數的圖片，default／不認得的值�
     eq([l.toneCurve, l.ditherMode], ["none", "floyd-steinberg"], "沒綁變數的圖片不動");
     eq(pageEls(project)[0].toneCurve, "none", "不修改原專案");
     assert(applyImagePreset(project, "classic") === project, "classic 不改範本，原物件回傳");
+    eq(DEFAULT_IMAGE_PRESET, "detail-blue-noise", "預設組合是細節階調＋藍雜訊");
+    const byDefault = pageEls(applyImagePreset(project, "default"))[0];
+    eq([byDefault.toneCurve, byDefault.ditherMode], ["photo-detail", "blue-noise"], "沒指定時套預設組合");
 });
 
 test("照片階調存檔後保留，獨立亮度與對比不被覆寫", () => {

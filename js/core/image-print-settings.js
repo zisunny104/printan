@@ -27,10 +27,10 @@ export function applyImagePrintSettings(project, byVariable = {}) {
 // 預設組合由 DEFAULT_IMAGE_PRESET 決定：呼叫端沒指定或指定 "default" 時就套這一個，之後換預設只改這個常數。
 export const IMAGE_PRESETS = {
     classic: { label: "原始（誤差擴散）", settings: null },
-    "detail-blue-noise": { label: "細節階調＋藍噪聲", settings: { toneCurve: "photo-detail", ditherMode: "blue-noise" } },
+    "detail-blue-noise": { label: "細節階調＋藍雜訊", settings: { toneCurve: "photo-detail", ditherMode: "blue-noise" } },
     "detail-serpentine": { label: "細節階調＋來回掃描", settings: { toneCurve: "photo-detail", ditherMode: "serpentine" } },
 };
-export const DEFAULT_IMAGE_PRESET = "classic";
+export const DEFAULT_IMAGE_PRESET = "detail-blue-noise";
 
 /** 把呼叫端給的名稱整理成真正的組合 id："default"、沒給、不認得的值都落到預設組合。 */
 export function resolveImagePreset(id) {
