@@ -11,10 +11,19 @@ export function toGrayscale(imageData) {
     return imageData;
 }
 
-const PHOTO_DETAIL_GAMMA = 1.7; // 抖色前的線性化指數：網點覆蓋率對應的是線性亮度，灰階值直接當覆蓋率會讓中間調與亮部偏白
+const PHOTO_DETAIL_GAMMA = 1.7; // 抖色前的線性化指數（亮部端）：網點覆蓋率對應的是線性亮度，灰階值直接當覆蓋率會讓中間調與亮部偏白
+const PHOTO_DETAIL_GAMMA_KNEE = 0.6; // 指數從 1（暗部，近似不轉換）漸進到 GAMMA 的亮度位置（0–1）：暗部不跟著線性化往下壓，否則會糊成黑塊
+const PHOTO_DETAIL_BLACK_FLOOR = 0.15; // 輸出亮度下限（0–1）：最暗約 85% 墨點，熱感點會擴大，再黑就連成一片、暗部細節消失
 const PHOTO_DETAIL_CLARITY = 0.8; // 局部對比強度：把大範圍的亮暗差拉開，主體才不會融進背景
 const PHOTO_DETAIL_CLARITY_RADIUS = 11; // 局部對比的模糊半徑（點）
 const PHOTO_DETAIL_SHARPEN = 0.8;
+
+/** 亮度 x（0–1）→ 抖色前的亮度：指數由暗到亮從 1 漸進到 GAMMA，再墊上黑色下限。 */
+function photoDetailLevel(x) {
+    const t = Math.min(1, x / PHOTO_DETAIL_GAMMA_KNEE);
+    const gamma = 1 + (PHOTO_DETAIL_GAMMA - 1) * t * t * (3 - 2 * t);
+    return PHOTO_DETAIL_BLACK_FLOOR + (1 - PHOTO_DETAIL_BLACK_FLOOR) * Math.pow(x, gamma);
+}
 
 /** 單通道三次方塊模糊（近似高斯），邊緣沿用最近的像素。 */
 function blurGray(src, width, height, radius) {
@@ -48,7 +57,7 @@ function blurGray(src, width, height, radius) {
 }
 
 /** 3×3 反銳化遮罩（輸入已是灰階）：在縮到列印點數之後做，轉成黑白前先把邊緣拉開，細節才留得住。 */
-function sharpenGray(imageData, amount) {
+function sharpenGray(imageData, amount, minGray = 0) {
     const { width, height, data } = imageData;
     const src = new Float32Array(width * height);
     for (let p = 0, i = 0; p < src.length; p++, i += 4) src[p] = data[i];
@@ -60,7 +69,7 @@ function sharpenGray(imageData, amount) {
                 for (let dx = -1; dx <= 1; dx++) sum += src[yy * width + Math.min(width - 1, Math.max(0, x + dx))];
             }
             const g = src[y * width + x];
-            const v = Math.max(0, Math.min(255, g + amount * (g - sum / 9)));
+            const v = Math.max(minGray, Math.min(255, g + amount * (g - sum / 9)));
             const i = (y * width + x) * 4;
             data[i] = data[i + 1] = data[i + 2] = v;
         }
@@ -77,9 +86,9 @@ export function applyPhotoToneCurve(imageData, curve = "none") {
         const base = blurGray(gray, width, height, PHOTO_DETAIL_CLARITY_RADIUS);
         for (let p = 0, i = 0; p < gray.length; p++, i += 4) {
             const local = Math.max(0, Math.min(255, gray[p] + PHOTO_DETAIL_CLARITY * (gray[p] - base[p])));
-            d[i] = d[i + 1] = d[i + 2] = 255 * Math.pow(local / 255, PHOTO_DETAIL_GAMMA);
+            d[i] = d[i + 1] = d[i + 2] = photoDetailLevel(local / 255) * 255;
         }
-        sharpenGray(imageData, PHOTO_DETAIL_SHARPEN);
+        sharpenGray(imageData, PHOTO_DETAIL_SHARPEN, PHOTO_DETAIL_BLACK_FLOOR * 255); // 銳化過衝也不能低於黑色下限
         return imageData;
     }
     if (curve !== "photo-readable") return imageData;
