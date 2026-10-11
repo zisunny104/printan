@@ -27,6 +27,10 @@ export const WEB_FONTS = [
         label: "等寬（JetBrains Mono，僅英數）",
         stack: '"JetBrains Mono", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif',
         sheets: { 400: `${JETBRAINS_CDN}latin-400.css`, 700: `${JETBRAINS_CDN}latin-700.css` },
+        sheetIntegrity: {
+            400: "sha512-YhXNskaM7YVJnvRizsbG1L6ifYNK6/0aifIPsH2rd9kcq27b/oCDr/V7L2aA1H/cRw5+lpKQlkmkHl6Fm2cQvQ==",
+            700: "sha512-rmG8u/eiDkDwmoP0UuuI26BqqV6Y/TKq5mQ4/B5vKE1/6JHYyfk3srPTcDSajpu8tYSgkAVtwNEEjlf7yV1ANw==",
+        },
     },
 ];
 
@@ -65,12 +69,16 @@ function withTimeout(promise, label) {
     ]);
 }
 
-function loadSheet(url) {
+function loadSheet(url, integrity) {
     if (sheetPromises.has(url)) return sheetPromises.get(url);
     const promise = new Promise((resolve, reject) => {
         const link = document.createElement("link");
         link.rel = "stylesheet";
         link.href = url;
+        if (integrity) {
+            link.integrity = integrity;
+            link.crossOrigin = "anonymous";
+        }
         link.onload = resolve;
         link.onerror = () => reject(new Error("樣式表載入失敗"));
         sheetLinks.set(url, link);
@@ -114,7 +122,7 @@ function collectUsage(elements, defaultFamily) {
 
 async function loadFont(font, byWeight) {
     for (const [weight, text] of byWeight) {
-        await withTimeout(loadSheet(font.sheets[weight]), font.label);
+        await withTimeout(loadSheet(font.sheets[weight], font.sheetIntegrity?.[weight]), font.label);
         const chars = [...new Set(text)].join("");
         await withTimeout(document.fonts.load(`${weight} 20px "${font.family}"`, chars), font.label);
     }

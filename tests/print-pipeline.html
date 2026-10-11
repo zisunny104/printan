@@ -14,9 +14,15 @@ pre { margin: 0 0 0 24px; white-space: pre-wrap; }
 <body>
 <h1 id="summary">執行中…</h1>
 <ul id="list"></ul>
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode_UTF8.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"
+    integrity="sha512-2BJF/j/2TII7JcHAPMIT74wLQ8BTk5NqeGAC5ypeSKLa6V96abAl86gvcsrU2etaN4fttehQtcxXXAriYXlDCg=="
+    crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode_UTF8.js"
+    integrity="sha512-KVY6a8I3VlMmJFe6rYFDdqyhNqKDMccyydi6pSE7G6iGR7Hqozi1Yde8iD1/KYBJNbct4iWa+4eN0dVSvqH2zg=="
+    crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"
+    integrity="sha512-nMnXAGKzA0wZ4YsriudrdnAKSFYXwdCvSt1Auwz6q7XXtSRoRcMVud13Q1LnQnobA2hRhLtHUv9tbVR5pyStPw=="
+    crossorigin="anonymous"></script>
 <script type="module">
 // ESC/POS 位元組 golden 測試，跟 tests/index.html 同一套跑法（標題顯示 PASS／FAIL）。
 import {

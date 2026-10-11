@@ -6,7 +6,7 @@
                     <div class="ts-wrap is-vertical is-compact">
                         <div class="ts-text is-description">
                             <a href="/koilisu/" class="footer-plain-link">KoiLiSu 開利手</a> -
-                            讓工具使用更順手的開放專案 | <a href="https://toka.dev" target="_blank" rel="noopener" class="footer-plain-link">prjToka</a>
+                            讓工具使用更順手的開放專案 | <a href="https://toka.dev" target="_blank" rel="noopener noreferrer" class="footer-plain-link">prjToka</a>
                         </div>
                         <div class="ts-wrap is-middle-aligned is-compact">
                             <button type="button" id="btn-license" class="ts-button is-small is-start-icon footer-action-button">
