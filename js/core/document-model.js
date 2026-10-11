@@ -6,7 +6,7 @@ import { ptToDots } from "./units.js";
 
 /**
  * 共用的「填色」模型：分隔線色塊、文字反白背景、文字本身墨色都用同一組欄位，交給
- * renderer.js 同一套排序抖色演算法畫（見 renderer.js renderFillCanvas），不用各自維護
+ * renderer.js 同一套排序仿色演算法畫（見 renderer.js renderFillCanvas），不用各自維護
  * 一套網點／漸層邏輯。mode "solid" 是純黑，等同還沒套用這個功能之前的舊行為。
  */
 export const FILL_MODES = ["solid", "halftone", "gradient"];
@@ -372,8 +372,8 @@ export function createImageElement(overrides = {}) {
         brightness: 0, // -100..100
         contrast: 0, // -100..100
         invert: false,
-        toneCurve: "none", // none | photo-readable，僅套用熱感照片階調
-        ditherMode: "floyd-steinberg", // floyd-steinberg | ordered | threshold，決定熱感模式下怎麼轉成網點
+        toneCurve: "none", // none | photo-readable | photo-detail，僅套用熱感照片階調
+        ditherMode: "floyd-steinberg", // floyd-steinberg | serpentine | blue-noise | ordered | threshold，決定熱感模式下怎麼轉成網點
         thresholdLevel: 128, // 僅 ditherMode === "threshold" 時使用，0-255
         border: createBorder(), // 圖片外框，見 createBorder
         cornerRadiusDots: 0, // 圓角半徑：>0 時圖片本身也會被裁成圓角（不只是外框轉角），見 renderer.js paintImage

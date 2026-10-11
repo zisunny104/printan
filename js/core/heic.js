@@ -1,6 +1,5 @@
-// HEIC/HEIF 相片轉換：瀏覽器 <img>/canvas 原生不支援解碼 HEIC，改用自行託管的 libheif（wasm，
-// vendor/libheif/，LGPL-3.0）在 web worker 內解碼，再由畫布轉成 JPEG。第一次選到 HEIC 才建立 worker
-// （wasm 約 1.4MB），不影響平常開編輯器的載入量；不需要 eval，CSP 只多 'wasm-unsafe-eval'。
+// HEIC/HEIF 相片轉換：用 libheif（vendor/libheif/，LGPL-3.0）在 web worker 內解碼，再轉成 JPEG。
+// 第一次選到 HEIC 才建立 worker。
 let worker = null;
 let nextJobId = 1;
 const pending = new Map();

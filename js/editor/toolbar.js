@@ -4,6 +4,7 @@
 
 import { getPaperWidth } from "../core/printer-profiles.js";
 import { createImageElement } from "../core/document-model.js";
+import { newImageEffectSettings } from "../core/image-print-settings.js";
 import { fileToDataUrl, downscaleImageFile } from "../core/ptan-file.js";
 import { convertHeicIfNeeded } from "../core/heic.js";
 import { els, rt, state } from "./context.js";
@@ -233,6 +234,6 @@ export function bindImageFileInput() {
         const assetId = await handleImageFileSelected(file);
         if (!assetId) return;
         if (handler) handler(assetId);
-        else insertElement(createImageElement({ assetId, widthPercent: await defaultImageWidthPercent(assetId) }));
+        else insertElement(createImageElement({ assetId, widthPercent: await defaultImageWidthPercent(assetId), ...newImageEffectSettings() }));
     });
 }

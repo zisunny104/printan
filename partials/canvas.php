@@ -41,7 +41,7 @@
                                 </button>
                             </div>
                         </div>
-                        <!-- 窄螢幕（<768px）不排 2D 佈局，一次顯示一頁，用這列前後切換；只有一頁時隱藏 -->
+                        <?php /* 窄螢幕（<768px）不排 2D 佈局，一次顯示一頁，用這列前後切換；只有一頁時隱藏 */ ?>
                         <div class="page-pager" id="page-pager" hidden>
                             <button type="button" class="ts-button is-icon is-ghost is-small" id="btn-page-prev" aria-label="上一頁">
                                 <span class="ts-icon is-chevron-left-icon" aria-hidden="true"></span>
@@ -57,8 +57,8 @@
                             <div class="paper-ruler is-horizontal" id="ruler-h" aria-hidden="true"><canvas></canvas></div>
                             <div class="paper-ruler is-vertical" id="ruler-v" aria-hidden="true"><canvas></canvas></div>
                             <div class="paper-viewport-body" id="paper-scroll">
-                                <!-- 2D 多頁佈局（js/editor/page-board.js）：水平＝不同段（之間會切紙），垂直＝同段接續的連續紙。
-                                     下面這組 #paper-shadow 永遠是「作用中頁面」，切頁時由 JS 搬進對應的欄位；其餘頁面是唯讀縮圖。 -->
+                                <?php /* 2D 多頁佈局（js/editor/page-board.js）：水平＝不同段（之間會切紙），垂直＝同段接續的連續紙。
+                                     下面這組 #paper-shadow 永遠是「作用中頁面」，切頁時由 JS 搬進對應的欄位；其餘頁面是唯讀縮圖。 */ ?>
                                 <div class="page-board" id="page-board">
                                     <div class="page-group">
                                         <div class="page-frame is-active">
@@ -75,10 +75,10 @@
                         </div>
                     </div>
 
-                    <!-- 浮動工具列：快速新增元素（.canvas-floating-toolbar）。元素設定仍在右側「元素設定」面板，
+                    <?php /* 浮動工具列：快速新增元素（.canvas-floating-toolbar）。元素設定仍在右側「元素設定」面板，
                          這裡只放「新增」這類畫布層級的快速操作。
                          data-collapse-priority：容器窄到放不下整排按鈕時，依數字由小到大
-                         把整顆按鈕收進最後的「更多工具」選單（不是壓縮/裁切）。數字愈小愈先被收，「新增文字」最常用留到最後。 -->
+                         把整顆按鈕收進最後的「更多工具」選單（不是壓縮/裁切）。數字愈小愈先被收，「新增文字」最常用留到最後。 */ ?>
                     <div class="canvas-floating-toolbar pane-toolbar" role="toolbar" aria-label="新增元素">
                         <button type="button" class="ts-button is-icon" id="btn-toolbar-add"
                             aria-haspopup="menu" aria-expanded="false" aria-label="新增元素" data-tooltip="新增元素">
@@ -111,9 +111,9 @@
                             <span class="ts-icon is-table-columns-icon" aria-hidden="true"></span>
                         </button>
 
-                        <!-- 容器寬度不夠同時放下所有按鈕時，依上面標的 data-collapse-priority
+                        <?php /* 容器寬度不夠同時放下所有按鈕時，依上面標的 data-collapse-priority
                              由小到大依序把整顆按鈕收進這個選單，可見按鈕永遠維持原始大小，
-                             不需要橫向捲動工具列才找得到。JS 邏輯見 toolbar.js wireToolbarOverflow()。 -->
+                             不需要橫向捲動工具列才找得到。JS 邏輯見 toolbar.js wireToolbarOverflow()。 */ ?>
                         <div class="pane-menu-wrap" id="toolbarOverflowWrap" hidden>
                             <button type="button" id="btnToolbarOverflow" class="ts-button is-icon is-ghost"
                                 aria-label="更多工具" aria-haspopup="menu" aria-expanded="false"
@@ -162,7 +162,7 @@
                         </div>
                     </div>
 
-                    <!-- 多欄比例選單（放在懸浮工具列外，避免干擾方向鍵巡覽） -->
+                    <?php /* 多欄比例選單（放在懸浮工具列外，避免干擾方向鍵巡覽） */ ?>
                     <div class="ts-dropdown" id="row-ratio-dropdown">
                         <a class="item" data-ratio="1,1" id="row-ratio-1-1">1 / 1</a>
                         <a class="item" data-ratio="2,1" id="row-ratio-2-1">2 / 1</a>

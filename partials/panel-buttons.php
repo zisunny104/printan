@@ -1,5 +1,5 @@
 <?php defined('PRINTAN_VIEW') || exit; ?>
-                <!-- 只在 <768px：畫布下方（頁尾之上、文件流內）的兩顆開關，開啟版面結構／元素設定抽屜（aria-expanded 由 JS 同步） -->
+                <?php /* 只在 <768px：畫布下方（頁尾之上、文件流內）的兩顆開關，開啟版面結構／元素設定抽屜（aria-expanded 由 JS 同步） */ ?>
                 <nav class="mobile-panel-bar tablet+:has-hidden" aria-label="面板">
                     <div class="ts-buttons" id="mobile-drawer-buttons">
                     <button type="button" class="ts-button is-small is-outlined is-start-icon" id="btn-outline-drawer"

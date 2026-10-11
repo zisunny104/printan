@@ -14,7 +14,7 @@ import { applyDither } from "../core/dithering.js";
 
 const FONT = DEFAULT_FONT_FAMILY;
 
-// willReadFrequently：同一張畫布會反覆 getImageData 的用途（抖色樣本）才開，改用軟體繪圖後端讀回較快，
+// willReadFrequently：同一張畫布會反覆 getImageData 的用途（仿色樣本）才開，改用軟體繪圖後端讀回較快，
 // 也不會觸發瀏覽器的 readback 效能警告；其餘只畫不讀的畫布維持預設。
 function makeCanvas(width, height, { willReadFrequently = false } = {}) {
     const canvas = document.createElement("canvas");
@@ -201,11 +201,11 @@ function buildFineDetailStrip(widthDots) {
     return canvas.toDataURL("image/png");
 }
 
-// 抖色模式比較：把同一段由白到黑的漸層分別餵給三種抖色演算法（誤差擴散／網點／閾值），
+// 仿色模式比較：把同一段由白到黑的漸層分別餵給三種仿色演算法（誤差擴散／網點／閾值），
 // 並排比較密度過渡的效果與網點紋理差異（熱感紙沒有真正的灰階，看的就是這個）。
 const DITHER_SWATCH_H = { grad: 56, label: 18 };
 function buildDitherSwatch(widthDots) {
-    const modes = [["floyd-steinberg", "誤差擴散"], ["ordered", "網點"], ["threshold", "閾值"]];
+    const modes = [["floyd-steinberg", "誤差擴散"], ["serpentine", "來回掃描"], ["blue-noise", "藍雜訊"], ["ordered", "網點"], ["threshold", "閾值"]];
     const { grad: gradH, label: labelH } = DITHER_SWATCH_H;
     const { canvas, ctx } = makeCanvas(widthDots, gradH + labelH, { willReadFrequently: true });
     const cellW = Math.floor(widthDots / modes.length);
@@ -438,7 +438,7 @@ function buildReceiptElements(info, model, iconUrl, stripUrl, cutLineUrl, fineDe
         // 細線／細字辨識：測印字頭能分辨的最細線寬、最小可讀字級
         createImageElement({ assetId: fineDetailUrl, fit: "auto", ditherMode: "threshold" }),
         gap(),
-        // 抖色模式比較：同一段漸層分別跑三種演算法（誤差擴散／網點／閾值，各欄下方已有文字標籤），比較密度過渡與網點紋理
+        // 仿色模式比較：同一段漸層分別跑三種演算法（誤差擴散／網點／閾值，各欄下方已有文字標籤），比較密度過渡與網點紋理
         createImageElement({ assetId: ditherUrl, fit: "auto", ditherMode: "threshold" }),
         gap(),
         // 技術資訊（小字級）

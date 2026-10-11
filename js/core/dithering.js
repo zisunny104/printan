@@ -1,4 +1,4 @@
-// 灰階 / 二值化 / 誤差擴散抖色，把畫面轉成熱感紙真正輸出的 1-bit 黑白。
+// 灰階 / 二值化 / 誤差擴散仿色，把畫面轉成熱感紙真正輸出的 1-bit 黑白。
 // 只操作 ImageData，不碰 DOM，符合 core 可嵌入的原則。
 
 export function toGrayscale(imageData) {
@@ -11,10 +11,87 @@ export function toGrayscale(imageData) {
     return imageData;
 }
 
-/** 照片用階調：提亮陰影，保留純白，降低暗部墨點結塊。舊圖未指定時不轉換。 */
+const PHOTO_DETAIL_GAMMA = 1.7; // 仿色前的線性化指數（亮部端）：網點覆蓋率對應的是線性亮度，灰階值直接當覆蓋率會讓中間調與亮部偏白
+const PHOTO_DETAIL_GAMMA_KNEE = 0.6; // 指數從 1（暗部，近似不轉換）漸進到 GAMMA 的亮度位置（0–1）：暗部不跟著線性化往下壓，否則會糊成黑塊
+const PHOTO_DETAIL_BLACK_FLOOR = 0.15; // 輸出亮度下限（0–1）：最暗約 85% 墨點，熱感點會擴大，再黑就連成一片、暗部細節消失
+const PHOTO_DETAIL_CLARITY = 0.8; // 局部對比強度：把大範圍的亮暗差拉開，主體才不會融進背景
+const PHOTO_DETAIL_CLARITY_RADIUS = 11; // 局部對比的模糊半徑（點）
+const PHOTO_DETAIL_SHARPEN = 0.8;
+
+/** 亮度 x（0–1）→ 仿色前的亮度：指數由暗到亮從 1 漸進到 GAMMA，再墊上黑色下限。 */
+function photoDetailLevel(x) {
+    const t = Math.min(1, x / PHOTO_DETAIL_GAMMA_KNEE);
+    const gamma = 1 + (PHOTO_DETAIL_GAMMA - 1) * t * t * (3 - 2 * t);
+    return PHOTO_DETAIL_BLACK_FLOOR + (1 - PHOTO_DETAIL_BLACK_FLOOR) * Math.pow(x, gamma);
+}
+
+/** 單通道三次方塊模糊（近似高斯），邊緣沿用最近的像素。 */
+function blurGray(src, width, height, radius) {
+    const size = 2 * radius + 1;
+    let from = src;
+    let to = new Float32Array(src.length);
+    for (let pass = 0; pass < 3; pass++) {
+        for (let y = 0; y < height; y++) {
+            const row = y * width;
+            let sum = 0;
+            for (let k = -radius; k <= radius; k++) sum += from[row + Math.min(width - 1, Math.max(0, k))];
+            for (let x = 0; x < width; x++) {
+                to[row + x] = sum / size;
+                sum += from[row + Math.min(width - 1, x + radius + 1)] - from[row + Math.max(0, x - radius)];
+            }
+        }
+        from = to;
+        to = new Float32Array(src.length);
+        for (let x = 0; x < width; x++) {
+            let sum = 0;
+            for (let k = -radius; k <= radius; k++) sum += from[Math.min(height - 1, Math.max(0, k)) * width + x];
+            for (let y = 0; y < height; y++) {
+                to[y * width + x] = sum / size;
+                sum += from[Math.min(height - 1, y + radius + 1) * width + x] - from[Math.max(0, y - radius) * width + x];
+            }
+        }
+        from = to;
+        to = new Float32Array(src.length);
+    }
+    return from;
+}
+
+/** 3×3 反銳化遮罩（輸入已是灰階）：在縮到列印點數之後做，轉成黑白前先把邊緣拉開，細節才留得住。 */
+function sharpenGray(imageData, amount, minGray = 0) {
+    const { width, height, data } = imageData;
+    const src = new Float32Array(width * height);
+    for (let p = 0, i = 0; p < src.length; p++, i += 4) src[p] = data[i];
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            let sum = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+                const yy = Math.min(height - 1, Math.max(0, y + dy));
+                for (let dx = -1; dx <= 1; dx++) sum += src[yy * width + Math.min(width - 1, Math.max(0, x + dx))];
+            }
+            const g = src[y * width + x];
+            const v = Math.max(minGray, Math.min(255, g + amount * (g - sum / 9)));
+            const i = (y * width + x) * 4;
+            data[i] = data[i + 1] = data[i + 2] = v;
+        }
+    }
+}
+
+/** 照片用階調：photo-readable＝提亮陰影、保留純白；photo-detail＝局部對比＋線性化（仿色前）＋銳化。舊圖未指定時不轉換。 */
 export function applyPhotoToneCurve(imageData, curve = "none") {
-    if (curve !== "photo-readable") return imageData;
     const d = imageData.data;
+    if (curve === "photo-detail") {
+        const { width, height } = imageData;
+        const gray = new Float32Array(width * height);
+        for (let p = 0, i = 0; p < gray.length; p++, i += 4) gray[p] = d[i];
+        const base = blurGray(gray, width, height, PHOTO_DETAIL_CLARITY_RADIUS);
+        for (let p = 0, i = 0; p < gray.length; p++, i += 4) {
+            const local = Math.max(0, Math.min(255, gray[p] + PHOTO_DETAIL_CLARITY * (gray[p] - base[p])));
+            d[i] = d[i + 1] = d[i + 2] = photoDetailLevel(local / 255) * 255;
+        }
+        sharpenGray(imageData, PHOTO_DETAIL_SHARPEN, PHOTO_DETAIL_BLACK_FLOOR * 255); // 銳化過衝也不能低於黑色下限
+        return imageData;
+    }
+    if (curve !== "photo-readable") return imageData;
     for (let i = 0; i < d.length; i += 4) {
         const gray = 16 + 239 * Math.pow(d[i] / 255, 0.72);
         d[i] = d[i + 1] = d[i + 2] = gray;
@@ -32,7 +109,7 @@ export function threshold(imageData, level = 128) {
     return imageData;
 }
 
-/** Floyd–Steinberg 誤差擴散抖色，畫質比單純閾值更接近真實熱感紙效果。 */
+/** Floyd–Steinberg 誤差擴散仿色，畫質比單純閾值更接近真實熱感紙效果。 */
 export function floydSteinberg(imageData, level = 128) {
     const { width, height, data } = imageData;
     const gray = new Float32Array(width * height);
@@ -64,6 +141,140 @@ export function floydSteinberg(imageData, level = 128) {
     return imageData;
 }
 
+/**
+ * 來回掃描的誤差擴散：奇數列由右往左掃，誤差擴散方向跟著鏡射，避免紋路都朝同一個方向；
+ * 掃到的值先夾回 0–255，累積溢出的誤差不會一路拖成長尾，亮部與暗部不會被推成大片全白或全黑。
+ */
+export function floydSteinbergSerpentine(imageData, level = 128) {
+    const { width, height, data } = imageData;
+    const gray = new Float32Array(width * height);
+    for (let i = 0, p = 0; i < data.length; i += 4, p += 1) {
+        gray[p] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    }
+    for (let y = 0; y < height; y++) {
+        const dir = y % 2 === 0 ? 1 : -1;
+        for (let k = 0; k < width; k++) {
+            const x = dir === 1 ? k : width - 1 - k;
+            const idx = y * width + x;
+            const old = Math.max(0, Math.min(255, gray[idx]));
+            const nv = old < level ? 0 : 255;
+            const err = old - nv;
+            gray[idx] = nv;
+            const ahead = x + dir;
+            const behind = x - dir;
+            if (ahead >= 0 && ahead < width) gray[idx + dir] += (err * 7) / 16;
+            if (y + 1 < height) {
+                if (behind >= 0 && behind < width) gray[idx + width - dir] += (err * 3) / 16;
+                gray[idx + width] += (err * 5) / 16;
+                if (ahead >= 0 && ahead < width) gray[idx + width + dir] += (err * 1) / 16;
+            }
+        }
+    }
+    for (let p = 0, i = 0; p < gray.length; p += 1, i += 4) {
+        const v = gray[p] < 128 ? 0 : 255;
+        data[i] = data[i + 1] = data[i + 2] = v;
+    }
+    return imageData;
+}
+
+const BLUE_NOISE_SIZE = 64;
+let blueNoiseMask = null;
+
+/** 用固定種子的 void-and-cluster 演算法產生 64×64 的藍雜訊門檻矩陣（排名 0..4095），只算一次。 */
+function getBlueNoiseMask() {
+    if (blueNoiseMask) return blueNoiseMask;
+    const size = BLUE_NOISE_SIZE;
+    const n = size * size;
+    const sigma = 1.5;
+    const radius = Math.ceil(sigma * 3);
+    const kernelSize = radius * 2 + 1;
+    const kernel = new Float32Array(kernelSize * kernelSize);
+    for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+            kernel[(dy + radius) * kernelSize + dx + radius] = Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+        }
+    }
+    const energy = new Float32Array(n);
+    const bits = new Uint8Array(n);
+    function splat(idx, sign) {
+        const x0 = idx % size;
+        const y0 = (idx - x0) / size;
+        for (let dy = -radius; dy <= radius; dy++) {
+            const row = ((y0 + dy + size) % size) * size;
+            for (let dx = -radius; dx <= radius; dx++) {
+                energy[row + ((x0 + dx + size) % size)] += sign * kernel[(dy + radius) * kernelSize + dx + radius];
+            }
+        }
+    }
+    const extreme = (want, pickMax) => {
+        let best = -1;
+        let bestValue = pickMax ? -Infinity : Infinity;
+        for (let i = 0; i < n; i++) {
+            if (bits[i] !== want) continue;
+            if (pickMax ? energy[i] > bestValue : energy[i] < bestValue) { bestValue = energy[i]; best = i; }
+        }
+        return best;
+    };
+    // 固定種子的亂數：每次產生的矩陣一樣，同一張圖每次印出來都相同
+    let seed = 0x9e3779b9;
+    const random = () => {
+        seed = (seed + 0x6d2b79f5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const ones = Math.floor(n * 0.1);
+    for (let placed = 0; placed < ones;) {
+        const i = Math.floor(random() * n);
+        if (!bits[i]) { bits[i] = 1; splat(i, 1); placed += 1; }
+    }
+    // 把最擠的點搬到最空的洞，直到不再變動
+    for (let guard = 0; guard < n * 4; guard++) {
+        const cluster = extreme(1, true);
+        bits[cluster] = 0; splat(cluster, -1);
+        const hole = extreme(0, false);
+        bits[hole] = 1; splat(hole, 1);
+        if (hole === cluster) break;
+    }
+    const initial = Uint8Array.from(bits);
+    const rank = new Int32Array(n);
+    for (let r = ones; r > 0;) { // 階段一：由最擠的點開始依序拿掉，排名 ones-1 … 0
+        const cluster = extreme(1, true);
+        bits[cluster] = 0; splat(cluster, -1);
+        r -= 1;
+        rank[cluster] = r;
+    }
+    bits.set(initial);
+    energy.fill(0);
+    for (let i = 0; i < n; i++) if (bits[i]) splat(i, 1);
+    for (let r = ones; r < n; r++) { // 階段二：由最空的洞開始依序補上，排名 ones … n-1
+        const hole = extreme(0, false);
+        bits[hole] = 1; splat(hole, 1);
+        rank[hole] = r;
+    }
+    blueNoiseMask = rank;
+    return blueNoiseMask;
+}
+
+/** 藍雜訊有序仿色：沒有規則格紋也沒有誤差擴散的蟲紋，亮部暗部的墨點密度穩定；level 不參與計算。 */
+export function blueNoiseDither(imageData) {
+    const { width, height, data } = imageData;
+    const mask = getBlueNoiseMask();
+    const size = BLUE_NOISE_SIZE;
+    const total = size * size;
+    for (let y = 0; y < height; y++) {
+        const maskRow = (y % size) * size;
+        for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            const v = gray < ((mask[maskRow + (x % size)] + 0.5) / total) * 255 ? 0 : 255;
+            data[i] = data[i + 1] = data[i + 2] = v;
+            data[i + 3] = 255;
+        }
+    }
+    return imageData;
+}
+
 const BAYER_4X4 = [
     [0, 8, 2, 10],
     [12, 4, 14, 6],
@@ -87,7 +298,7 @@ const CROSS_4X4 = [
 ];
 export const HALFTONE_PATTERNS = { dot: BAYER_4X4, line: LINE_4X4, cross: CROSS_4X4 };
 
-/** 排序抖色，呈現規則網點（印刷網屏）效果，跟誤差擴散比起來邊緣較銳利、噪點較規律。
+/** 排序仿色，呈現規則網點（印刷網屏）效果，跟誤差擴散比起來邊緣較銳利、噪點較規律。
  *  pattern 決定門檻矩陣的花紋：dot＝散開網點（預設）｜line＝橫線網屏｜cross＝菱形網點。 */
 export function orderedDither(imageData, level = 128, pattern = "dot") {
     const matrix = HALFTONE_PATTERNS[pattern] || BAYER_4X4;
@@ -128,9 +339,11 @@ export function orderedDitherGradient(imageData, w, h, tOf, fromPattern, toPatte
     return imageData;
 }
 
-/** 依「取樣方式」名稱分派抖色演算法，圖片元素的網點設定統一從這裡進入。 */
+/** 依「取樣方式」名稱分派仿色演算法，圖片元素的網點設定統一從這裡進入。 */
 export function applyDither(imageData, mode = "floyd-steinberg", level = 128, pattern = "dot") {
     if (mode === "ordered") return orderedDither(imageData, level, pattern);
+    if (mode === "blue-noise") return blueNoiseDither(imageData);
+    if (mode === "serpentine") return floydSteinbergSerpentine(imageData, level);
     if (mode === "threshold") return threshold(imageData, level);
     return floydSteinberg(imageData, level);
 }

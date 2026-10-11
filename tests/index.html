@@ -20,7 +20,8 @@ import {
     createBarcodeElement, createElement, cloneElementWithNewIds, walkElements, extractPlaceholders,
     normalizeTextElement, createImageElement,
 } from "../js/core/document-model.js";
-import { applyPhotoToneCurve } from "../js/core/dithering.js";
+import { applyDither, applyPhotoToneCurve } from "../js/core/dithering.js";
+import { applyImagePreset, applyImagePrintSettings, resolveImagePreset, DEFAULT_IMAGE_PRESET, IMAGE_PRESETS, PHOTO_EFFECTS, photoEffectOf, newImageEffectSettings } from "../js/core/image-print-settings.js";
 import * as tree from "../js/core/element-tree.js";
 import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
 import { renderElements, floatLineBox, MAX_CANVAS_HEIGHT } from "../js/core/renderer.js";
@@ -61,6 +62,99 @@ test("照片階調保白、提亮陰影，未指定與未知值維持原樣", ()
     eq(adjusted.data[20], 255, "純白保持白色");
     assert(adjusted.data[4] > levels[1], "陰影提亮");
     for (let i = 4; i < adjusted.data.length; i += 4) assert(adjusted.data[i] > adjusted.data[i - 4], "階調保持順序");
+});
+
+test("photo-detail 階調：線性化讓中間調變暗、純白維持、整張同色維持同色、局部邊緣被拉開", () => {
+    const flat = new ImageData(new Uint8ClampedArray(Array.from({ length: 64 }, () => [128, 128, 128, 255]).flat()), 8, 8);
+    applyPhotoToneCurve(flat, "photo-detail");
+    const mid = flat.data[0];
+    assert(mid < 128 && mid > 60, `中灰線性化後仍比原本暗：${mid}`);
+    assert(new Set(Array.from({ length: 64 }, (_, i) => flat.data[i * 4])).size === 1, "整張同色仍是同一個灰階");
+    const white = new ImageData(new Uint8ClampedArray(Array.from({ length: 64 }, () => [255, 255, 255, 255]).flat()), 8, 8);
+    applyPhotoToneCurve(white, "photo-detail");
+    eq(white.data[0], 255, "純白保持白色");
+    const edge = new ImageData(new Uint8ClampedArray(Array.from({ length: 32 * 8 }, (_, i) => (i % 32 < 16 ? [100, 100, 100, 255] : [160, 160, 160, 255])).flat()), 32, 8);
+    const before = [100, 160];
+    applyPhotoToneCurve(edge, "photo-detail");
+    const darkSide = edge.data[(3 * 32 + 12) * 4], lightSide = edge.data[(3 * 32 + 19) * 4];
+    assert(lightSide - darkSide > 20, `邊緣兩側仍分得出亮暗：${lightSide - darkSide} (${before})`);
+});
+
+test("photo-detail 階調：暗部不被壓成黑塊（有黑色下限、暗部細節不比原始更黑）", () => {
+    const values = Array.from({ length: 64 }, (_, i) => 15 + i); // 15..78 的暗部漸層
+    const img = new ImageData(new Uint8ClampedArray(values.flatMap((v) => [v, v, v, 255])), values.length, 1);
+    applyPhotoToneCurve(img, "photo-detail");
+    const out = Array.from({ length: values.length }, (_, i) => img.data[i * 4]);
+    assert(Math.min(...out) >= 38, `最暗不低於黑色下限：${Math.min(...out)}`);
+    const meanIn = values.reduce((a, b) => a + b, 0) / values.length;
+    const meanOut = out.reduce((a, b) => a + b, 0) / out.length;
+    assert(meanOut > meanIn + 20, `暗部整體被提亮：${meanIn.toFixed(0)} → ${meanOut.toFixed(0)}`);
+    assert(out[out.length - 2] - out[1] > 20, `暗部內部的層次仍分得出：${out[1]} → ${out[out.length - 2]}`);
+});
+
+test("藍雜訊與來回掃描仿色：墨點密度貼近灰階、結果固定、輸出只有黑白", () => {
+    for (const mode of ["blue-noise", "serpentine"]) {
+        for (const gray of [32, 128, 224]) {
+            const img = new ImageData(new Uint8ClampedArray(Array.from({ length: 128 * 128 }, () => [gray, gray, gray, 255]).flat()), 128, 128);
+            applyDither(img, mode, 128);
+            let black = 0;
+            for (let i = 0; i < img.data.length; i += 4) {
+                assert(img.data[i] === 0 || img.data[i] === 255, "只有純黑或純白");
+                if (img.data[i] === 0) black += 1;
+            }
+            const ratio = black / (128 * 128);
+            assert(Math.abs(ratio - (1 - gray / 255)) < 0.02, `${mode} 灰階 ${gray} 墨點比例 ${ratio.toFixed(3)}`);
+        }
+    }
+    const make = () => new ImageData(new Uint8ClampedArray(Array.from({ length: 80 * 80 }, (_, i) => { const v = 40 + (i % 80); return [v, v, v, 255]; }).flat()), 80, 80);
+    const a = make(), b = make();
+    applyDither(a, "blue-noise");
+    applyDither(b, "blue-noise");
+    eq(Array.from(a.data), Array.from(b.data), "同一張圖每次仿色結果相同");
+});
+
+test("照片處理組合：只改綁變數的圖片，default／不認得的值落到預設組合", () => {
+    const photo = createImageElement({ assetId: "{{photo}}", brightness: 9 });
+    const logo = createImageElement({ assetId: "asset-logo" });
+    const project = sampleProject([photo, logo]);
+    eq(resolveImagePreset("default"), DEFAULT_IMAGE_PRESET);
+    eq(resolveImagePreset("nope"), DEFAULT_IMAGE_PRESET);
+    eq(resolveImagePreset(undefined), DEFAULT_IMAGE_PRESET);
+    eq(resolveImagePreset("__proto__"), DEFAULT_IMAGE_PRESET);
+    const out = applyImagePreset(project, "clear");
+    const [p, l] = pageEls(out);
+    eq([p.toneCurve, p.ditherMode, p.brightness], ["photo-detail", "blue-noise", 9]);
+    eq([l.toneCurve, l.ditherMode], ["none", "floyd-steinberg"], "沒綁變數的圖片不動");
+    eq(pageEls(project)[0].toneCurve, "none", "不修改原專案");
+    assert(applyImagePreset(project, "soft") === project, "soft 不改範本，原物件回傳");
+    assert(applyImagePreset(project, "classic") === project, "舊名稱 classic 對應 soft");
+    eq(DEFAULT_IMAGE_PRESET, "clear", "預設組合是清晰（細節階調＋藍雜訊）");
+    eq(resolveImagePreset("detail-blue-noise"), "clear", "舊名稱對應到新名稱");
+    eq(applyImagePreset(project, "detail-serpentine") !== project, true, "舊的 detail-serpentine 仍可用");
+    const byDefault = pageEls(applyImagePreset(project, "default"))[0];
+    eq([byDefault.toneCurve, byDefault.ditherMode], ["photo-detail", "blue-noise"], "沒指定時套預設組合");
+});
+
+test("imageSettings 可用 effect 指定照片效果，toneCurve／ditherMode 逐項值優先，不認得的值忽略", () => {
+    const project = sampleProject([createImageElement({ assetId: "{{photo}}" })]);
+    const byEffect = pageEls(applyImagePrintSettings(project, { photo: { effect: "mono" } }))[0];
+    eq([byEffect.toneCurve, byEffect.ditherMode], ["none", "threshold"]);
+    const mixed = pageEls(applyImagePrintSettings(project, { photo: { effect: "clear", ditherMode: "serpentine" } }))[0];
+    eq([mixed.toneCurve, mixed.ditherMode], ["photo-detail", "serpentine"], "逐項值蓋過 effect");
+    const bogus = pageEls(applyImagePrintSettings(project, { photo: { effect: "nope", toneCurve: "x", ditherMode: "y" } }))[0];
+    eq([bogus.toneCurve, bogus.ditherMode], ["none", "floyd-steinberg"], "不認得的值不改");
+});
+
+test("照片效果：選項互不重複、能從圖片設定反查、新增圖片預設清晰、舊組合回傳 null", () => {
+    eq(new Set(PHOTO_EFFECTS.map((e) => e.id)).size, PHOTO_EFFECTS.length);
+    for (const effect of PHOTO_EFFECTS) {
+        eq(photoEffectOf({ toneCurve: effect.toneCurve, ditherMode: effect.ditherMode }), effect.id);
+    }
+    eq(photoEffectOf(createImageElement()), "soft", "資料模型預設（舊檔缺欄位）＝柔和");
+    eq(photoEffectOf({ toneCurve: "photo-readable", ditherMode: "floyd-steinberg" }), null, "舊的易辨識組合不在選單裡");
+    eq(photoEffectOf({ toneCurve: "photo-detail", ditherMode: "serpentine" }), null);
+    eq(photoEffectOf(createImageElement(newImageEffectSettings())), "clear", "新增圖片預設清晰");
+    assert(!Object.values(IMAGE_PRESETS).filter((p) => !p.hidden).some((p) => /純/.test(p.label)), "名稱不用「純」開頭");
 });
 
 test("照片階調存檔後保留，獨立亮度與對比不被覆寫", () => {
