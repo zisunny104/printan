@@ -1,53 +1,5 @@
-// Kiosk 模式：外部系統（例如測驗網站選到某個結果、或別的應用配對後）把 printan 嵌在 iframe 裡，
-// 用指定範本＋postMessage 送進來的變數值直接列印，畫面看不出是 printan。
-// 這個模組只管「kiosk 這一層」怎麼跟父視窗交換資料——資料本身怎麼產生（測驗邏輯、配對代碼）
-// 是父視窗自己的事，這裡不做任何後端配對機制。
-//
-// 支援的 query 參數（只有這些，其餘一律忽略——變數值不再從網址列讀，全部走 postMessage）：
-//   tpl=<.ptan 網址>[,<.ptan 網址>...]   指定範本，限同源（不接受任意第三方網址，也不是 IndexedDB
-//                      草稿 id，這樣才能跨裝置／跨部署使用同一份範本檔）。可以用逗號分隔給多個
-//                      網址——多份範本各自套用同一份 data 後由上而下拼成一張畫布再送印（見
-//                      compose.js renderProjects），給「單據由後台排序的多個獨立範本組成」這種
-//                      用法用；單一網址時行為跟以前完全一樣（走單一專案，會載入畫面預覽）。
-//   kiosk=1            切 <html class="is-kiosk">，給 CSS 隱藏工具列／大綱／檢視器等編輯介面用
-//                      （實際隱藏規則不在這裡，這裡只掛 class）
-//   jobId=<字串>       選填，列印工作識別碼初始值；收到 submit-job 時會被訊息裡的 jobId 覆蓋。
-//                      只用來原樣帶回 postMessage 回報，讓父視窗在連續兩筆列印工作時對得上是哪一筆
-//   parentOrigin=<origin> 父視窗 origin，回報與接收資料都只信任這個來源；沒給就退而用
-//                      document.referrer 的 origin（iframe 嵌入時瀏覽器通常會帶）；兩者都拿不到，
-//                      這個 kiosk session 就沒有任何安全的對象可以送資料／收資料，整組功能不會動作
-//   gapDots=<數字>     選填，只有 tpl 給多個網址時有意義：多份範本合成時中間的留白點數，
-//                      預設 0（父視窗如果自己有這個偏好設定，帶進來就好，不給就不留白）
-//
-// postMessage 協定：
-//   printan → 父視窗（回報，只要判斷得出 parentOrigin 就會送，targetOrigin 一律是 parentOrigin，
-//   不用 "*"，避免列印內容——姓名／留言等——洩漏給不明頁面）：
-//     { source: "printan-kiosk", jobId, status: "ready"|"printer_connected"|"printed"|"print_failed"|"needs_connect", ...細節欄位 }
-//     ready 代表範本已載入完成，可以送 submit-job 了。
-//     ready 之後 printan 會先靜默重連一次已授權印表機再回報結果，不用等第一筆列印工作：已連上是
-//     printer_connected；沒有已授權裝置是 needs_connect，並直接顯示配對按鈕（配對成功後回報
-//     printer_connected，不會列印）。這段檢查進行中收到的 submit-job 會等它做完才處理。
-//     另有 { source: "printan-kiosk", jobId: null, status: "printer_status", connected, supported, online, paper: "ok"|"near-end"|"out",
-//     coverOpen, paperEndStop, errorState, cutterError, unrecoverable, autoRecoverable, raw: [n1..n4 原始位元組] }：
-//     印表機閒置時每 STATUS_POLL_MS 讀一次即時狀態（DLE EOT 1～4），狀態有變或距離上次回報超過 STATUS_REPORT_MAX_MS 才送；
-//     USB／序列埠被拔掉時立刻送 connected:false。supported:false＝這台印表機／連線方式查不到狀態（其餘欄位沒有）。
-//     n=2／n=3 的位元定義尚未實機驗證，raw 供對照。
-//   父視窗 → printan（要求立即讀一次印表機狀態，後台「立即檢查」用）：{ type: "printan:query-status" }
-//     不管狀態有沒有變都會回一則 printer_status；正在列印（忙碌）會每秒重試，最多約 6 秒，仍忙就不回（父視窗自己逾時處理）。
-//   父視窗 → printan（送資料，唯一的資料輸入管道）：
-//     { type: "printan:submit-job", jobId, data: { 變數名: 值 } }
-//     data 裡的鍵值比照範本 {{var}} 的規則套進 previewData（文字變數直接代換；照片變數是
-//     圖片元素 assetId 用 {{var}} 佔位，值需為 https:// 開頭網址，見 renderer.js resolveImage）。
-//     文字變數的值也可以是 run 陣列 [{ text, bold?, italic?, strikethrough? }]，見 merge.js applyDataToElements；
-//     不合格式的陣列會被忽略。
-//     多範本模式下同一份 data 會分別套到每一份範本，各自只挑自己範本裡實際用到的變數名稱
-//     （見 applyVariablesFromData），所以不同範本的變數名稱不會互相污染，即使剛好同名也只是
-//     兩邊都吃到同一個值，不會報錯。套用完立刻觸發一次列印（有已授權印表機就直接印，沒有就
-//     顯示候補配對按鈕）。event.origin 必須等於 parentOrigin 且 event.source 必須是
-//     window.parent，其餘一律忽略。
-//
-// 已知限制：如果範本剛好有變數叫 tpl／kiosk／jobId／parentOrigin／gapDots，會被當保留字吃掉、
-// 進不了 previewData，這種邊角案例不特別處理。
+// Kiosk 模式：嵌在 iframe 裡，依指定範本與父視窗送來的變數值直接列印。
+// 這個模組只處理與父視窗之間的資料往來與回報，協定與參數說明見 docs/kiosk-integration.md。
 
 import { extractPlaceholders } from "../core/document-model.js";
 import { isRunArray } from "../core/merge.js";
@@ -65,8 +17,7 @@ const KIOSK_CLASS = "is-kiosk";
 const KIOSK_PREVIEW_CLASS = "kiosk-preview";
 const RESERVED_PARAMS = new Set(["tpl", "kiosk", "jobId", "parentOrigin", "gapDots"]);
 
-// 這次列印工作的識別碼與回報／接收用的信任 origin；只有 bootKioskFromQuery 在跑，模組層級變數夠用，
-// 不需要放進 state（跟編輯器畫面狀態無關，是這個 kiosk session 專屬的一次性資訊）。
+// 這次列印工作的識別碼與回報對象；只屬於這個 kiosk session，不放進 state。
 let currentJobId = null;
 let reportTargetOrigin = null;
 
@@ -150,9 +101,7 @@ function describePrintFailure(outcome) {
     return `自動列印失敗：${pageInfo}${pageInfo ? "，" : ""}${describePrinterError(outcome.error)}，請改用列印鍵`;
 }
 
-// parentOrigin= 沒給就用 document.referrer 的 origin 當預設（iframe 嵌入時瀏覽器會自動帶，
-// 除非父頁面設了 Referrer-Policy 擋掉）；兩者都沒有就回傳 null，這個 kiosk session 整組不動作。
-// 跟 isAllowedTemplateUrl 不同的是這裡允許跨源——父視窗本來就大多是別的網站（例如 chunghsingshashin）。
+// 決定父視窗的來源；判斷不出來就回傳 null。
 function resolveParentOrigin(params) {
     const explicit = params.get("parentOrigin");
     if (explicit) {
@@ -173,8 +122,7 @@ function resolveParentOrigin(params) {
     return null;
 }
 
-// 回報列印工作狀態給父視窗；沒有 reportTargetOrigin（沒帶 parentOrigin 也讀不到 referrer）或根本沒被
-// iframe 嵌入就整個跳過，不會用 "*" 亂猜目標，避免姓名／留言等列印內容送到不明頁面。
+// 回報列印工作狀態給父視窗；沒有嵌入或沒有回報對象時只更新畫面上的狀態區。
 function reportJobStatus(status, extra = {}) {
     showStatusOnBar(status, extra);
     if (window.parent === window || !reportTargetOrigin) return;
@@ -390,9 +338,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     const tplParam = params.get("tpl");
     if (!tplParam) return false;
 
-    // origin 要在讀範本之前先算出來：範本讀取失敗（網址錯、範本內容壞掉、同源檢查沒過……）
-    // 也要能回報給父視窗，不然父視窗只會看到「一直沒收到 ready」，完全不知道是什麼問題、
-    // 也無從在自己的畫面上顯示錯誤原因給現場人員看。
+    // 回報對象要在讀範本之前先算出來，讀取失敗時才回報得出去。
     currentJobId = params.get("jobId") || null;
     reportTargetOrigin = resolveParentOrigin(params);
 
@@ -406,8 +352,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     for (const url of tplUrls) {
         const { project, error } = await loadTemplateFromUrl(url);
         if (!project) {
-            // 任一份讀取失敗就整個中止，維持 kiosk 外觀顯示錯誤提示，不退回一般編輯畫面；
-            // 同時盡量回報給父視窗（沒有 reportTargetOrigin 就跟以前一樣完全不動作）。
+            // 任一份讀取失敗就整個中止，顯示錯誤並盡量回報給父視窗。
             setKioskTemplateNames([], "無法載入範本");
             attemptSilentPrinterReconnect().catch(() => {}).finally(markPrinterChecked); // 指示燈仍要如實顯示印表機
             reportJobStatus("load_failed", { message: `範本載入失敗：${url}（${error}）` });
@@ -428,15 +373,12 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     }
 
     if (!reportTargetOrigin) {
-        // 判斷不出安全的父視窗 origin：既沒有 parentOrigin 也讀不到 referrer，沒有可信任的對象
-        // 可以送資料進來，這個 kiosk session 就只顯示範本本身，不會有任何 postMessage 動作。
-        // 狀態列仍要如實顯示印表機（重連是同一次單一進行中的呼叫，不會重複開裝置）。
+        // 沒有父視窗可互通：只顯示範本，狀態區仍如實顯示印表機。
         attemptSilentPrinterReconnect().catch(() => {}).finally(markPrinterChecked);
         return true;
     }
 
-    // 唯一的資料輸入管道：父視窗收到 ready 之後送 submit-job 帶變數值進來，套用完立刻觸發列印。
-    // 嚴格比對 event.origin／event.source，其餘一律忽略。
+    // 資料輸入管道：父視窗收到 ready 之後送 submit-job，套用後立刻列印。
     window.addEventListener("message", (event) => {
         if (event.origin !== reportTargetOrigin || event.source !== window.parent) return;
         const msg = event.data;
@@ -519,7 +461,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     startPrinterStatusReporting();
     reportJobStatus("ready", {
         capabilities: ["job-project", "job-project-required", "image-settings", "image-presets"],
-        imagePresets: Object.entries(IMAGE_PRESETS).map(([id, preset]) => ({ id, label: preset.label })),
+        imagePresets: Object.entries(IMAGE_PRESETS).filter(([, preset]) => !preset.hidden).map(([id, preset]) => ({ id, label: preset.label })),
         defaultImagePreset: DEFAULT_IMAGE_PRESET,
     });
     // 不 await：editor.js 等這個函式跑完才收起骨架畫面，印表機重連（可能卡在裝置 open）不該拖住畫面顯示。

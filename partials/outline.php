@@ -1,11 +1,11 @@
 <?php defined('PRINTAN_VIEW') || exit; ?>
-                <!-- ≥768px 是一般側欄（CSS 讓未開啟的 dialog 也照常顯示）；<768px 是底部抽屜，由工具列 #btn-outline-drawer
-                     以 showModal() 開啟（原生 dialog：Esc、焦點陷阱、焦點還原、body 鎖捲動）。內容只有這一份，不重複渲染。 -->
+                <?php /* ≥768px 是一般側欄（CSS 讓未開啟的 dialog 也照常顯示）；<768px 是底部抽屜，由工具列 #btn-outline-drawer
+                     以 showModal() 開啟（原生 dialog：Esc、焦點陷阱、焦點還原、body 鎖捲動）。內容只有這一份，不重複渲染。 */ ?>
                 <dialog class="ts-app-drawer is-bottom editor-list" id="outlineSidebar" aria-label="版面結構">
                     <button type="button" class="sheet-handle" aria-label="面板把手（拖曳調整高度）"><span aria-hidden="true"></span></button>
                     <div class="content">
-                    <!-- 版面結構樹：最上層是頁面（frame），底下是該頁元素，各層可收合（js/editor/outline.js）。
-                         頁面的新增／刪除／改名／排序／合併／切紙開關都在頁面列上；分割是「從選取的元素處切開」，放標題列。 -->
+                    <?php /* 版面結構樹：最上層是頁面（frame），底下是該頁元素，各層可收合（js/editor/outline.js）。
+                         頁面的新增／刪除／改名／排序／合併／切紙開關都在頁面列上；分割是「從選取的元素處切開」，放標題列。 */ ?>
                     <div class="ts-box is-rounded">
                         <div class="pane-card-header">
                             <span class="pane-card-header-title">

@@ -142,7 +142,7 @@ export function floydSteinberg(imageData, level = 128) {
 }
 
 /**
- * 來回掃描的誤差擴散：奇數列由右往左掃，誤差擴散方向跟著鏡射，不會像單向掃描長出同方向的蟲紋；
+ * 來回掃描的誤差擴散：奇數列由右往左掃，誤差擴散方向跟著鏡射，避免紋路都朝同一個方向；
  * 掃到的值先夾回 0–255，累積溢出的誤差不會一路拖成長尾，亮部與暗部不會被推成大片全白或全黑。
  */
 export function floydSteinbergSerpentine(imageData, level = 128) {
