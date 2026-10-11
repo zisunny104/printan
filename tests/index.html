@@ -21,7 +21,7 @@ import {
     normalizeTextElement, createImageElement,
 } from "../js/core/document-model.js";
 import { applyDither, applyPhotoToneCurve } from "../js/core/dithering.js";
-import { applyImagePreset, resolveImagePreset, DEFAULT_IMAGE_PRESET } from "../js/core/image-print-settings.js";
+import { applyImagePreset, applyImagePrintSettings, resolveImagePreset, DEFAULT_IMAGE_PRESET, IMAGE_PRESETS, PHOTO_EFFECTS, photoEffectOf, newImageEffectSettings } from "../js/core/image-print-settings.js";
 import * as tree from "../js/core/element-tree.js";
 import { createEmptyProject, loadProject, serializeProject, PTAN_VERSION } from "../js/core/schema.js";
 import { renderElements, floatLineBox, MAX_CANVAS_HEIGHT } from "../js/core/renderer.js";
@@ -121,15 +121,40 @@ test("照片處理組合：只改綁變數的圖片，default／不認得的值�
     eq(resolveImagePreset("nope"), DEFAULT_IMAGE_PRESET);
     eq(resolveImagePreset(undefined), DEFAULT_IMAGE_PRESET);
     eq(resolveImagePreset("__proto__"), DEFAULT_IMAGE_PRESET);
-    const out = applyImagePreset(project, "detail-blue-noise");
+    const out = applyImagePreset(project, "clear");
     const [p, l] = pageEls(out);
     eq([p.toneCurve, p.ditherMode, p.brightness], ["photo-detail", "blue-noise", 9]);
     eq([l.toneCurve, l.ditherMode], ["none", "floyd-steinberg"], "沒綁變數的圖片不動");
     eq(pageEls(project)[0].toneCurve, "none", "不修改原專案");
-    assert(applyImagePreset(project, "classic") === project, "classic 不改範本，原物件回傳");
-    eq(DEFAULT_IMAGE_PRESET, "detail-blue-noise", "預設組合是細節階調＋藍雜訊");
+    assert(applyImagePreset(project, "soft") === project, "soft 不改範本，原物件回傳");
+    assert(applyImagePreset(project, "classic") === project, "舊名稱 classic 對應 soft");
+    eq(DEFAULT_IMAGE_PRESET, "clear", "預設組合是清晰（細節階調＋藍雜訊）");
+    eq(resolveImagePreset("detail-blue-noise"), "clear", "舊名稱對應到新名稱");
+    eq(applyImagePreset(project, "detail-serpentine") !== project, true, "舊的 detail-serpentine 仍可用");
     const byDefault = pageEls(applyImagePreset(project, "default"))[0];
     eq([byDefault.toneCurve, byDefault.ditherMode], ["photo-detail", "blue-noise"], "沒指定時套預設組合");
+});
+
+test("imageSettings 可用 effect 指定照片效果，toneCurve／ditherMode 逐項值優先，不認得的值忽略", () => {
+    const project = sampleProject([createImageElement({ assetId: "{{photo}}" })]);
+    const byEffect = pageEls(applyImagePrintSettings(project, { photo: { effect: "mono" } }))[0];
+    eq([byEffect.toneCurve, byEffect.ditherMode], ["none", "threshold"]);
+    const mixed = pageEls(applyImagePrintSettings(project, { photo: { effect: "clear", ditherMode: "serpentine" } }))[0];
+    eq([mixed.toneCurve, mixed.ditherMode], ["photo-detail", "serpentine"], "逐項值蓋過 effect");
+    const bogus = pageEls(applyImagePrintSettings(project, { photo: { effect: "nope", toneCurve: "x", ditherMode: "y" } }))[0];
+    eq([bogus.toneCurve, bogus.ditherMode], ["none", "floyd-steinberg"], "不認得的值不改");
+});
+
+test("照片效果：選項互不重複、能從圖片設定反查、新增圖片預設清晰、舊組合回傳 null", () => {
+    eq(new Set(PHOTO_EFFECTS.map((e) => e.id)).size, PHOTO_EFFECTS.length);
+    for (const effect of PHOTO_EFFECTS) {
+        eq(photoEffectOf({ toneCurve: effect.toneCurve, ditherMode: effect.ditherMode }), effect.id);
+    }
+    eq(photoEffectOf(createImageElement()), "soft", "資料模型預設（舊檔缺欄位）＝柔和");
+    eq(photoEffectOf({ toneCurve: "photo-readable", ditherMode: "floyd-steinberg" }), null, "舊的易辨識組合不在選單裡");
+    eq(photoEffectOf({ toneCurve: "photo-detail", ditherMode: "serpentine" }), null);
+    eq(photoEffectOf(createImageElement(newImageEffectSettings())), "clear", "新增圖片預設清晰");
+    assert(!Object.values(IMAGE_PRESETS).filter((p) => !p.hidden).some((p) => /純/.test(p.label)), "名稱不用「純」開頭");
 });
 
 test("照片階調存檔後保留，獨立亮度與對比不被覆寫", () => {

@@ -3,7 +3,7 @@
     <meta charset="UTF-8">
     <title>Printan 單仔 - KoiLiSu | prjToka</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- CSP：只允許本站與用到的兩個 CDN，以及 Cloudflare 對代理站點自動注入的 Web Analytics 腳本（script-src 的 static.cloudflareinsights.com；它回報用的 /cdn-cgi/rum 是同源，connect-src 的 'self' 已涵蓋，不用另外開）；connect-src 放行 cdnjs 是為了開發者工具讀取函式庫的 sourcemap（.map），不然開著工具時主控台每次都有被擋的訊息；內嵌 theme-script 與 Tocas／Canvas 動態樣式需要 unsafe-inline，圖片放行 data:／blob:（畫布轉出、列印預覽）與 https:（批次資料的圖片網址），HEIC 轉檔（自行託管的 libheif wasm，在 same-origin worker 內執行）只需要 wasm-unsafe-eval，不放行 eval。 -->
+    <?php /* CSP：只允許本站與用到的兩個 CDN，以及 Cloudflare 對代理站點自動注入的 Web Analytics 腳本（script-src 的 static.cloudflareinsights.com；它回報用的 /cdn-cgi/rum 是同源，connect-src 的 'self' 已涵蓋，不用另外開）；connect-src 放行 cdnjs 是為了開發者工具讀取函式庫的 sourcemap（.map），不然開著工具時主控台每次都有被擋的訊息；內嵌 theme-script 與 Tocas／Canvas 動態樣式需要 unsafe-inline，圖片放行 data:／blob:（畫布轉出、列印預覽）與 https:（批次資料的圖片網址），HEIC 轉檔（自行託管的 libheif wasm，在 same-origin worker 內執行）只需要 wasm-unsafe-eval，不放行 eval。 */ ?>
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src 'self' data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tocas-ui/5.7.0/tocas.min.css"
         integrity="sha512-F4xj0Qcc6/jwQjpN70mZP1F5edUVg/WbWEYqUu1FEnvZFAg5IxvBAlNgji+6547uhPtaO14HmBdMhsZ19fHVSw=="
@@ -14,7 +14,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"
         integrity="sha512-plOdviVmws4Y3JAvbnpfKb2hVxKM1lCwsi3vmElYRj+tiDLffZ4FVUj5a8vyKJ9pIgl8JCAHEJ4D1iUKBecswg=="
         crossorigin="anonymous" defer></script>
-    <!-- cdnjs 上的 qrcode-generator 套件實際上沒有檔案（打開會 404／ORB 擋下且無 console 錯誤，很難察覺），改用 jsdelivr 直接讀 npm 套件內容 -->
+    <?php /* cdnjs 上的 qrcode-generator 套件實際上沒有檔案（打開會 404／ORB 擋下且無 console 錯誤，很難察覺），改用 jsdelivr 直接讀 npm 套件內容 */ ?>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"
         integrity="sha512-2BJF/j/2TII7JcHAPMIT74wLQ8BTk5NqeGAC5ypeSKLa6V96abAl86gvcsrU2etaN4fttehQtcxXXAriYXlDCg=="
         crossorigin="anonymous" defer></script>
@@ -24,7 +24,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"
         integrity="sha512-nMnXAGKzA0wZ4YsriudrdnAKSFYXwdCvSt1Auwz6q7XXtSRoRcMVud13Q1LnQnobA2hRhLtHUv9tbVR5pyStPw=="
         crossorigin="anonymous" defer></script>
-    <!-- 圖示放在Printan 目錄底下並明確宣告，不靠網站根目錄的 /favicon.ico（那是整個站共用的位置） -->
+    <?php /* 圖示放在Printan 目錄底下並明確宣告，不靠網站根目錄的 /favicon.ico（那是整個站共用的位置） */ ?>
     <link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars($appBasePath) ?>/img/favicon.svg">
     <link rel="apple-touch-icon" href="<?= htmlspecialchars($appBasePath) ?>/img/apple-touch-icon.png">
     <link rel="stylesheet" href="<?= htmlspecialchars($appBasePath) ?>/css/editor.css">

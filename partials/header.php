@@ -1,6 +1,6 @@
 <?php defined('PRINTAN_VIEW') || exit; ?>
-            <!-- 整個頁首包一層 id，kiosk 模式（.is-kiosk，見 css/editor.css 尾端）一次隱藏標題／說明／
-                 存檔狀態／說明按鈕＋下面那條分隔線，不用逐一挑選擇器 -->
+            <?php /* 整個頁首包一層 id，kiosk 模式（.is-kiosk，見 css/editor.css 尾端）一次隱藏標題／說明／
+                 存檔狀態／說明按鈕＋下面那條分隔線，不用逐一挑選擇器 */ ?>
             <div id="app-header">
                 <div class="ts-grid is-middle-aligned">
                     <div class="column is-fluid">

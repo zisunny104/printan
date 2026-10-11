@@ -9,8 +9,8 @@ import {
 import { MAX_ROW_GAP, normalizeRowGap, dotsToPt as dotsToPtRaw, ptToDots as ptToDotsRaw, dotsToMm, mmToDots } from "../core/units.js";
 import { WEB_FONTS, findWebFont, isWebFontFailed } from "../core/web-fonts.js";
 import { applyFieldToElements, findElementById, setRowRatio, splitRowColumn, mergeRowColumns, MAX_ROW_COLUMNS } from "../core/element-tree.js";
+import { PHOTO_EFFECTS, photoEffectOf } from "../core/image-print-settings.js";
 import { createInfoIcon } from "./ui-helpers.js";
-import { PHOTO_DITHER_MODES, PHOTO_TONE_CURVES } from "../core/image-print-settings.js";
 import {
     getLocalFontFamilies, isFontInstalled, isLocalFontAccessSupported, loadLocalFonts, localFontStack,
     primaryFamilyName,
@@ -367,13 +367,13 @@ const TEXT_STYLE_PRESET_INFO = "標籤對應 Markdown 的標題階層（H1-H5）
 const PRESET_BACKED_FIELDS = ["fontSize", "bold", "lineHeight", "letterSpacing"];
 
 // 「容器底色」選單：多一個「無」對應 el.inverse=false（見 buildTextInspector），其餘沿用 fillFields
-// 的模式名稱，但「純黑」在這裡改叫「反轉」，比較貼近使用者實際感受到的效果（黑底白字）。
+// 的模式名稱，但「全黑」在這裡改叫「反轉」，比較貼近使用者實際感受到的效果（黑底白字）。
 // 填色方式按鈕直接用色票（實際填色效果的縮圖）取代抽象圖示，跟工具列的粗體/斜體一樣是單選圖示按鈕組。
 const fillSwatch = (bg) => `<span class="fill-swatch" style="background:${bg}" aria-hidden="true"></span>`;
 const SWATCH_SOLID = fillSwatch("#000");
 const SWATCH_HALFTONE = fillSwatch("radial-gradient(circle, #000 34%, transparent 36%) 0 0/40% 40%, #fff");
 const SWATCH_GRADIENT = fillSwatch("linear-gradient(135deg, #000, #fff)");
-const INK_FILL_MODE_OPTIONS = [["solid", "純黑", SWATCH_SOLID], ["halftone", "網點", SWATCH_HALFTONE], ["gradient", "漸層", SWATCH_GRADIENT]];
+const INK_FILL_MODE_OPTIONS = [["solid", "全黑", SWATCH_SOLID], ["halftone", "網點", SWATCH_HALFTONE], ["gradient", "漸層", SWATCH_GRADIENT]];
 // 「無」「反轉」是狀態／動作不是顏色，用圖示比色票更好懂；網點／漸層是實際填色效果，用色票。
 const BG_FILL_MODE_OPTIONS = [["none", "無", "ban"], ["solid", "反轉", "circle-half-stroke"], ["halftone", "網點", SWATCH_HALFTONE], ["gradient", "漸層", SWATCH_GRADIENT]];
 const FILL_DIRECTION_OPTIONS = [
@@ -891,15 +891,19 @@ function buildImageInspector(panel, el) {
         body.appendChild(sliderField("亮度", el.brightness ?? 0, -100, 100, (v) => { el.brightness = v; onModelChange({ skipInspector: true }); }));
         body.appendChild(sliderField("對比", el.contrast ?? 0, -100, 100, (v) => { el.contrast = v; onModelChange({ skipInspector: true }); }));
         body.appendChild(field(null, checkboxInput(!!el.invert, (v) => { el.invert = v; onModelChange({ skipInspector: true }); }, "反相")));
-        body.appendChild(field("熱感照片階調", selectInput(
-            PHOTO_TONE_CURVES,
-            el.toneCurve || "none",
-            (v) => { el.toneCurve = v; onModelChange(); },
-        )));
-        body.appendChild(field("取樣方式", selectInput(
-            PHOTO_DITHER_MODES,
-            el.ditherMode || "floyd-steinberg",
-            (v) => { el.ditherMode = v; onModelChange(); },
+        const effectId = photoEffectOf(el);
+        // 舊檔的其他組合（例如易辨識、來回掃描）不在選單裡，多列一項「其他（舊設定）」顯示現況，選別的才會改
+        const effectOptions = [...PHOTO_EFFECTS.map((effect) => [effect.id, effect.label]), ...(effectId ? [] : [["legacy", "其他（舊設定）"]])];
+        body.appendChild(field("照片效果", selectInput(
+            effectOptions,
+            effectId || "legacy",
+            (v) => {
+                const effect = PHOTO_EFFECTS.find((item) => item.id === v);
+                if (!effect) return;
+                el.toneCurve = effect.toneCurve;
+                el.ditherMode = effect.ditherMode;
+                onModelChange();
+            },
         )));
         if (el.ditherMode === "threshold") {
             body.appendChild(sliderField("門檻", el.thresholdLevel ?? 128, 0, 255, (v) => { el.thresholdLevel = v; onModelChange({ skipInspector: true }); }));
@@ -914,7 +918,7 @@ function buildSpacerInspector(panel, el) {
     panel.appendChild(field("高度 (dot)", textInput(el.heightDots, (v) => { el.heightDots = v; onModelChange({ skipInspector: true }); }, "number")));
 }
 
-// 共用的填色控制項：純黑／網點／漸層，分隔線色塊、文字墨色、文字反白背景都用這一組（見
+// 共用的填色控制項：全黑／網點／漸層，分隔線色塊、文字墨色、文字反白背景都用這一組（見
 // document-model.js createFill／resolveFill）。onChange(patch, needsRedraw)：patch 是要併入
 // 目前 fill 物件的欄位，needsRedraw 是「模式」這類會讓子欄位跟著變、面板要整個重繪的變動；
 // 其餘（濃度／方向／反轉）用 skipInspector，行為比照其它欄位（例如 divider 原本的粗細）。

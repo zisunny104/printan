@@ -1,11 +1,9 @@
 import { childArrays } from "./element-tree.js";
 import { loadProject } from "./schema.js";
 
-// 熱感照片可選的階調與取樣方式：編輯器的下拉選單、外部設定的檢查、chunghsingshashin 後台的選單都讀這裡，
-// 新增或改名只改這兩份清單（[代號, 顯示名稱]）。
-export const PHOTO_TONE_CURVES = [["none", "原始"], ["photo-readable", "易辨識（提亮暗部）"], ["photo-detail", "細節（局部對比＋線性化＋銳化）"]];
-export const PHOTO_DITHER_MODES = [["floyd-steinberg", "誤差擴散"], ["serpentine", "誤差擴散（來回掃描）"], ["blue-noise", "藍雜訊"], ["ordered", "網點"], ["threshold", "純黑白"]];
-const hasOption = (list, id) => list.some(([value]) => value === id);
+// imageSettings 逐項接受的階調與取樣方式（含舊檔用過、已不列在選單裡的值）；對外只公開 PHOTO_EFFECTS。
+const ACCEPTED_TONE_CURVES = ["none", "photo-readable", "photo-detail"];
+const ACCEPTED_DITHER_MODES = ["floyd-steinberg", "serpentine", "blue-noise", "ordered", "threshold"];
 
 // 只覆寫指定圖片變數的轉換設定，不更動原專案及版面。
 export function applyImagePrintSettings(project, byVariable = {}) {
@@ -19,8 +17,13 @@ export function applyImagePrintSettings(project, byVariable = {}) {
                     const min = key === "thresholdLevel" ? 0 : -100, max = key === "thresholdLevel" ? 255 : 100;
                     if (Number.isInteger(settings[key]) && settings[key] >= min && settings[key] <= max) el[key] = settings[key];
                 }
-                if (hasOption(PHOTO_TONE_CURVES, settings.toneCurve)) el.toneCurve = settings.toneCurve;
-                if (hasOption(PHOTO_DITHER_MODES, settings.ditherMode)) el.ditherMode = settings.ditherMode;
+                const effect = PHOTO_EFFECTS.find((item) => item.id === settings.effect);
+                if (effect) {
+                    el.toneCurve = effect.toneCurve;
+                    el.ditherMode = effect.ditherMode;
+                }
+                if (ACCEPTED_TONE_CURVES.includes(settings.toneCurve)) el.toneCurve = settings.toneCurve;
+                if (ACCEPTED_DITHER_MODES.includes(settings.ditherMode)) el.ditherMode = settings.ditherMode;
             }
             for (const children of childArrays(el)) apply(children);
         }
@@ -29,18 +32,44 @@ export function applyImagePrintSettings(project, byVariable = {}) {
     return loadProject(copy).project;
 }
 
-// 外部（kiosk 的 submit-job 帶 imagePreset）可以選的照片處理組合。settings 為 null＝不改範本裡各圖片自己的設定。
-// 預設組合由 DEFAULT_IMAGE_PRESET 決定：呼叫端沒指定或指定 "default" 時就套這一個，之後換預設只改這個常數。
+// 圖片的「照片效果」：把階調（toneCurve）與取樣方式（ditherMode）合成使用者看得懂的幾個選項，
+// 編輯器的下拉選單、新增圖片的預設值、外部（kiosk 的 submit-job 帶 imagePreset）的組合都從這裡來。
+export const PHOTO_EFFECTS = [
+    { id: "clear", label: "清晰", toneCurve: "photo-detail", ditherMode: "blue-noise" },
+    { id: "soft", label: "柔和", toneCurve: "none", ditherMode: "floyd-steinberg" },
+    { id: "halftone", label: "網點", toneCurve: "none", ditherMode: "ordered" },
+    { id: "mono", label: "黑白", toneCurve: "none", ditherMode: "threshold" },
+];
+
+/** 圖片目前的設定對應哪個照片效果；舊檔的其他組合（例如易辨識、來回掃描）回傳 null。 */
+export function photoEffectOf(el) {
+    const tone = el.toneCurve || "none";
+    const dither = el.ditherMode || "floyd-steinberg";
+    return PHOTO_EFFECTS.find((effect) => effect.toneCurve === tone && effect.ditherMode === dither)?.id ?? null;
+}
+
+/** 新增圖片時的預設效果。只用在使用者新增圖片的地方；資料模型本身的預設值不變。 */
+export const NEW_IMAGE_EFFECT_ID = "clear";
+export function newImageEffectSettings() {
+    const { toneCurve, ditherMode } = PHOTO_EFFECTS.find((effect) => effect.id === NEW_IMAGE_EFFECT_ID);
+    return { toneCurve, ditherMode };
+}
+
+// 外部可選的組合：clear／soft 就是上面的照片效果；soft 不改範本裡各圖片自己的設定（settings 為 null）。
+// 舊名稱（classic、detail-blue-noise）仍接受，對應到新名稱；detail-serpentine 只留給舊呼叫端，不列在清單裡。
 export const IMAGE_PRESETS = {
-    classic: { label: "原始（誤差擴散）", settings: null },
-    "detail-blue-noise": { label: "細節階調＋藍雜訊", settings: { toneCurve: "photo-detail", ditherMode: "blue-noise" } },
-    "detail-serpentine": { label: "細節階調＋來回掃描", settings: { toneCurve: "photo-detail", ditherMode: "serpentine" } },
+    clear: { label: "清晰", settings: { toneCurve: "photo-detail", ditherMode: "blue-noise" } },
+    soft: { label: "柔和", settings: null },
+    "detail-serpentine": { label: "細節階調＋來回掃描", settings: { toneCurve: "photo-detail", ditherMode: "serpentine" }, hidden: true },
 };
-export const DEFAULT_IMAGE_PRESET = "detail-blue-noise";
+const IMAGE_PRESET_ALIASES = { classic: "soft", "detail-blue-noise": "clear" };
+// 呼叫端沒指定或指定 "default" 時就套這一個，之後換預設只改這個常數。
+export const DEFAULT_IMAGE_PRESET = "clear";
 
 /** 把呼叫端給的名稱整理成真正的組合 id："default"、沒給、不認得的值都落到預設組合。 */
 export function resolveImagePreset(id) {
-    return Object.hasOwn(IMAGE_PRESETS, id) ? id : DEFAULT_IMAGE_PRESET;
+    const name = Object.hasOwn(IMAGE_PRESET_ALIASES, id) ? IMAGE_PRESET_ALIASES[id] : id;
+    return Object.hasOwn(IMAGE_PRESETS, name) ? name : DEFAULT_IMAGE_PRESET;
 }
 
 /** 對所有綁變數的圖片（照片）套用組合；亮度、對比、反相與沒綁變數的圖片（Logo 等）不動。 */
