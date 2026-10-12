@@ -314,7 +314,7 @@ async function runMultiAutoprintFlow(projects, data, gapDots) {
  * 讀網址 query string，有 tpl= 就切換成 kiosk 流程；沒有就什麼都不做（一般編輯器行為不受影響）。
  * 要在 editor.js 的 init() 完成一般初始化（含靜默重連印表機）之後呼叫，回傳是否進了 kiosk 流程。
  * loadProjectIntoEditor／schedulePreview 由呼叫端（editor.js）傳進來，避免這個檔案反過來 import
- * editor.js 造成循環依賴。
+ * editor.js 造成循環相依。
  *
  * tpl= 可以是單一網址（沿用原本行為：載入編輯器、有畫面預覽），也可以是逗號分隔的多個網址
  * （多範本模式，見 runMultiAutoprintFlow：不進編輯器、不預覽，收到資料直接合成＋送印）。

@@ -110,7 +110,7 @@ selfcheck_web() {
     exposed)
       CRIT=1
       fail "${BOLD}${RED}.git/ 可被下載${RESET}  ${DIM}回 200，${url}${RESET}"
-      echo "  ${BOLD}${RED}整份原始碼與提交歷史都能被任何人取得${RESET}"
+      echo "  ${BOLD}${RED}整份原始碼與 commit 歷史都能被任何人取得${RESET}"
       echo "  ${BOLD}修法${RESET}：貼進 nginx 的 server 區塊再 reload，或用 sudo ./deploy.sh --configure-nginx <設定檔> 自動處理"
       echo "${CYAN}${NGINX_SNIPPET}${RESET}"
       echo "  ${DIM}完成後執行 ./deploy.sh --check-only 重測${RESET}" ;;
@@ -162,20 +162,20 @@ fi
 
 BRANCH="${DEPLOY_BRANCH:-main}"
 
-# PHP 只輸出頁面，功能在瀏覽器端 JS；無資料庫、必要的 PHP 擴充套件與 PHP 寫入目錄。
+# PHP 只輸出頁面，功能在瀏覽器端 JS；無資料庫、必要的 PHP extension 與 PHP 寫入目錄。
 
 require_cmd git git
 
 step "檢查本機變更"
-# 手動改過的檔案會讓快轉失敗，先列出並中止。
+# 手動改過的檔案會讓 fast-forward 失敗，先列出並中止。
 DIRTY="$(git status --porcelain --untracked-files=no)"
 if [ -n "$DIRTY" ]; then
-  fail "有未提交的修改，部署已中止："
+  fail "有未 commit 的修改，部署已中止："
   sed 's/^/    /' <<< "$DIRTY"
-  echo "  ${DIM}請先提交或備份上述修改，再執行 ./deploy.sh${RESET}"
+  echo "  ${DIM}請先 commit 或備份上述修改，再執行 ./deploy.sh${RESET}"
   exit 1
 fi
-ok "沒有未提交的修改"
+ok "沒有未 commit 的修改"
 
 HAS_PHP=0
 if command -v php >/dev/null 2>&1; then
@@ -186,16 +186,16 @@ else
   install_hint php-cli
 fi
 
-step "取得遠端版本"
+step "取得 remote 版本"
 BEFORE=$(git rev-parse --short HEAD)
 git fetch --quiet origin "$BRANCH"
 AFTER=$(git rev-parse --short FETCH_HEAD)
-ok "遠端分支 ${BRANCH}：${AFTER}"
+ok "remote branch ${BRANCH}：${AFTER}"
 
 if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ] && ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
-  # 本機與遠端分歧時無法快轉，不在伺服器上產生 merge commit。
-  fail "本機與遠端版本已分歧，無法快轉更新，部署已中止"
-  echo "  ${DIM}請先保留並確認本機提交：git log ${AFTER}..HEAD${RESET}"
+  # 本機與 remote diverge 時無法 fast-forward，不在伺服器上產生 merge commit。
+  fail "本機與 remote 版本已 diverge，無法 fast-forward 更新，部署已中止"
+  echo "  ${DIM}請先保留並確認本機 commit：git log ${AFTER}..HEAD${RESET}"
   exit 1
 fi
 

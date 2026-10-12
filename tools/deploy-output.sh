@@ -39,6 +39,6 @@ deployment_summary() {
         step "部署未完成"
     fi
     [ -z "$version" ] || printf '  專案版本：%sv%s%s\n' "$BOLD" "$version" "$RESET"
-    printf '  目前提交：%s%s%s\n' "$BOLD" "$(git rev-parse --short HEAD)" "$RESET"
+    printf '  目前 commit：%s%s%s\n' "$BOLD" "$(git rev-parse --short HEAD)" "$RESET"
     printf '  部署時間：%s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
 }
