@@ -61,7 +61,7 @@ free_port() {
   python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'
 }
 
-# 啟動伺服器，埠號放在 PORT；PID 記在檔案裡，收尾只殺自己啟動的程序
+# 啟動伺服器，埠號放在 PORT；PID 記在檔案裡，收尾只殺自己啟動的行程
 start_server() { # router
   local i
   PORT="$(free_port)"
@@ -105,7 +105,7 @@ check "200 非 git 提示" 0 "請確認檢查網址指向本站" ".git/ 已擋�
 run_case "3xx" router_redirect.php 0 ".git/ 回 302 轉址，不跟隨" ".git/ 可被下載"
 check "3xx 提示" 0 "請改用最終網址" ""
 
-# 連不上：用剛釋放的空閒埠，沒有程序在聽
+# 連不上：用剛釋放的空閒埠，沒有行程在聽
 PORT="$(free_port)"
 run_deploy env DEPLOY_CHECK_URL="http://127.0.0.1:$PORT" bash ./deploy.sh --check-only
 check "連不上" 0 ".git/ 連不上，略過" ".git/ 可被下載"
