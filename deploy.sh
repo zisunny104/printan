@@ -162,7 +162,7 @@ fi
 
 BRANCH="${DEPLOY_BRANCH:-main}"
 
-# PHP 頁面殼加瀏覽器端 JS，無資料庫、必要的 PHP 擴充套件與 PHP 寫入目錄。
+# PHP 只輸出頁面，功能在瀏覽器端 JS；無資料庫、必要的 PHP 擴充套件與 PHP 寫入目錄。
 
 require_cmd git git
 

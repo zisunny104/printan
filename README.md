@@ -41,7 +41,7 @@
 ## 技術規格
 
 - **前端框架**：Tocas UI 5.7
-- **執行環境**：PHP 頁面殼 + 原生 ES6 模組（無建置工具、無 Node.js 依賴）
+- **執行環境**：PHP 輸出頁面 + 原生 ES6 模組（無建置工具、無 Node.js 依賴）
 - **版面渲染**：Canvas 2D，1 canvas pixel = 1 個印表機實體點，螢幕預覽／PDF／未來 ESC/POS 點陣輸出共用同一份渲染邏輯
 - **PDF 匯出**：jsPDF，頁面尺寸依實際紙寬與內容高度動態決定
 - **本機儲存**：IndexedDB（草稿／圖片），localStorage 只存「最近使用」等輕量 metadata
@@ -106,7 +106,7 @@
 
 ---
 
-**版本**：0.3.6
+**版本**：0.3.7
 **作者**：Tokas (Xiang-zi Xie)
 **專案**：KoiLiSu 開利手
 **網址**：https://toka.dev/koilisu/printan
