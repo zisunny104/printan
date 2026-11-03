@@ -300,6 +300,24 @@ function stylesEqual(a, b) {
         && a.inverse === b.inverse;
 }
 
+// ── 避頭尾與標點擠壓 ──────────────────────────────────────────────
+// 行頭不可出現的符號（關閉括號、逗號句號、驚嘆問號等）與行尾不可出現的符號（開啟括號）。
+const NO_LINE_START = new Set(Array.from("，。、．；：！？）］｝〉》」』】〕〗〙〛…‥ー々ゝゞヽヾぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ,.;:!?)]}%"));
+const NO_LINE_END = new Set(Array.from("（［｛〈《「『【〔〖〘〚([{"));
+// 可以把右側留白擠掉的全形標點（字面通常只佔字身一半，另一半是空白）
+const SQUEEZABLE = new Set(Array.from("，。、．；：！？）］｝〉》」』】〕〗〙〛（［｛〈《「『【〔〖〘〚"));
+const MAX_SQUEEZE_EM = 0.5;
+
+/** 一個標點字元右側的留白能擠掉多少（點）：實際字面右緣到字身右緣的距離，最多半個字身，並留一點空隙避免貼住下一個字。 */
+function glyphSqueezeCapacity(g, ctx) {
+    if (!SQUEEZABLE.has(g.ch)) return 0;
+    ctx.font = fontString(g.style);
+    const m = ctx.measureText(g.ch);
+    const blank = m.width - (m.actualBoundingBoxRight ?? m.width);
+    const room = Math.min(MAX_SQUEEZE_EM * g.style.fontSize, blank - 0.04 * g.style.fontSize);
+    return room > 0 ? room : 0;
+}
+
 /** 把 el.runs 展開成 [[{ch, style}, ...], ...] 段落陣列（在 "\n" 處切段落，run 邊界不影響斷段）。 */
 function buildParagraphs(el, fallbackFontFamily) {
     const paragraphs = [[]];
@@ -319,35 +337,72 @@ function coalesceSegments(glyphs) {
     let i = 0;
     while (i < glyphs.length) {
         let j = i + 1;
-        while (j < glyphs.length && stylesEqual(glyphs[j].style, glyphs[i].style)) j++;
-        segments.push({ text: glyphs.slice(i, j).map((g) => g.ch).join(""), style: glyphs[i].style });
+        // 被擠壓的標點單獨成一段（每段只有一個字，squeeze＝這個字要少佔的點數），其餘照樣式合併
+        if (!glyphs[i].squeeze) {
+            while (j < glyphs.length && !glyphs[j].squeeze && stylesEqual(glyphs[j].style, glyphs[i].style)) j++;
+        }
+        const seg = { text: glyphs.slice(i, j).map((g) => g.ch).join(""), style: glyphs[i].style };
+        if (glyphs[i].squeeze) seg.squeeze = glyphs[i].squeeze;
+        segments.push(seg);
         i = j;
     }
     return segments;
+}
+
+/** 一段文字實際佔的寬度（扣掉被擠壓的點數）。 */
+function segmentWidth(ctx, seg) {
+    return ctx.measureText(seg.text).width - (seg.squeeze || 0);
 }
 
 function measureGlyphs(glyphs, ctx) {
     let width = 0;
     for (const seg of coalesceSegments(glyphs)) {
         ctx.font = fontString(seg.style);
-        width += ctx.measureText(seg.text).width;
+        width += segmentWidth(ctx, seg);
     }
     return width;
 }
 
-// 以字元為單位貪婪換行（同時適用中日韓字元與西文，西文長單字可能被截斷）。
+// 以字元為單位貪婪換行（同時適用中日韓字元與西文，西文長單字可能被截斷），並套用避頭尾：
+//  1. 行頭不可出現標點：先試著把這個標點放回上一行，用擠掉標點右側留白的方式（行內所有可擠的標點平均分攤）放得下就擠；
+//  2. 擠不下就把上一行最後一個字一起帶到下一行（追い出し）；上一行最後若是開啟括號，也一併帶到下一行。
+// glyph.squeeze 是這個字要少佔的點數，只在擠壓時才有。
 function wrapParagraphGlyphs(glyphs, maxWidth, ctx) {
     if (glyphs.length === 0) return [[]];
     const lines = [];
     let current = [];
+    const clearSqueeze = (list) => list.map((g) => (g.squeeze ? { ch: g.ch, style: g.style } : g));
     for (const g of glyphs) {
         const test = current.concat([g]);
-        if (current.length > 0 && measureGlyphs(test, ctx) > maxWidth) {
-            lines.push(current);
-            current = [g];
-        } else {
+        if (current.length === 0 || measureGlyphs(test, ctx) <= maxWidth) {
             current = test;
+            continue;
         }
+        if (NO_LINE_START.has(g.ch)) {
+            // 先試擠壓：需要擠掉的量＝放進去後超出的寬度，能擠的量＝行內可擠標點（含這個字自己）的容量總和
+            const plain = clearSqueeze(test);
+            const over = measureGlyphs(plain, ctx) - maxWidth;
+            const caps = plain.map((x) => glyphSqueezeCapacity(x, ctx));
+            const total = caps.reduce((sum, c) => sum + c, 0);
+            if (total > 0 && over <= total + 0.01) {
+                const ratio = Math.min(1, over / total);
+                current = plain.map((x, i) => (caps[i] > 0 ? { ch: x.ch, style: x.style, squeeze: caps[i] * ratio } : x));
+                continue;
+            }
+        }
+        // 不能擠（或這個字沒有行頭限制）：結束這一行。要避頭時把上一行結尾的字一個個帶到下一行，直到帶下去的第一個字不是不可行頭；
+        // 上一行結尾若是開啟括號（不可行尾）也一併帶下去。
+        const endLine = current.slice();
+        const carry = [];
+        if (NO_LINE_START.has(g.ch)) {
+            do {
+                if (endLine.length <= 1) break;
+                carry.unshift(endLine.pop());
+            } while (NO_LINE_START.has(carry[0].ch));
+        }
+        while (endLine.length > 1 && NO_LINE_END.has(endLine[endLine.length - 1].ch)) carry.unshift(endLine.pop());
+        lines.push(endLine);
+        current = clearSqueeze(carry).concat([g]);
     }
     if (current.length) lines.push(current);
     return lines;
@@ -388,7 +443,7 @@ function layoutText(el, widthDots, ctx, fallbackFontFamily) {
         for (const g of glyphs) maxFontSize = Math.max(maxFontSize, g.style.fontSize);
         for (const seg of segments) {
             ctx.font = fontString(seg.style);
-            width += ctx.measureText(seg.text).width;
+            width += segmentWidth(ctx, seg);
         }
         const lineHeightDots = Math.round(maxFontSize * (el.lineHeight || 1.3));
         return { segments, width, lineHeightDots, maxFontSize };
@@ -436,7 +491,7 @@ async function layoutFloatBlock(el, columnWidth, ctx, fontFamily, assetCtx) {
         for (const g of glyphs) maxFontSize = Math.max(maxFontSize, g.style.fontSize);
         for (const seg of segments) {
             ctx.font = fontString(seg.style);
-            width += ctx.measureText(seg.text).width;
+            width += segmentWidth(ctx, seg);
         }
         const lineHeightDots = Math.round(maxFontSize * (el.lineHeight || 1.3));
         lines.push({ segments, width, lineHeightDots, maxFontSize, offsetX: box.x, availWidth: box.width, skipBefore: box.skip, glyphs });
@@ -752,7 +807,7 @@ function paintText(ctx, item, x, y) {
                 ctx.stroke();
                 ctx.restore();
             }
-            cursorX += segWidth;
+            cursorX += segWidth - (seg.squeeze || 0);   // 被擠壓的標點少佔右側留白，後面的字往左靠
         }
         lineY += line.lineHeightDots;
     }
