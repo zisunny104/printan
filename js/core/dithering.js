@@ -11,20 +11,23 @@ export function toGrayscale(imageData) {
     return imageData;
 }
 
-const PHOTO_DETAIL_GAMMA = 1.7; // 仿色前的線性化指數（亮部端）：網點覆蓋率對應的是線性亮度，灰階值直接當覆蓋率會讓中間調與亮部偏白
-const PHOTO_DETAIL_GAMMA_KNEE = 0.6; // 指數從 1（暗部，近似不轉換）漸進到 GAMMA 的亮度位置（0–1）：暗部不跟著線性化往下壓，否則會糊成黑塊
-const PHOTO_DETAIL_BLACK_FLOOR = 0.15; // 輸出亮度下限（0–1）：最暗約 85% 墨點，熱感點會擴大，再黑就連成一片、暗部細節消失
-const PHOTO_DETAIL_SHADOW_LIFT = 0.7; // 暗部提亮指數（<1 提亮）：線性化與黑色下限之後再整體往上拉，暗部才不會黑成一團；黑色下限同步升高
-const PHOTO_DETAIL_FLOOR_LEVEL = Math.pow(PHOTO_DETAIL_BLACK_FLOOR, PHOTO_DETAIL_SHADOW_LIFT);
+// 仿色前的階調曲線：[輸入亮度, 輸出亮度]（0–1），線性內插。直接用控制點而不是疊公式，要調哪一段看這張表就知道。
+// 設計：0 留在近黑（0.04），純黑才印得黑、不發灰；0–0.3 的陰影快速托起並保持間距（細節才分得開、不黑成一團）；
+// 中間調比單純提亮的版本暗一些，不蒙一層灰；亮部沿用線性化後的位置，白色與淺色不變。
+const PHOTO_DETAIL_CURVE = [[0, 0.04], [0.03, 0.15], [0.1, 0.24], [0.2, 0.31], [0.3, 0.37], [0.5, 0.48], [0.7, 0.64], [0.9, 0.86], [1, 1]];
+const PHOTO_DETAIL_FLOOR_LEVEL = PHOTO_DETAIL_CURVE[0][1]; // 輸出亮度下限：銳化過衝也不能低於它
 const PHOTO_DETAIL_CLARITY = 0.8; // 局部對比強度：把大範圍的亮暗差拉開，主體才不會融進背景
 const PHOTO_DETAIL_CLARITY_RADIUS = 11; // 局部對比的模糊半徑（點）
 const PHOTO_DETAIL_SHARPEN = 0.8;
 
-/** 亮度 x（0–1）→ 仿色前的亮度：指數由暗到亮從 1 漸進到 GAMMA，再墊上黑色下限。 */
+/** 亮度 x（0–1）→ 仿色前的亮度：查 PHOTO_DETAIL_CURVE 線性內插。 */
 function photoDetailLevel(x) {
-    const t = Math.min(1, x / PHOTO_DETAIL_GAMMA_KNEE);
-    const gamma = 1 + (PHOTO_DETAIL_GAMMA - 1) * t * t * (3 - 2 * t);
-    return Math.pow(PHOTO_DETAIL_BLACK_FLOOR + (1 - PHOTO_DETAIL_BLACK_FLOOR) * Math.pow(x, gamma), PHOTO_DETAIL_SHADOW_LIFT);
+    const c = PHOTO_DETAIL_CURVE;
+    if (x <= 0) return c[0][1];
+    for (let i = 1; i < c.length; i += 1) {
+        if (x <= c[i][0]) { const [x0, y0] = c[i - 1], [x1, y1] = c[i]; return y0 + (y1 - y0) * (x - x0) / (x1 - x0); }
+    }
+    return c[c.length - 1][1];
 }
 
 /** 單通道三次方塊模糊（近似高斯），邊緣沿用最近的像素。 */
