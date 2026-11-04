@@ -1040,6 +1040,11 @@ function paintImage(ctx, item, x, y, mode) {
     temp.width = w;
     temp.height = h;
     const tctx = temp.getContext("2d");
+    // 熱感模式下透明像素讀出來是 rgb(0,0,0)，灰階後會被當成黑色印成一片雜訊；先墊白底，透明處才會印成空白（紙的顏色）。
+    if (mode === "thermal") {
+        tctx.fillStyle = "#fff";
+        tctx.fillRect(0, 0, w, h);
+    }
     tctx.filter = buildImageFilter(el);
     drawCroppedRotatedImage(tctx, item.img, el, w, h);
     tctx.filter = "none";
