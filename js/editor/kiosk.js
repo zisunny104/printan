@@ -11,7 +11,7 @@ import { applyImagePreset, applyImagePrintSettings, DEFAULT_IMAGE_PRESET, IMAGE_
 import { getBaseProfile } from "./editor.js";
 import { els, state } from "./context.js";
 import { attemptSilentPrinterReconnect, connectPrinter, pollPrinterStatusIfIdle, printComposedSilently, printSilently } from "./printer-settings.js";
-import { initKioskStatusBar, markPrinterChecked, mountPrinterCardAction, setKioskTemplateNames, updateKioskStatus } from "./kiosk-status-bar.js";
+import { initKioskStatusBar, markPrinterChecked, mountPrinterCardAction, updateKioskStatus } from "./kiosk-status-bar.js";
 
 const KIOSK_CLASS = "is-kiosk";
 const KIOSK_PREVIEW_CLASS = "kiosk-preview";
@@ -81,7 +81,6 @@ function showKioskConnectButton(printFn) {
                 reportJobStatus("printer_connected");
                 return;
             }
-            updateKioskStatus({ job: "printing", jobId: currentJobId });
             const outcome = await printRetryingBusy(pendingConnectPrint);
             reportPrintOutcome(outcome);
         });
@@ -122,9 +121,9 @@ function resolveParentOrigin(params) {
     return null;
 }
 
-// 回報列印工作狀態給父視窗；沒有嵌入或沒有回報對象時只更新畫面上的狀態區。
+// 回報列印工作狀態給父視窗；沒有嵌入或沒有回報對象時只更新印表機指示燈。
 function reportJobStatus(status, extra = {}) {
-    showStatusOnBar(status, extra);
+    updateKioskStatus(); // 印表機指示燈跟著每次回報重讀連線旗標
     if (window.parent === window || !reportTargetOrigin) return;
     window.parent.postMessage({ source: "printan-kiosk", jobId: currentJobId, status, ...extra }, reportTargetOrigin);
 }
@@ -169,22 +168,6 @@ function startPrinterStatusReporting() {
     if ("usb" in navigator) navigator.usb.addEventListener("disconnect", onGone);
     if ("serial" in navigator) navigator.serial.addEventListener("disconnect", onGone);
     setInterval(() => { pollAndReportPrinterStatus().catch(() => {}); }, STATUS_POLL_MS);
-}
-
-// 每一次回報也同步顯示在畫面上方的狀態列（不論有沒有父視窗）；printer_connected／needs_connect 只影響
-// 印表機欄位，由狀態列直接讀連線旗標，這裡不用另外傳。
-// 失敗原因、被略過的問題（issues）都寫在狀態列上，畫面上沒有另外的提示框。
-const BAR_JOB_BY_STATUS = { ready: "idle", printed: "printed", print_failed: "failed", load_failed: "load_failed" };
-function showStatusOnBar(status, extra) {
-    let job = BAR_JOB_BY_STATUS[status];
-    // 狀態列已寫「列印失敗」；kiosk 畫面上也沒有可以按的列印鍵，所以拿掉訊息的前綴與「請改用列印鍵」
-    let message = (extra.message || "").replace(/^自動列印失敗：/, "").replace(/，請改用列印鍵$/, "");
-    if (status === "printed" && extra.issues?.length) {
-        job = "printed_issues";
-        message = extra.issues.join("；");
-    }
-    if (status === "load_failed") message = message.replace(/^範本載入失敗：/, ""); // 狀態文字本身已寫「範本載入失敗」
-    updateKioskStatus({ job, message, jobId: currentJobId });
 }
 
 // printSilently() 的回傳結果轉成對外回報用的狀態；describePrintFailure 沿用既有的中文訊息組法，
@@ -234,7 +217,7 @@ function isAllowedTemplateUrl(url) {
     }
 }
 
-/** 抓 tpl= 指定的 .ptan 內容、解析、註冊內嵌字型，回傳 { project }；失敗回傳 { error }（原因，供狀態列與回報使用）。 */
+/** 抓 tpl= 指定的 .ptan 內容、解析、註冊內嵌字型，回傳 { project }；失敗回傳 { error }（原因，供回報使用）。 */
 async function loadTemplateFromUrl(url) {
     if (!isAllowedTemplateUrl(url)) {
         return { error: "網址不允許（僅接受同源網址）" };
@@ -347,20 +330,17 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     const isMulti = tplUrls.length > 1;
     const gapDots = Math.max(0, Number(params.get("gapDots")) || 0);
 
-    updateKioskStatus({ job: "loading", jobId: currentJobId });
     const projects = [];
     for (const url of tplUrls) {
         const { project, error } = await loadTemplateFromUrl(url);
         if (!project) {
             // 任一份讀取失敗就整個中止，顯示錯誤並盡量回報給父視窗。
-            setKioskTemplateNames([], "無法載入範本");
             attemptSilentPrinterReconnect().catch(() => {}).finally(markPrinterChecked); // 指示燈仍要如實顯示印表機
             reportJobStatus("load_failed", { message: `範本載入失敗：${url}（${error}）` });
             return true;
         }
         projects.push(project);
     }
-    setKioskTemplateNames(projects.map((project) => project.meta?.name));
 
     if (!isMulti) {
         loadProjectIntoEditor(projects[0]);
@@ -373,7 +353,7 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
     }
 
     if (!reportTargetOrigin) {
-        // 沒有父視窗可互通：只顯示範本，狀態區仍如實顯示印表機。
+        // 沒有父視窗可互通：只顯示範本，指示燈仍如實顯示印表機。
         attemptSilentPrinterReconnect().catch(() => {}).finally(markPrinterChecked);
         return true;
     }
@@ -400,7 +380,6 @@ export async function bootKioskFromQuery(loadProjectIntoEditor, schedulePreview)
                 reportJobStatus('print_failed', {message:'這筆工作需要指定列印專案，未送印'});
                 return;
             }
-            updateKioskStatus({ job: "printing", jobId: currentJobId });
             if (msg.project !== undefined) {
                 const result = loadProject(msg.project);
                 if (!result.ok) { reportJobStatus("print_failed", { message: result.error }); return; }
