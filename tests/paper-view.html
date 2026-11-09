@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Printan tests：熱感紙預覽元件</title>
+<style>
+body { font: 14px/1.6 system-ui, sans-serif; margin: 16px; }
+li { list-style: none; }
+.pass { color: #1a7f37; }
+.fail { color: #cf222e; }
+pre { margin: 0 0 0 24px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1 id="summary">執行中…</h1>
+<ul id="list"></ul>
+<script type="module">
+import { PAPER, CSS_PX_PER_DOT, MM_PX, displayWidth, paperCanvas, createPaperView } from "../js/core/paper-view.js";
+
+const cases = [];
+const test = (name, fn) => cases.push({ name, fn });
+function assert(cond, msg = "assert failed") { if (!cond) throw new Error(msg); }
+const content = (h = 100) => { const c = document.createElement("canvas"); c.width = 576; c.height = h; c.getContext("2d").fillRect(0, 0, 576, h); return c; };
+
+test("紙張 canvas 固定 640 點寬，高度是內容加上下留白", () => {
+    const p = paperCanvas(content(100));
+    assert(p.width === 640, "寬 " + p.width);
+    assert(p.height === 100 + PAPER.top + PAPER.bottom, "高 " + p.height);
+});
+test("100% 時 576 點寬的內容約 72 mm", () => {
+    assert(Math.abs(displayWidth(576, 1) / MM_PX - 72) < 0.5, "實際 " + displayWidth(576, 1) / MM_PX + " mm");
+    assert(Math.abs(CSS_PX_PER_DOT - 96 / 203) < 1e-9);
+});
+test("容器寬度不同，顯示寬度都一樣", () => {
+    const widths = [];
+    for (const w of [120, 400, 1600]) {
+        const stage = document.createElement("div");
+        stage.style.cssText = `width:${w}px;display:flex`;
+        document.body.appendChild(stage);
+        const view = createPaperView(stage, { paper: false });
+        view.setContent(content());
+        widths.push(Math.round(view.img.getBoundingClientRect().width * 100) / 100);
+        stage.remove();
+    }
+    assert(widths.every((x) => x === widths[0]), "寬度 " + widths.join("、"));
+});
+test("放大倍率與紙張開關只改顯示，不改內容點陣", () => {
+    const stage = document.createElement("div"); document.body.appendChild(stage);
+    const view = createPaperView(stage, { paper: true });
+    view.setContent(content(50));
+    const w1 = view.img.getBoundingClientRect().width;
+    view.setZoom(2);
+    assert(Math.abs(view.img.getBoundingClientRect().width - w1 * 2) < 0.01, "2 倍");
+    assert(view.content.width === 576 && view.paper.width === 640);
+    view.setPaper(false);
+    assert(Math.abs(view.img.getBoundingClientRect().width - displayWidth(576, 2)) < 0.01, "關閉紙張後寬度");
+    stage.remove();
+});
+
+const list = document.getElementById("list");
+let failed = 0;
+for (const c of cases) {
+    const li = document.createElement("li");
+    try { await c.fn(); li.className = "pass"; li.textContent = "PASS " + c.name; }
+    catch (e) { failed++; li.className = "fail"; li.textContent = "FAIL " + c.name; const pre = document.createElement("pre"); pre.textContent = e.message; li.appendChild(pre); }
+    list.appendChild(li);
+}
+document.getElementById("summary").textContent = failed ? `FAIL ${failed}/${cases.length}` : `PASS ${cases.length}/${cases.length}`;
+</script>
+</body>
+</html>
