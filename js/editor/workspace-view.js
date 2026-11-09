@@ -8,8 +8,8 @@
 // 工作區捲動、紙寬變動重畫。
 
 import { safeGetItem, safeSetItem } from "../core/storage.js";
+import { MM_PX } from "../core/paper-view.js";
 
-const MM_PX = 96 / 25.4;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 4;
 const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1, 1.25, 1.5, 2, 3, 4];
